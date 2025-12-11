@@ -1,4 +1,4 @@
--- =====================================================
+http://192.168.1.84:3000/-- =====================================================
 -- IMS Database Schema - Recreated from Scratch
 -- All tables prefixed with it_
 -- =====================================================
@@ -304,7 +304,7 @@ CREATE TABLE `it_equipment` (
     KEY `idx_equipment_vendor` (`vendor_id`),
     KEY `idx_equipment_supplier` (`supplier_id`),
     KEY `idx_equipment_cerf` (`cerf`),
-    KEY `idx_equipment_personal` (`personal`),
+    KEY `idx_equipment_personal` (`is_personal`),
     KEY `idx_equipment_written_off` (`is_written_off`),
     KEY `idx_equipment_assigned_to` (`assigned_to`),
     KEY `idx_equipment_sub_area` (`equipment_sub_area_id`),
