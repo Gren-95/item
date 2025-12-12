@@ -13,7 +13,7 @@ async function handleRequest(req: Request): Promise<Response> {
   const path = url.pathname;
 
   // Static files
-  if (path.startsWith("/css/") || path.startsWith("/js/")) {
+  if (path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/icons/") || path === "/manifest.webmanifest") {
     const filePath = `./public${path}`;
     const staticFile = file(filePath);
     if (await staticFile.exists()) {
