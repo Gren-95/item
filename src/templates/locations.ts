@@ -19,9 +19,9 @@ interface LocationsData {
 
 export function locationsPage(data: LocationsData, success = "", error = ""): string {
   const alert = success
-    ? `<div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 text-green-700">✅ ${escapeHtml(success)}</div>`
+    ? `<div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6 text-green-700 dark:text-green-400">✅ ${escapeHtml(success)}</div>`
     : error
-    ? `<div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-red-700">⚠️ ${escapeHtml(error)}</div>`
+    ? `<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6 text-red-700 dark:text-red-400">⚠️ ${escapeHtml(error)}</div>`
     : "";
 
   const sections: {
@@ -42,8 +42,8 @@ export function locationsPage(data: LocationsData, success = "", error = ""): st
   const content = `
     <div class="max-w-6xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
-        <h1 class="text-2xl font-bold text-gray-900">Locations</h1>
-        <p class="text-sm text-gray-500">Manage hierarchy and see assigned equipment counts.</p>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Locations</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Manage hierarchy and see assigned equipment counts.</p>
       </div>
 
       ${alert}
@@ -127,8 +127,8 @@ function renderSection(
     <div class="card tab-panel ${active ? "" : "hidden"}">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <h2 class="text-lg font-semibold text-gray-900">${title}</h2>
-          <p class="text-sm text-gray-500">Add, rename, activate/deactivate, and see usage.</p>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">${title}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Add, rename, activate/deactivate, and see usage.</p>
         </div>
       </div>
 
@@ -162,7 +162,7 @@ function renderSection(
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b border-gray-200 text-left text-gray-600">
+            <tr class="border-b border-gray-200 dark:border-gray-700 text-left text-gray-600 dark:text-gray-400">
               <th class="py-3 px-2">Name</th>
               <th class="py-3 px-2">Status</th>
               <th class="py-3 px-2">Equipment</th>
@@ -172,11 +172,11 @@ function renderSection(
           <tbody>
             ${
               items.length === 0
-                ? `<tr><td colspan="4" class="py-4 px-2 text-gray-500">No entries yet.</td></tr>`
+                ? `<tr><td colspan="4" class="py-4 px-2 text-gray-500 dark:text-gray-400">No entries yet.</td></tr>`
                 : items
                     .map(
                       (item) => `
-                <tr class="border-b border-gray-100">
+                <tr class="border-b border-gray-100 dark:border-gray-700">
                   <td class="py-2 px-2">
                     <form method="POST" action="/locations" class="flex items-center gap-2">
                       <input type="hidden" name="action" value="edit">
@@ -187,12 +187,12 @@ function renderSection(
                     </form>
                   </td>
                   <td class="py-2 px-2">
-                    <span class="px-2 py-1 rounded-full text-xs ${item.status ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}">
+                    <span class="px-2 py-1 rounded-full text-xs ${item.status ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}">
                       ${item.status ? "Active" : "Inactive"}
                     </span>
                   </td>
                   <td class="py-2 px-2">
-                    <span class="px-2 py-1 rounded-lg bg-blue-50 text-blue-700">${item.equipment_count}</span>
+                    <span class="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">${item.equipment_count}</span>
                   </td>
                   <td class="py-2 px-2 space-x-2">
                     <form method="POST" action="/locations" class="inline">

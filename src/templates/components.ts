@@ -3,11 +3,11 @@
 export function getModalHtml(): string {
   return `
     <!-- Add New Modal -->
-    <div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-      <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+    <div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 transition-colors">
         <div class="flex justify-between items-center mb-4">
-          <h3 id="modalTitle" class="text-lg font-semibold text-gray-900">Add New Item</h3>
-          <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+          <h3 id="modalTitle" class="text-lg font-semibold text-gray-900 dark:text-white">Add New Item</h3>
+          <button onclick="closeModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
@@ -18,7 +18,7 @@ export function getModalHtml(): string {
             <label id="modalLabel" for="modalInput" class="label">Name</label>
             <input type="text" id="modalInput" class="input-field" placeholder="Enter name...">
           </div>
-          <div id="modalError" class="text-red-600 text-sm mb-4 hidden"></div>
+          <div id="modalError" class="text-red-600 dark:text-red-400 text-sm mb-4 hidden"></div>
         </div>
         <div class="flex justify-end gap-3">
           <button onclick="closeModal()" class="btn btn-secondary">Cancel</button>

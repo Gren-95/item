@@ -1,0 +1,7 @@
+Dockerfile linguist-detectable=true
+Dockerfile linguist-language=Dockerfile
+# Other file overrides
+*.sh linguist-language=Shell
+*.yml linguist-language=YAML
+*.sql linguist-detectable=true
+*.md linguist-detectable=true

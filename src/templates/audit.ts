@@ -65,18 +65,18 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
   const content = `
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-4 mb-6">
-        <a href="/" class="text-gray-500 hover:text-gray-700">
+        <a href="/" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>
         </a>
-        <h1 class="text-2xl font-bold text-gray-900">Edit Equipment</h1>
-        <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full font-mono text-sm">${escapeHtml(eq.service_tag)}</span>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Edit Equipment</h1>
+        <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-mono text-sm">${escapeHtml(eq.service_tag)}</span>
       </div>
 
       ${success ? `
-        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-          <div class="flex items-center gap-2 text-green-700">
+        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
+          <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
             </svg>
@@ -86,8 +86,8 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
       ` : ""}
 
       ${error ? `
-        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <div class="flex items-center gap-2 text-red-700">
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+          <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
@@ -99,8 +99,8 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
       <form action="/edit/${eq.id}" method="POST">
         <!-- Equipment Information -->
         <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             Equipment Information
@@ -124,7 +124,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 id="warranty_expiry_date"
                 name="warranty_expiry_date"
                 value="${eq.warranty_expiry_date}"
-                class="input-field ${isExpired(eq.warranty_expiry_date) ? "text-red-600 bg-red-50 border-red-200" : ""}"
+                class="input-field ${isExpired(eq.warranty_expiry_date) ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" : ""}"
               >
             </div>
             <div>
@@ -149,7 +149,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </div>
             <div>
               <label class="label">Service Tag</label>
-              <div class="readonly-field font-mono bg-white">${escapeHtml(eq.service_tag)}</div>
+              <div class="readonly-field font-mono bg-white dark:bg-gray-800">${escapeHtml(eq.service_tag)}</div>
             </div>
             <div>
               <label for="cerf" class="label">CERF</label>
@@ -188,8 +188,8 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
 
         <!-- Type & Model Selection -->
         <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
             </svg>
             Equipment Type
@@ -231,8 +231,8 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
 
         <!-- Location Selection -->
         <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
             </svg>
@@ -305,8 +305,8 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
 
         <!-- Inventory Period -->
         <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
             </svg>
             Inventory
@@ -327,8 +327,8 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
 
         <!-- Assignment & TeamViewer -->
         <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
             </svg>
             Assignment & Remote Access
