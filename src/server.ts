@@ -3,6 +3,7 @@ import pool from "./db";
 import { searchPage } from "./templates/search";
 import { auditPage } from "./templates/audit";
 import { addPage } from "./templates/add";
+import { locationsPage } from "./templates/locations";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 
 const PORT = process.env.PORT || 3000;
@@ -216,6 +217,76 @@ async function handleRequest(req: Request): Promise<Response> {
         return new Response(auditPage(auditData, false, err.message), {
           headers: { "Content-Type": "text/html" },
         });
+      }
+    }
+
+    // Locations management - GET
+    if (path === "/locations" && req.method === "GET") {
+      const success = url.searchParams.get("success") || "";
+      const error = url.searchParams.get("error") || "";
+      const data = await getLocationsData();
+      return new Response(locationsPage(data, success, error), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // Locations management - POST (add/edit/activate/deactivate)
+    if (path === "/locations" && req.method === "POST") {
+      const form = await req.formData();
+      const action = (form.get("action") || "").toString();
+      const type = (form.get("type") || "").toString();
+      const id = form.get("id") ? Number(form.get("id")) : null;
+      const name = form.get("name") ? form.get("name")!.toString().trim() : "";
+      const parent_id = form.get("parent_id") ? Number(form.get("parent_id")) : null;
+
+      const map: Record<
+        string,
+        { table: string; parent?: string }
+      > = {
+        region: { table: "it_equipment_region" },
+        country: { table: "it_equipment_country", parent: "region_id" },
+        plant: { table: "it_equipment_plant", parent: "country_id" },
+        department: { table: "it_equipment_department", parent: "plant_id" },
+        area: { table: "it_equipment_area", parent: "department_id" },
+        sub_area: { table: "it_equipment_sub_area", parent: "area_id" },
+      };
+
+      if (!map[type]) {
+        return Response.redirect(`/locations?error=${encodeURIComponent("Unknown type")}`, 303);
+      }
+
+      try {
+        const { table, parent } = map[type];
+
+        if (action === "add") {
+          if (!name) throw new Error("Name is required");
+          if (parent && !parent_id) throw new Error("Parent is required");
+          const cols = ["name", "status"];
+          const vals: any[] = [name, 1];
+          if (parent) {
+            cols.push(parent);
+            vals.push(parent_id);
+          }
+          const placeholders = cols.map(() => "?").join(", ");
+          await pool.query(
+            `INSERT INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`,
+            vals
+          );
+        } else if (action === "edit") {
+          if (!id) throw new Error("ID is required");
+          if (!name) throw new Error("Name is required");
+          await pool.query(`UPDATE ${table} SET name = ? WHERE id = ?`, [name, id]);
+        } else if (action === "deactivate" || action === "activate") {
+          if (!id) throw new Error("ID is required");
+          const status = action === "activate" ? 1 : 0;
+          await pool.query(`UPDATE ${table} SET status = ? WHERE id = ?`, [status, id]);
+        } else {
+          throw new Error("Unknown action");
+        }
+
+        return Response.redirect(`/locations?success=${encodeURIComponent("Saved")}`, 303);
+      } catch (err: any) {
+        return Response.redirect(`/locations?error=${encodeURIComponent(err.message)}`, 303);
       }
     }
 
@@ -484,6 +555,132 @@ async function getAddData(serviceTag: string) {
     suppliers,
     employees,
     inventoryPeriods
+  };
+}
+
+async function getLocationsData() {
+  const [
+    [regions],
+    [countries],
+    [plants],
+    [departments],
+    [areas],
+    [subAreas]
+  ] = await Promise.all([
+    pool.query<RowDataPacket[]>(`WITH latest AS (
+        SELECT l1.equipment_id, l1.equipment_sub_area_id
+        FROM it_equipment_log l1
+        JOIN (
+          SELECT equipment_id, MAX(created) AS max_created
+          FROM it_equipment_log
+          GROUP BY equipment_id
+        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+      )
+      SELECT r.id, r.name, r.status,
+        COUNT(lat.equipment_id) as equipment_count
+      FROM it_equipment_region r
+      LEFT JOIN it_equipment_country c ON c.region_id = r.id
+      LEFT JOIN it_equipment_plant p ON p.country_id = c.id
+      LEFT JOIN it_equipment_department d ON d.plant_id = p.id
+      LEFT JOIN it_equipment_area a ON a.department_id = d.id
+      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
+      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
+      GROUP BY r.id
+      ORDER BY r.name`),
+    pool.query<RowDataPacket[]>(`WITH latest AS (
+        SELECT l1.equipment_id, l1.equipment_sub_area_id
+        FROM it_equipment_log l1
+        JOIN (
+          SELECT equipment_id, MAX(created) AS max_created
+          FROM it_equipment_log
+          GROUP BY equipment_id
+        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+      )
+      SELECT c.id, c.name, c.region_id as parent_id, c.status,
+        COUNT(lat.equipment_id) as equipment_count
+      FROM it_equipment_country c
+      LEFT JOIN it_equipment_plant p ON p.country_id = c.id
+      LEFT JOIN it_equipment_department d ON d.plant_id = p.id
+      LEFT JOIN it_equipment_area a ON a.department_id = d.id
+      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
+      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
+      GROUP BY c.id
+      ORDER BY c.name`),
+    pool.query<RowDataPacket[]>(`WITH latest AS (
+        SELECT l1.equipment_id, l1.equipment_sub_area_id
+        FROM it_equipment_log l1
+        JOIN (
+          SELECT equipment_id, MAX(created) AS max_created
+          FROM it_equipment_log
+          GROUP BY equipment_id
+        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+      )
+      SELECT p.id, p.name, p.country_id as parent_id, p.status,
+        COUNT(lat.equipment_id) as equipment_count
+      FROM it_equipment_plant p
+      LEFT JOIN it_equipment_department d ON d.plant_id = p.id
+      LEFT JOIN it_equipment_area a ON a.department_id = d.id
+      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
+      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
+      GROUP BY p.id
+      ORDER BY p.name`),
+    pool.query<RowDataPacket[]>(`WITH latest AS (
+        SELECT l1.equipment_id, l1.equipment_sub_area_id
+        FROM it_equipment_log l1
+        JOIN (
+          SELECT equipment_id, MAX(created) AS max_created
+          FROM it_equipment_log
+          GROUP BY equipment_id
+        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+      )
+      SELECT d.id, d.name, d.plant_id as parent_id, d.status,
+        COUNT(lat.equipment_id) as equipment_count
+      FROM it_equipment_department d
+      LEFT JOIN it_equipment_area a ON a.department_id = d.id
+      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
+      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
+      GROUP BY d.id
+      ORDER BY d.name`),
+    pool.query<RowDataPacket[]>(`WITH latest AS (
+        SELECT l1.equipment_id, l1.equipment_sub_area_id
+        FROM it_equipment_log l1
+        JOIN (
+          SELECT equipment_id, MAX(created) AS max_created
+          FROM it_equipment_log
+          GROUP BY equipment_id
+        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+      )
+      SELECT a.id, a.name, a.department_id as parent_id, a.status,
+        COUNT(lat.equipment_id) as equipment_count
+      FROM it_equipment_area a
+      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
+      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
+      GROUP BY a.id
+      ORDER BY a.name`),
+    pool.query<RowDataPacket[]>(`WITH latest AS (
+        SELECT l1.equipment_id, l1.equipment_sub_area_id
+        FROM it_equipment_log l1
+        JOIN (
+          SELECT equipment_id, MAX(created) AS max_created
+          FROM it_equipment_log
+          GROUP BY equipment_id
+        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+      )
+      SELECT sa.id, sa.name, sa.area_id as parent_id, sa.status,
+        COUNT(lat.equipment_id) as equipment_count
+      FROM it_equipment_sub_area sa
+      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
+      GROUP BY sa.id
+      ORDER BY sa.name`)
+  ]);
+
+  return {
+    regions,
+    countries,
+    plants,
+    departments,
+    areas,
+    subAreas
   };
 }
 
