@@ -13,6 +13,13 @@ async function handleRequest(req: Request): Promise<Response> {
   const path = url.pathname;
 
   // Static files
+  if (path === "/favicon.ico") {
+    const ico = file("./public/icons/icon.png");
+    if (await ico.exists()) {
+      return new Response(ico, { headers: { "Content-Type": "image/png" } });
+    }
+  }
+
   if (path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/icons/") || path === "/manifest.webmanifest") {
     const filePath = `./public${path}`;
     const staticFile = file(filePath);
