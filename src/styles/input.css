@@ -4,46 +4,46 @@
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800;
   }
   
   .btn-primary {
-    @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500;
+    @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600;
   }
   
   .btn-secondary {
-    @apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-gray-500;
+    @apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600;
   }
   
   .btn-success {
-    @apply bg-green-600 text-white hover:bg-green-700 focus:ring-green-500;
+    @apply bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600;
   }
   
   .input-field {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors;
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-500;
   }
   
   .select-field {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors;
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-500;
   }
   
   .label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    @apply block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300;
   }
   
   .readonly-field {
-    @apply w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-600;
+    @apply w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400;
   }
   
   .card {
-    @apply bg-white rounded-xl shadow-lg p-6;
+    @apply bg-white rounded-xl shadow-lg p-6 dark:bg-gray-800 dark:shadow-gray-900/50;
   }
 
   /* Tabs for Locations */
   .tab-btn {
-    @apply px-4 py-2 rounded-full border border-transparent text-sm font-semibold text-gray-600 bg-white shadow-sm transition duration-150 ease-in-out hover:text-gray-900 hover:border-blue-200 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+    @apply px-4 py-2 rounded-full border border-transparent text-sm font-semibold text-gray-600 bg-white shadow-sm transition duration-150 ease-in-out hover:text-gray-900 hover:border-blue-200 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-gray-800 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 dark:hover:border-blue-600 dark:focus:ring-offset-gray-800;
   }
   .tab-active {
-    @apply text-blue-700 bg-blue-50 border-blue-300 shadow-inner;
+    @apply text-blue-700 bg-blue-50 border-blue-300 shadow-inner dark:text-blue-300 dark:bg-blue-900/30 dark:border-blue-600;
   }
 }
