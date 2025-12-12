@@ -1,9 +1,17 @@
 import { layout } from "./layout";
+import { getModalHtml, getScriptsHtml } from "./components";
 
 interface SelectOption {
   id: number;
   name: string;
   parent_id?: number;
+}
+
+interface InventoryPeriod {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
 }
 
 interface AddData {
@@ -20,6 +28,7 @@ interface AddData {
   vendors: SelectOption[];
   suppliers: SelectOption[];
   employees: { employee_no: string; name: string }[];
+  inventoryPeriods: InventoryPeriod[];
 }
 
 export function addPage(data: AddData, success: boolean = false, error: string | null = null): string {
@@ -81,11 +90,12 @@ export function addPage(data: AddData, success: boolean = false, error: string |
             </div>
             <div>
               <label for="vendor_id" class="label">Vendor</label>
-              <select id="vendor_id" name="vendor_id" class="select-field">
+              <select id="vendor_id" name="vendor_id" class="select-field" onchange="handleSelectChange(this, 'vendors', 'Vendor')">
                 <option value="">Select Vendor...</option>
                 ${data.vendors.map(v => `
                   <option value="${v.id}">${escapeHtml(v.name)}</option>
                 `).join("")}
+                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new vendor...</option>
               </select>
             </div>
             <div>
@@ -110,11 +120,12 @@ export function addPage(data: AddData, success: boolean = false, error: string |
             </div>
             <div>
               <label for="supplier_id" class="label">Supplier</label>
-              <select id="supplier_id" name="supplier_id" class="select-field">
+              <select id="supplier_id" name="supplier_id" class="select-field" onchange="handleSelectChange(this, 'suppliers', 'Supplier')">
                 <option value="">Select Supplier...</option>
                 ${data.suppliers.map(s => `
                   <option value="${s.id}">${escapeHtml(s.name)}</option>
                 `).join("")}
+                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new supplier...</option>
               </select>
             </div>
             <div>
@@ -142,29 +153,32 @@ export function addPage(data: AddData, success: boolean = false, error: string |
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label for="type_id" class="label">Type</label>
-              <select id="type_id" name="type_id" class="select-field" onchange="loadProductLines(this.value)">
+              <select id="type_id" name="type_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'types', 'Type'); } else { loadProductLines(this.value); }">
                 <option value="">Select Type...</option>
                 ${data.types.map(t => `
                   <option value="${t.id}">${escapeHtml(t.name)}</option>
                 `).join("")}
+                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new type...</option>
               </select>
             </div>
             <div>
               <label for="product_line_id" class="label">Product Line</label>
-              <select id="product_line_id" name="product_line_id" class="select-field" onchange="loadModels(this.value)">
-                <option value="">Select Product Line...</option>
+              <select id="product_line_id" name="product_line_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'product-lines', 'Product Line', 'type_id'); } else { loadModels(this.value); }">
+                <option value="">Select Type first...</option>
                 ${data.productLines.map(pl => `
                   <option value="${pl.id}" data-parent="${pl.parent_id}" hidden>${escapeHtml(pl.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new product line...</option>
               </select>
             </div>
             <div>
               <label for="model_id" class="label">Model</label>
-              <select id="model_id" name="model_id" class="select-field">
-                <option value="">Select Model...</option>
+              <select id="model_id" name="model_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'models', 'Model', 'product_line_id'); }">
+                <option value="">Select Product Line first...</option>
                 ${data.models.map(m => `
                   <option value="${m.id}" data-parent="${m.parent_id}" hidden>${escapeHtml(m.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new model...</option>
               </select>
             </div>
           </div>
@@ -183,55 +197,83 @@ export function addPage(data: AddData, success: boolean = false, error: string |
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label for="region_id" class="label">Region</label>
-              <select id="region_id" name="region_id" class="select-field" onchange="loadCountries(this.value)">
+              <select id="region_id" name="region_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'regions', 'Region'); } else { loadCountries(this.value); }">
                 <option value="">Select Region...</option>
                 ${data.regions.map(r => `
                   <option value="${r.id}">${escapeHtml(r.name)}</option>
                 `).join("")}
+                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new region...</option>
               </select>
             </div>
             <div>
               <label for="country_id" class="label">Country</label>
-              <select id="country_id" name="country_id" class="select-field" onchange="loadPlants(this.value)">
-                <option value="">Select Country...</option>
+              <select id="country_id" name="country_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'countries', 'Country', 'region_id'); } else { loadPlants(this.value); }">
+                <option value="">Select Region first...</option>
                 ${data.countries.map(c => `
                   <option value="${c.id}" data-parent="${c.parent_id}" hidden>${escapeHtml(c.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new country...</option>
               </select>
             </div>
             <div>
               <label for="plant_id" class="label">Plant</label>
-              <select id="plant_id" name="plant_id" class="select-field" onchange="loadDepartments(this.value)">
-                <option value="">Select Plant...</option>
+              <select id="plant_id" name="plant_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'plants', 'Plant', 'country_id'); } else { loadDepartments(this.value); }">
+                <option value="">Select Country first...</option>
                 ${data.plants.map(p => `
                   <option value="${p.id}" data-parent="${p.parent_id}" hidden>${escapeHtml(p.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new plant...</option>
               </select>
             </div>
             <div>
               <label for="department_id" class="label">Department</label>
-              <select id="department_id" name="department_id" class="select-field" onchange="loadAreas(this.value)">
-                <option value="">Select Department...</option>
+              <select id="department_id" name="department_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'departments', 'Department', 'plant_id'); } else { loadAreas(this.value); }">
+                <option value="">Select Plant first...</option>
                 ${data.departments.map(d => `
                   <option value="${d.id}" data-parent="${d.parent_id}" hidden>${escapeHtml(d.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new department...</option>
               </select>
             </div>
             <div>
               <label for="area_id" class="label">Area</label>
-              <select id="area_id" name="area_id" class="select-field" onchange="loadSubAreas(this.value)">
-                <option value="">Select Area...</option>
+              <select id="area_id" name="area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'areas', 'Area', 'department_id'); } else { loadSubAreas(this.value); }">
+                <option value="">Select Department first...</option>
                 ${data.areas.map(a => `
                   <option value="${a.id}" data-parent="${a.parent_id}" hidden>${escapeHtml(a.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new area...</option>
               </select>
             </div>
             <div>
               <label for="equipment_sub_area_id" class="label">Sub Area</label>
-              <select id="equipment_sub_area_id" name="equipment_sub_area_id" class="select-field">
-                <option value="">Select Sub Area...</option>
+              <select id="equipment_sub_area_id" name="equipment_sub_area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'sub-areas', 'Sub Area', 'area_id'); }">
+                <option value="">Select Area first...</option>
                 ${data.subAreas.map(sa => `
                   <option value="${sa.id}" data-parent="${sa.parent_id}" hidden>${escapeHtml(sa.name)}</option>
+                `).join("")}
+                <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new sub area...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inventory Period -->
+        <div class="card mb-6">
+          <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+            </svg>
+            Inventory
+          </h2>
+          
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <label for="inventory_period_id" class="label">Inventory Period</label>
+              <select id="inventory_period_id" name="inventory_period_id" class="select-field">
+                <option value="">No inventory period</option>
+                ${data.inventoryPeriods.map(ip => `
+                  <option value="${ip.id}">${escapeHtml(ip.name)} (${ip.start_date} - ${ip.end_date})</option>
                 `).join("")}
               </select>
             </div>
@@ -328,56 +370,8 @@ export function addPage(data: AddData, success: boolean = false, error: string |
       </form>
     </div>
 
-    <script>
-      function filterOptions(selectId, parentId) {
-        const select = document.getElementById(selectId);
-        const options = select.querySelectorAll('option[data-parent]');
-        
-        options.forEach(opt => {
-          if (opt.dataset.parent === parentId) {
-            opt.hidden = false;
-          } else {
-            opt.hidden = true;
-            opt.selected = false;
-          }
-        });
-        
-        select.value = '';
-      }
-
-      function loadCountries(regionId) {
-        filterOptions('country_id', regionId);
-        loadPlants('');
-      }
-
-      function loadPlants(countryId) {
-        filterOptions('plant_id', countryId);
-        loadDepartments('');
-      }
-
-      function loadDepartments(plantId) {
-        filterOptions('department_id', plantId);
-        loadAreas('');
-      }
-
-      function loadAreas(departmentId) {
-        filterOptions('area_id', departmentId);
-        loadSubAreas('');
-      }
-
-      function loadSubAreas(areaId) {
-        filterOptions('equipment_sub_area_id', areaId);
-      }
-
-      function loadProductLines(typeId) {
-        filterOptions('product_line_id', typeId);
-        loadModels('');
-      }
-
-      function loadModels(productLineId) {
-        filterOptions('model_id', productLineId);
-      }
-    </script>
+    ${getModalHtml()}
+    ${getScriptsHtml()}
   `;
 
   return layout("Add Equipment", content);

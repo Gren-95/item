@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { getModalHtml, getScriptsHtml } from "./components";
 
 interface Equipment {
   id: number;
@@ -23,12 +24,22 @@ interface Equipment {
   department_id: number | null;
   area_id: number | null;
   latest_audit_date: string | null;
+  comment: string | null;
+  inventory_period_id: number | null;
+  inventory_nr: string | null;
 }
 
 interface SelectOption {
   id: number;
   name: string;
   parent_id?: number;
+}
+
+interface InventoryPeriod {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
 }
 
 interface AuditData {
@@ -43,21 +54,14 @@ interface AuditData {
   productLines: SelectOption[];
   models: SelectOption[];
   employees: { employee_no: string; name: string }[];
+  inventoryPeriods: InventoryPeriod[];
+  vendors: SelectOption[];
+  suppliers: SelectOption[];
 }
 
 export function auditPage(data: AuditData, success: boolean = false, error: string | null = null): string {
   const eq = data.equipment;
   
-  // Calculate device age
-  const purchaseDate = new Date(eq.purchase_date);
-  const now = new Date();
-  const ageInMonths = Math.floor((now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24 * 30));
-  const ageYears = Math.floor(ageInMonths / 12);
-  const ageMonthsRemaining = ageInMonths % 12;
-  const deviceAge = ageYears > 0 
-    ? `${ageYears} year${ageYears > 1 ? "s" : ""}${ageMonthsRemaining > 0 ? `, ${ageMonthsRemaining} month${ageMonthsRemaining > 1 ? "s" : ""}` : ""}`
-    : `${ageMonthsRemaining} month${ageMonthsRemaining !== 1 ? "s" : ""}`;
-
   const content = `
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-4 mb-6">
@@ -66,7 +70,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>
         </a>
-        <h1 class="text-2xl font-bold text-gray-900">Audit Equipment</h1>
+        <h1 class="text-2xl font-bold text-gray-900">Edit Equipment</h1>
         <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full font-mono text-sm">${escapeHtml(eq.service_tag)}</span>
       </div>
 
@@ -76,7 +80,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
             </svg>
-            <span>Equipment audit saved successfully!</span>
+            <span>Equipment saved successfully!</span>
           </div>
         </div>
       ` : ""}
@@ -92,40 +96,92 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
         </div>
       ` : ""}
 
-      <form action="/audit/${eq.id}" method="POST">
-        <!-- Read-only Information -->
+      <form action="/edit/${eq.id}" method="POST">
+        <!-- Equipment Information -->
         <div class="card mb-6">
           <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            Equipment Information (Read-only)
+            Equipment Information
           </h2>
           
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-              <label class="label">Latest Audit Date</label>
-              <div class="readonly-field">${eq.latest_audit_date || "Never audited"}</div>
+              <label for="purchase_date" class="label">Warranty Start</label>
+              <input
+                type="date"
+                id="purchase_date"
+                name="purchase_date"
+                value="${eq.purchase_date}"
+                class="input-field"
+              >
             </div>
             <div>
-              <label class="label">Warranty Start</label>
-              <div class="readonly-field">${formatDate(eq.purchase_date)}</div>
+              <label for="warranty_expiry_date" class="label">Warranty Expiry</label>
+              <input
+                type="date"
+                id="warranty_expiry_date"
+                name="warranty_expiry_date"
+                value="${eq.warranty_expiry_date}"
+                class="input-field ${isExpired(eq.warranty_expiry_date) ? "text-red-600 bg-red-50 border-red-200" : ""}"
+              >
             </div>
             <div>
-              <label class="label">Warranty Expiry</label>
-              <div class="readonly-field ${isExpired(eq.warranty_expiry_date) ? "text-red-600 bg-red-50 border-red-200" : ""}">${formatDate(eq.warranty_expiry_date)}</div>
+              <label for="vendor_id" class="label">Vendor</label>
+              <select id="vendor_id" name="vendor_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'vendors', 'Vendor'); }">
+                <option value="">Select Vendor...</option>
+                ${data.vendors.map(v => `
+                  <option value="${v.id}" ${eq.vendor_id === v.id ? "selected" : ""}>${escapeHtml(v.name)}</option>
+                `).join("")}
+                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new vendor...</option>
+              </select>
             </div>
             <div>
-              <label class="label">Device Age</label>
-              <div class="readonly-field">${deviceAge}</div>
-            </div>
-            <div>
-              <label class="label">Vendor</label>
-              <div class="readonly-field">${escapeHtml(eq.vendor_name || "-")}</div>
+              <label for="supplier_id" class="label">Supplier</label>
+              <select id="supplier_id" name="supplier_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'suppliers', 'Supplier'); }">
+                <option value="">Select Supplier...</option>
+                ${data.suppliers.map(s => `
+                  <option value="${s.id}" ${eq.supplier_id === s.id ? "selected" : ""}>${escapeHtml(s.name)}</option>
+                `).join("")}
+                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new supplier...</option>
+              </select>
             </div>
             <div>
               <label class="label">Service Tag</label>
-              <div class="readonly-field font-mono">${escapeHtml(eq.service_tag)}</div>
+              <div class="readonly-field font-mono bg-white">${escapeHtml(eq.service_tag)}</div>
+            </div>
+            <div>
+              <label for="cerf" class="label">CERF</label>
+              <input
+                type="number"
+                id="cerf"
+                name="cerf"
+                value="${eq.cerf || ""}"
+                class="input-field"
+              >
+            </div>
+            <div>
+              <label for="ip" class="label">IP Address</label>
+              <input
+                type="text"
+                id="ip"
+                name="ip"
+                value="${eq.ip || ""}"
+                class="input-field font-mono"
+                placeholder="e.g., 192.168.1.100"
+              >
+            </div>
+            <div>
+              <label for="mac_addresses" class="label">MAC Addresses</label>
+              <input
+                type="text"
+                id="mac_addresses"
+                name="mac_addresses"
+                value="${eq.mac_addresses || ""}"
+                class="input-field font-mono"
+                placeholder="Comma-separated MAC addresses"
+              >
             </div>
           </div>
         </div>
@@ -142,29 +198,32 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label for="type_id" class="label">Type</label>
-              <select id="type_id" name="type_id" class="select-field" onchange="loadProductLines(this.value)">
+              <select id="type_id" name="type_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'types', 'Type'); } else { loadProductLines(this.value); }">
                 <option value="">Select Type...</option>
                 ${data.types.map(t => `
                   <option value="${t.id}" ${eq.type_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>
                 `).join("")}
+                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new type...</option>
               </select>
             </div>
             <div>
               <label for="product_line_id" class="label">Product Line</label>
-              <select id="product_line_id" name="product_line_id" class="select-field" onchange="loadModels(this.value)">
-                <option value="">Select Product Line...</option>
+              <select id="product_line_id" name="product_line_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'product-lines', 'Product Line', 'type_id'); } else { loadModels(this.value); }">
+                <option value="">${eq.type_id ? "Select Product Line..." : "Select Type first..."}</option>
                 ${data.productLines.map(pl => `
                   <option value="${pl.id}" data-parent="${pl.parent_id}" ${eq.product_line_id === pl.id ? "selected" : ""} ${eq.type_id !== pl.parent_id ? "hidden" : ""}>${escapeHtml(pl.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" ${eq.type_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new product line...</option>
               </select>
             </div>
             <div>
               <label for="model_id" class="label">Model</label>
-              <select id="model_id" name="model_id" class="select-field">
-                <option value="">Select Model...</option>
+              <select id="model_id" name="model_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'models', 'Model', 'product_line_id'); }">
+                <option value="">${eq.product_line_id ? "Select Model..." : "Select Product Line first..."}</option>
                 ${data.models.map(m => `
                   <option value="${m.id}" data-parent="${m.parent_id}" ${eq.model_id === m.id ? "selected" : ""} ${eq.product_line_id !== m.parent_id ? "hidden" : ""}>${escapeHtml(m.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" ${eq.product_line_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new model...</option>
               </select>
             </div>
           </div>
@@ -183,55 +242,83 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label for="region_id" class="label">Region</label>
-              <select id="region_id" name="region_id" class="select-field" onchange="loadCountries(this.value)">
+              <select id="region_id" name="region_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'regions', 'Region'); } else { loadCountries(this.value); }">
                 <option value="">Select Region...</option>
                 ${data.regions.map(r => `
                   <option value="${r.id}" ${eq.region_id === r.id ? "selected" : ""}>${escapeHtml(r.name)}</option>
                 `).join("")}
+                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new region...</option>
               </select>
             </div>
             <div>
               <label for="country_id" class="label">Country</label>
-              <select id="country_id" name="country_id" class="select-field" onchange="loadPlants(this.value)">
-                <option value="">Select Country...</option>
+              <select id="country_id" name="country_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'countries', 'Country', 'region_id'); } else { loadPlants(this.value); }">
+                <option value="">${eq.region_id ? "Select Country..." : "Select Region first..."}</option>
                 ${data.countries.map(c => `
                   <option value="${c.id}" data-parent="${c.parent_id}" ${eq.country_id === c.id ? "selected" : ""} ${eq.region_id !== c.parent_id ? "hidden" : ""}>${escapeHtml(c.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" ${eq.region_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new country...</option>
               </select>
             </div>
             <div>
               <label for="plant_id" class="label">Plant</label>
-              <select id="plant_id" name="plant_id" class="select-field" onchange="loadDepartments(this.value)">
-                <option value="">Select Plant...</option>
+              <select id="plant_id" name="plant_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'plants', 'Plant', 'country_id'); } else { loadDepartments(this.value); }">
+                <option value="">${eq.country_id ? "Select Plant..." : "Select Country first..."}</option>
                 ${data.plants.map(p => `
                   <option value="${p.id}" data-parent="${p.parent_id}" ${eq.plant_id === p.id ? "selected" : ""} ${eq.country_id !== p.parent_id ? "hidden" : ""}>${escapeHtml(p.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" ${eq.country_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new plant...</option>
               </select>
             </div>
             <div>
               <label for="department_id" class="label">Department</label>
-              <select id="department_id" name="department_id" class="select-field" onchange="loadAreas(this.value)">
-                <option value="">Select Department...</option>
+              <select id="department_id" name="department_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'departments', 'Department', 'plant_id'); } else { loadAreas(this.value); }">
+                <option value="">${eq.plant_id ? "Select Department..." : "Select Plant first..."}</option>
                 ${data.departments.map(d => `
                   <option value="${d.id}" data-parent="${d.parent_id}" ${eq.department_id === d.id ? "selected" : ""} ${eq.plant_id !== d.parent_id ? "hidden" : ""}>${escapeHtml(d.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" ${eq.plant_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new department...</option>
               </select>
             </div>
             <div>
               <label for="area_id" class="label">Area</label>
-              <select id="area_id" name="area_id" class="select-field" onchange="loadSubAreas(this.value)">
-                <option value="">Select Area...</option>
+              <select id="area_id" name="area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'areas', 'Area', 'department_id'); } else { loadSubAreas(this.value); }">
+                <option value="">${eq.department_id ? "Select Area..." : "Select Department first..."}</option>
                 ${data.areas.map(a => `
                   <option value="${a.id}" data-parent="${a.parent_id}" ${eq.area_id === a.id ? "selected" : ""} ${eq.department_id !== a.parent_id ? "hidden" : ""}>${escapeHtml(a.name)}</option>
                 `).join("")}
+                <option value="__add_new__" data-parent="__always__" ${eq.department_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new area...</option>
               </select>
             </div>
             <div>
               <label for="equipment_sub_area_id" class="label">Sub Area</label>
-              <select id="equipment_sub_area_id" name="equipment_sub_area_id" class="select-field">
-                <option value="">Select Sub Area...</option>
+              <select id="equipment_sub_area_id" name="equipment_sub_area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'sub-areas', 'Sub Area', 'area_id'); }">
+                <option value="">${eq.area_id ? "Select Sub Area..." : "Select Area first..."}</option>
                 ${data.subAreas.map(sa => `
                   <option value="${sa.id}" data-parent="${sa.parent_id}" ${eq.equipment_sub_area_id === sa.id ? "selected" : ""} ${eq.area_id !== sa.parent_id ? "hidden" : ""}>${escapeHtml(sa.name)}</option>
+                `).join("")}
+                <option value="__add_new__" data-parent="__always__" ${eq.area_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new sub area...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inventory Period -->
+        <div class="card mb-6">
+          <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+            </svg>
+            Inventory
+          </h2>
+          
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <label for="inventory_period_id" class="label">Inventory Period</label>
+              <select id="inventory_period_id" name="inventory_period_id" class="select-field">
+                <option value="">No inventory period</option>
+                ${data.inventoryPeriods.map(ip => `
+                  <option value="${ip.id}" ${eq.inventory_period_id === ip.id ? "selected" : ""}>${escapeHtml(ip.name)} (${ip.start_date} - ${ip.end_date})</option>
                 `).join("")}
               </select>
             </div>
@@ -268,6 +355,16 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 class="input-field"
               >
             </div>
+            <div class="md:col-span-2">
+              <label for="comment" class="label">Audit Comment</label>
+              <textarea 
+                id="comment" 
+                name="comment"
+                rows="3"
+                placeholder="Add notes about this audit..."
+                class="input-field"
+              >${eq.comment || ""}</textarea>
+            </div>
           </div>
         </div>
 
@@ -286,59 +383,8 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
       </form>
     </div>
 
-    <script>
-      function filterOptions(selectId, parentId) {
-        const select = document.getElementById(selectId);
-        const options = select.querySelectorAll('option[data-parent]');
-        let firstVisible = null;
-        
-        options.forEach(opt => {
-          if (opt.dataset.parent === parentId) {
-            opt.hidden = false;
-            if (!firstVisible) firstVisible = opt;
-          } else {
-            opt.hidden = true;
-            opt.selected = false;
-          }
-        });
-        
-        // Reset selection
-        select.value = '';
-      }
-
-      function loadCountries(regionId) {
-        filterOptions('country_id', regionId);
-        loadPlants('');
-      }
-
-      function loadPlants(countryId) {
-        filterOptions('plant_id', countryId);
-        loadDepartments('');
-      }
-
-      function loadDepartments(plantId) {
-        filterOptions('department_id', plantId);
-        loadAreas('');
-      }
-
-      function loadAreas(departmentId) {
-        filterOptions('area_id', departmentId);
-        loadSubAreas('');
-      }
-
-      function loadSubAreas(areaId) {
-        filterOptions('equipment_sub_area_id', areaId);
-      }
-
-      function loadProductLines(typeId) {
-        filterOptions('product_line_id', typeId);
-        loadModels('');
-      }
-
-      function loadModels(productLineId) {
-        filterOptions('model_id', productLineId);
-      }
-    </script>
+    ${getModalHtml()}
+    ${getScriptsHtml()}
   `;
 
   return layout(`Audit - ${eq.service_tag}`, content);

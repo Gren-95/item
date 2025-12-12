@@ -18,7 +18,7 @@ export function searchPage(
   const content = `
     <div class="max-w-4xl mx-auto">
       <div class="card mb-8">
-        <h1 class="text-2xl font-bold text-gray-900 mb-6">Equipment Audit Search</h1>
+        <h1 class="text-2xl font-bold text-gray-900 mb-6">Equipment Search</h1>
         
         <form action="/" method="GET" class="flex gap-4">
           <div class="flex-1">
@@ -59,55 +59,18 @@ export function searchPage(
 
       ${results !== null ? `
         <div class="card">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">
-            Search Results ${results.length > 0 ? `(${results.length} found)` : ""}
-          </h2>
-          
-          ${results.length === 0 ? `
-            <div class="text-center py-8">
-              <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          <div class="text-center py-8">
+            <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-gray-500 mb-4">No equipment found matching "${escapeHtml(query)}"</p>
+            <a href="/add?serial=${encodeURIComponent(query)}" class="btn btn-primary inline-flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
               </svg>
-              <p class="text-gray-500 mb-4">No equipment found matching "${escapeHtml(query)}"</p>
-              <a href="/add?serial=${encodeURIComponent(query)}" class="btn btn-primary inline-flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                Add New Equipment
-              </a>
-            </div>
-          ` : `
-            <div class="overflow-x-auto">
-              <table class="w-full">
-                <thead>
-                  <tr class="border-b border-gray-200">
-                    <th class="text-left py-3 px-4 font-semibold text-gray-600">Service Tag</th>
-                    <th class="text-left py-3 px-4 font-semibold text-gray-600">Type</th>
-                    <th class="text-left py-3 px-4 font-semibold text-gray-600">Model</th>
-                    <th class="text-left py-3 px-4 font-semibold text-gray-600">Assigned To</th>
-                    <th class="text-left py-3 px-4 font-semibold text-gray-600">Location</th>
-                    <th class="text-left py-3 px-4 font-semibold text-gray-600">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${results.map(r => `
-                    <tr class="border-b border-gray-100 hover:bg-gray-50">
-                      <td class="py-3 px-4 font-mono text-blue-600">${escapeHtml(r.service_tag)}</td>
-                      <td class="py-3 px-4">${escapeHtml(r.type_name || "-")}</td>
-                      <td class="py-3 px-4">${escapeHtml(r.model_name || "-")}</td>
-                      <td class="py-3 px-4">${escapeHtml(r.assigned_to_name || "-")}</td>
-                      <td class="py-3 px-4">${escapeHtml(r.location || "-")}</td>
-                      <td class="py-3 px-4">
-                        <a href="/audit/${r.id}" class="btn btn-success text-sm">
-                          Audit
-                        </a>
-                      </td>
-                    </tr>
-                  `).join("")}
-                </tbody>
-              </table>
-            </div>
-          `}
+              Add New Equipment
+            </a>
+          </div>
         </div>
       ` : `
         <div class="text-center py-12">
