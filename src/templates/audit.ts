@@ -371,6 +371,14 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
         <!-- Submit -->
         <div class="flex justify-end gap-4">
           <a href="/" class="btn btn-secondary">Cancel</a>
+          <button type="button" id="print-label" class="btn btn-secondary" data-service-tag="${escapeHtml(eq.service_tag)}">
+            <span class="flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+              </svg>
+              Print Label
+            </span>
+          </button>
           <button type="submit" class="btn btn-success">
             <span class="flex items-center gap-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,6 +388,160 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </span>
           </button>
         </div>
+        
+        <!-- Print Modal -->
+        <div id="printModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 transition-colors">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Select Printer</h3>
+              <button onclick="closePrintModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div id="printModalBody">
+              <div id="printers-loading" class="text-center py-4">
+                <svg class="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <p class="text-gray-600 dark:text-gray-400 mt-2">Loading printers...</p>
+              </div>
+              <div id="printers-list" class="hidden max-h-64 overflow-y-auto mb-4"></div>
+              <div id="printers-error" class="hidden text-red-600 dark:text-red-400 text-sm mb-4"></div>
+            </div>
+            <div class="flex justify-end gap-3">
+              <button onclick="closePrintModal()" class="btn btn-secondary">Cancel</button>
+              <button id="confirm-print" onclick="confirmPrint()" class="btn btn-primary hidden">Print</button>
+            </div>
+          </div>
+        </div>
+        
+        <script>
+          (function() {
+            let printers = [];
+            let selectedPrinter = null;
+            const serviceTag = '${escapeHtml(eq.service_tag)}';
+            
+            const printBtn = document.getElementById('print-label');
+            const printModal = document.getElementById('printModal');
+            const printersLoading = document.getElementById('printers-loading');
+            const printersList = document.getElementById('printers-list');
+            const printersError = document.getElementById('printers-error');
+            const confirmPrintBtn = document.getElementById('confirm-print');
+            
+            async function loadPrinters() {
+              try {
+                const response = await fetch('/api/printers');
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                  printers = result.data;
+                  renderPrinters();
+                } else {
+                  showError(result.message || 'Failed to load printers');
+                }
+              } catch (err) {
+                showError('Error loading printers: ' + err.message);
+              } finally {
+                printersLoading.classList.add('hidden');
+              }
+            }
+            
+            function renderPrinters() {
+              if (printers.length === 0) {
+                printersList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-4">No printers available</p>';
+                printersList.classList.remove('hidden');
+                return;
+              }
+              
+              printersList.innerHTML = printers.map((p, idx) => \`
+                <label class="flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg mb-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  <input type="radio" name="printer" value="\${p.name}" class="mr-3" onchange="selectPrinter('\${p.name}')">
+                  <div class="flex-1">
+                    <div class="font-medium text-gray-900 dark:text-white">\${escapeHtml(p.name)}</div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                      \${escapeHtml(p.department)} - \${escapeHtml(p.area)} | \${escapeHtml(p.ip)}
+                    </div>
+                  </div>
+                </label>
+              \`).join('');
+              printersList.classList.remove('hidden');
+            }
+            
+            function showError(msg) {
+              printersError.textContent = msg;
+              printersError.classList.remove('hidden');
+            }
+            
+            window.selectPrinter = function(name) {
+              selectedPrinter = name;
+              confirmPrintBtn.classList.remove('hidden');
+            };
+            
+            window.closePrintModal = function() {
+              printModal.classList.add('hidden');
+              printModal.classList.remove('flex');
+              selectedPrinter = null;
+              confirmPrintBtn.classList.add('hidden');
+            };
+            
+            window.confirmPrint = async function() {
+              if (!selectedPrinter) return;
+              
+              const btn = confirmPrintBtn;
+              const originalText = btn.innerHTML;
+              btn.disabled = true;
+              btn.innerHTML = 'Printing...';
+              
+              try {
+                const response = await fetch('/api/print', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    service_tag: serviceTag,
+                    printer: selectedPrinter
+                  })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                  alert('Label sent to printer successfully!');
+                  closePrintModal();
+                } else {
+                  alert('Error printing label: ' + (result.error || 'Unknown error'));
+                }
+              } catch (err) {
+                alert('Error printing label: ' + err.message);
+              } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+              }
+            };
+            
+            if (printBtn) {
+              printBtn.addEventListener('click', function() {
+                printModal.classList.remove('hidden');
+                printModal.classList.add('flex');
+                printersLoading.classList.remove('hidden');
+                printersList.classList.add('hidden');
+                printersError.classList.add('hidden');
+                confirmPrintBtn.classList.add('hidden');
+                loadPrinters();
+              });
+            }
+            
+            function escapeHtml(str) {
+              return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+            }
+          })();
+        </script>
       </form>
     </div>
 
