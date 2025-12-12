@@ -297,6 +297,162 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
+    // Get printers from Bartender
+    if (path === "/api/printers" && req.method === "GET") {
+      try {
+        const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
+        const host = bartenderHost.replace(/\/$/, "");
+        const printersUrl = `${host}/integration/getprinters/execute`;
+
+        const response = await fetch(printersUrl, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Bartender API returned ${response.status}`);
+        }
+
+        let responseText = await response.text();
+        // Remove BOM if present
+        responseText = responseText.replace(/^\uFEFF/, "");
+        
+        const apiData = JSON.parse(responseText);
+
+        // Transform API response
+        const result = apiData
+          .map((printer: any) => {
+            const location = printer.Location || "";
+            let department = "";
+            let area = "";
+
+            // Split location on dash (-) and trim both parts
+            if (location.includes("-")) {
+              const locationParts = location.split("-", 2);
+              department = locationParts[0].trim();
+              area = (locationParts[1] || "").trim();
+              if (!area) {
+                area = department;
+              }
+            } else {
+              department = location.trim();
+              area = department;
+            }
+
+            const driver = (printer.DriverName || "").toLowerCase();
+            let type = "A4";
+
+            // Determine paper type based on driver
+            if (
+              driver.includes("intermec") ||
+              driver.includes("honeywell") ||
+              driver.includes("easycoder")
+            ) {
+              type = "sticker";
+            } else if (driver.includes("brother")) {
+              type = "sticker-tiny";
+            }
+
+            // Clean IP address by removing suffix after underscore
+            const cleanIp = (printer.PortName || "").split("_")[0];
+
+            // Only return sticker printers
+            if (type === "sticker-tiny") {
+              return {
+                name: printer.Name,
+                ip: cleanIp,
+                department: department,
+                area: area,
+                driver: printer.DriverName || "",
+                type: type,
+              };
+            }
+
+            return null;
+          })
+          .filter((item: any) => item !== null);
+
+        return new Response(JSON.stringify({ success: true, data: result }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err: any) {
+        return new Response(
+          JSON.stringify({
+            error: true,
+            message: "Failed to fetch printers. Printer server may be offline or the API may be down.",
+            details: err.message,
+          }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
+
+    // Print label API
+    if (path === "/api/print" && req.method === "POST") {
+      try {
+        const body = await req.json();
+        const service_tag = body.service_tag;
+        const printer = body.printer || process.env.BARTENDER_PRINTER || "EERAK-PRT103";
+        const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
+
+        if (!service_tag) {
+          return new Response(JSON.stringify({ error: "Service tag is required" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        if (!printer) {
+          return new Response(JSON.stringify({ error: "Printer is required" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        // Remove trailing slash from host if present
+        const host = bartenderHost.replace(/\/$/, "");
+        const printUrl = `${host}/Integration/ServiceTag/Execute`;
+
+        const response = await fetch(printUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            service_tag: service_tag,
+            printer: printer,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          return new Response(
+            JSON.stringify({ error: `Bartender error: ${errorText}` }),
+            {
+              status: response.status,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        return new Response(JSON.stringify({ success: true, message: "Label sent to printer" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // API Routes for adding new items
     if (path.startsWith("/api/") && req.method === "POST") {
       const body = await req.json();
