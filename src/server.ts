@@ -28,35 +28,15 @@ async function handleRequest(req: Request): Promise<Response> {
       const serial = url.searchParams.get("serial");
       
       if (serial && serial.trim()) {
-        const [rows] = await pool.query<RowDataPacket[]>(`
-          SELECT 
-            e.id,
-            e.service_tag,
-            t.type_name,
-            m.name as model_name,
-            v.name as vendor_name,
-            CONCAT(emp.first_name, ' ', emp.last_name) as assigned_to_name,
-            CONCAT_WS(' > ', r.name, c.name, p.name, d.name, a.name, sa.name) as location
-          FROM it_equipment e
-          LEFT JOIN it_equipment_model m ON e.model_id = m.id
-          LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
-          LEFT JOIN it_equipment_type t ON pl.type_id = t.id
-          LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
-          LEFT JOIN it_employees_list emp ON e.assigned_to = emp.employee_no
-          LEFT JOIN it_equipment_sub_area sa ON e.equipment_sub_area_id = sa.id
-          LEFT JOIN it_equipment_area a ON sa.area_id = a.id
-          LEFT JOIN it_equipment_department d ON a.department_id = d.id
-          LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
-          LEFT JOIN it_equipment_country c ON p.country_id = c.id
-          LEFT JOIN it_equipment_region r ON c.region_id = r.id
-          WHERE e.service_tag LIKE ?
-          ORDER BY e.service_tag
-          LIMIT 50
-        `, [`%${serial.trim()}%`]);
+        const [rows] = await pool.query<RowDataPacket[]>(
+          `SELECT id FROM it_equipment WHERE service_tag LIKE ? ORDER BY service_tag LIMIT 1`,
+          [`%${serial.trim()}%`]
+        );
 
-        return new Response(searchPage(serial, rows as any[]), {
-          headers: { "Content-Type": "text/html" },
-        });
+        if (rows.length > 0) {
+          // Redirect directly to edit page (prefilled form)
+          return Response.redirect(`${url.origin}/edit/${rows[0].id}`, 303);
+        }
       }
 
       return new Response(searchPage(), {
@@ -93,12 +73,12 @@ async function handleRequest(req: Request): Promise<Response> {
       const comment = formData.get("comment") || null;
 
       try {
+        // Insert into equipment table (static data only)
         const [result] = await pool.query<ResultSetHeader>(`
           INSERT INTO it_equipment (
             service_tag, vendor_id, supplier_id, model_id,
-            purchase_date, warranty_expiry_date, equipment_sub_area_id,
-            assigned_to, teamviewer, cerf, ip, mac_addresses, comment
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            purchase_date, warranty_expiry_date, teamviewer, cerf, ip, mac_addresses
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           service_tag,
           vendor_id || null,
@@ -106,17 +86,31 @@ async function handleRequest(req: Request): Promise<Response> {
           model_id || null,
           purchase_date,
           warranty_expiry_date,
-          equipment_sub_area_id || null,
-          assigned_to || null,
           teamviewer || null,
           cerf || 0,
           ip || null,
-          mac_addresses || null,
+          mac_addresses || null
+        ]);
+
+        const equipmentId = result.insertId;
+
+        // Insert initial log entry (dynamic/audit data)
+        const inventory_period_id = formData.get("inventory_period_id") || null;
+        await pool.query(`
+          INSERT INTO it_equipment_log (
+            equipment_id, service_tag, assigned_to, equipment_sub_area_id, inventory_period_id, comment
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `, [
+          equipmentId,
+          service_tag,
+          assigned_to || null,
+          equipment_sub_area_id || null,
+          inventory_period_id || null,
           comment || null
         ]);
 
-        // Redirect to the audit page for the newly created equipment
-        return Response.redirect(`${url.origin}/audit/${result.insertId}?success=1`, 303);
+        // Redirect to the edit page for the newly created equipment
+        return Response.redirect(`${url.origin}/edit/${equipmentId}?success=1`, 303);
       } catch (err: any) {
         const addData = await getAddData(service_tag);
         return new Response(addPage(addData, false, err.message), {
@@ -125,8 +119,8 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Audit page - GET
-    if (path.match(/^\/audit\/\d+$/) && req.method === "GET") {
+    // Edit page - GET
+    if (path.match(/^\/edit\/\d+$/) && req.method === "GET") {
       const id = parseInt(path.split("/")[2]);
       const success = url.searchParams.get("success") === "1";
       
@@ -140,8 +134,8 @@ async function handleRequest(req: Request): Promise<Response> {
       });
     }
 
-    // Audit page - POST (save audit)
-    if (path.match(/^\/audit\/\d+$/) && req.method === "POST") {
+    // Edit page - POST (save)
+    if (path.match(/^\/edit\/\d+$/) && req.method === "POST") {
       const id = parseInt(path.split("/")[2]);
       const formData = await req.formData();
       
@@ -150,48 +144,70 @@ async function handleRequest(req: Request): Promise<Response> {
       const equipment_sub_area_id = formData.get("equipment_sub_area_id") || null;
       const assigned_to = formData.get("assigned_to") || null;
       const teamviewer = formData.get("teamviewer") || null;
+      const comment = formData.get("comment") || null;
+      const inventory_period_id = formData.get("inventory_period_id") || null;
+      const vendor_id = formData.get("vendor_id") || null;
+      const supplier_id = formData.get("supplier_id") || null;
+      const purchase_date = formData.get("purchase_date") || null;
+      const warranty_expiry_date = formData.get("warranty_expiry_date") || null;
+      const cerf = formData.get("cerf") || 0;
+      const ip = formData.get("ip") || null;
+      const mac_addresses = formData.get("mac_addresses") || null;
 
       try {
-        // Update the equipment record
+        // Get the equipment record for service_tag
+        const [equipment] = await pool.query<RowDataPacket[]>(`
+          SELECT service_tag FROM it_equipment WHERE id = ?
+        `, [id]);
+
+        if (equipment.length === 0) {
+          return new Response("Equipment not found", { status: 404 });
+        }
+
+        const service_tag = equipment[0].service_tag;
+
+        // Update the equipment table (static data only)
         await pool.query(`
           UPDATE it_equipment SET
             model_id = ?,
-            equipment_sub_area_id = ?,
-            assigned_to = ?,
+            vendor_id = ?,
+            supplier_id = ?,
+            purchase_date = ?,
+            warranty_expiry_date = ?,
+            cerf = ?,
+            ip = ?,
+            mac_addresses = ?,
             teamviewer = ?,
             updated = CURRENT_TIMESTAMP
           WHERE id = ?
         `, [
           model_id || null,
-          equipment_sub_area_id || null,
-          assigned_to || null,
+          vendor_id || null,
+          supplier_id || null,
+          purchase_date || null,
+          warranty_expiry_date || null,
+          cerf || 0,
+          ip || null,
+          mac_addresses || null,
           teamviewer || null,
           id
         ]);
 
-        // Create audit record
-        const [equipment] = await pool.query<RowDataPacket[]>(`
-          SELECT * FROM it_equipment WHERE id = ?
-        `, [id]);
+        // Insert new log entry (dynamic/audit data)
+        await pool.query(`
+          INSERT INTO it_equipment_log (
+            equipment_id, service_tag, assigned_to, equipment_sub_area_id, inventory_period_id, comment
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `, [
+          id,
+          service_tag,
+          assigned_to || null,
+          equipment_sub_area_id || null,
+          inventory_period_id || null,
+          comment || null
+        ]);
 
-        if (equipment.length > 0) {
-          const eq = equipment[0];
-          await pool.query(`
-            INSERT INTO it_equipment_audit (
-              equipment_id, service_tag, model_id, vendor_id, supplier_id,
-              cerf, device_no, is_personal, purchase_date, warranty_expiry_date,
-              is_written_off, teamviewer, imei1, imei2, ip, mac_addresses,
-              assigned_to, equipment_sub_area_id, comment, bill_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [
-            eq.id, eq.service_tag, eq.model_id, eq.vendor_id, eq.supplier_id,
-            eq.cerf, eq.device_no, eq.is_personal, eq.purchase_date, eq.warranty_expiry_date,
-            eq.is_written_off, eq.teamviewer, eq.imei1, eq.imei2, eq.ip, eq.mac_addresses,
-            eq.assigned_to, eq.equipment_sub_area_id, eq.comment, eq.bill_id
-          ]);
-        }
-
-        return Response.redirect(`${url.origin}/audit/${id}?success=1`, 303);
+        return Response.redirect(`${url.origin}/edit/${id}?success=1`, 303);
       } catch (err: any) {
         const auditData = await getAuditData(id);
         if (!auditData) {
@@ -199,6 +215,116 @@ async function handleRequest(req: Request): Promise<Response> {
         }
         return new Response(auditPage(auditData, false, err.message), {
           headers: { "Content-Type": "text/html" },
+        });
+      }
+    }
+
+    // API Routes for adding new items
+    if (path.startsWith("/api/") && req.method === "POST") {
+      const body = await req.json();
+      const name = body.name?.trim();
+      const parent_id = body.parent_id || null;
+
+      if (!name) {
+        return new Response(JSON.stringify({ error: "Name is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        let result: ResultSetHeader;
+        const apiType = path.replace("/api/", "");
+
+        switch (apiType) {
+          case "regions":
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_region (name, status) VALUES (?, 1)",
+              [name]
+            );
+            break;
+          case "countries":
+            if (!parent_id) throw new Error("Region is required");
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_country (name, region_id, status) VALUES (?, ?, 1)",
+              [name, parent_id]
+            );
+            break;
+          case "plants":
+            if (!parent_id) throw new Error("Country is required");
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_plant (name, country_id, status) VALUES (?, ?, 1)",
+              [name, parent_id]
+            );
+            break;
+          case "departments":
+            if (!parent_id) throw new Error("Plant is required");
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_department (name, plant_id, status) VALUES (?, ?, 1)",
+              [name, parent_id]
+            );
+            break;
+          case "areas":
+            if (!parent_id) throw new Error("Department is required");
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_area (name, department_id, status) VALUES (?, ?, 1)",
+              [name, parent_id]
+            );
+            break;
+          case "sub-areas":
+            if (!parent_id) throw new Error("Area is required");
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_sub_area (name, area_id, status) VALUES (?, ?, 1)",
+              [name, parent_id]
+            );
+            break;
+          case "types":
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)",
+              [name]
+            );
+            break;
+          case "product-lines":
+            if (!parent_id) throw new Error("Type is required");
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_product_line (name, type_id, status) VALUES (?, ?, 1)",
+              [name, parent_id]
+            );
+            break;
+          case "models":
+            if (!parent_id) throw new Error("Product Line is required");
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_model (name, product_line_id, status) VALUES (?, ?, 1)",
+              [name, parent_id]
+            );
+            break;
+          case "vendors":
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_vendor (name) VALUES (?)",
+              [name]
+            );
+            break;
+          case "suppliers":
+            [result] = await pool.query<ResultSetHeader>(
+              "INSERT INTO it_equipment_supplier (name) VALUES (?)",
+              [name]
+            );
+            break;
+          default:
+            return new Response(JSON.stringify({ error: "Unknown API endpoint" }), {
+              status: 404,
+              headers: { "Content-Type": "application/json" },
+            });
+        }
+
+        return new Response(JSON.stringify({ id: result.insertId, name }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
         });
       }
     }
@@ -214,7 +340,7 @@ async function handleRequest(req: Request): Promise<Response> {
 }
 
 async function getAuditData(id: number) {
-  // Get equipment with all joined data
+  // Get equipment with latest log entry joined
   const [equipment] = await pool.query<RowDataPacket[]>(`
     SELECT 
       e.*,
@@ -224,20 +350,34 @@ async function getAuditData(id: number) {
       pl.name as product_line_name,
       m.name as model_name,
       v.name as vendor_name,
+      log.assigned_to,
+      log.equipment_sub_area_id,
+      log.inventory_period_id,
+      log.comment,
       CONCAT(emp.first_name, ' ', emp.last_name) as assigned_to_name,
+      ip.inventory_nr,
       sa.area_id,
       a.department_id,
       d.plant_id,
       p.country_id,
       c.region_id,
-      (SELECT MAX(created) FROM it_equipment_audit WHERE equipment_id = e.id) as latest_audit_date
+      log.created as latest_audit_date
     FROM it_equipment e
     LEFT JOIN it_equipment_model m ON e.model_id = m.id
     LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
     LEFT JOIN it_equipment_type t ON pl.type_id = t.id
     LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
-    LEFT JOIN it_employees_list emp ON e.assigned_to = emp.employee_no
-    LEFT JOIN it_equipment_sub_area sa ON e.equipment_sub_area_id = sa.id
+    LEFT JOIN (
+      SELECT l1.* FROM it_equipment_log l1
+      INNER JOIN (
+        SELECT equipment_id, MAX(created) as max_created
+        FROM it_equipment_log
+        GROUP BY equipment_id
+      ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+    ) log ON e.id = log.equipment_id
+    LEFT JOIN it_employees_list emp ON log.assigned_to = emp.employee_no
+    LEFT JOIN it_inventory_period ip ON log.inventory_period_id = ip.id
+    LEFT JOIN it_equipment_sub_area sa ON log.equipment_sub_area_id = sa.id
     LEFT JOIN it_equipment_area a ON sa.area_id = a.id
     LEFT JOIN it_equipment_department d ON a.department_id = d.id
     LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
@@ -260,7 +400,10 @@ async function getAuditData(id: number) {
     [types],
     [productLines],
     [models],
-    [employees]
+    [employees],
+    [inventoryPeriods],
+    [vendors],
+    [suppliers]
   ] = await Promise.all([
     pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 ORDER BY name`),
@@ -271,7 +414,10 @@ async function getAuditData(id: number) {
     pool.query<RowDataPacket[]>(`SELECT id, type_name as name FROM it_equipment_type WHERE status = 1 ORDER BY type_name`),
     pool.query<RowDataPacket[]>(`SELECT id, name, type_id as parent_id FROM it_equipment_product_line WHERE status = 1 ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, name, product_line_id as parent_id FROM it_equipment_model WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT employee_no, CONCAT(first_name, ' ', last_name) as name FROM it_employees_list WHERE status = 1 ORDER BY last_name, first_name`)
+    pool.query<RowDataPacket[]>(`SELECT employee_no, CONCAT(first_name, ' ', last_name) as name FROM it_employees_list WHERE status = 1 ORDER BY last_name, first_name`),
+    pool.query<RowDataPacket[]>(`SELECT id, inventory_nr as name, start_date, end_date FROM it_inventory_period ORDER BY start_date DESC`),
+    pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_vendor ORDER BY name`),
+    pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_supplier ORDER BY name`)
   ]);
 
   return {
@@ -285,7 +431,10 @@ async function getAuditData(id: number) {
     types,
     productLines,
     models,
-    employees
+    employees,
+    inventoryPeriods,
+    vendors,
+    suppliers
   };
 }
 
@@ -302,7 +451,8 @@ async function getAddData(serviceTag: string) {
     [models],
     [vendors],
     [suppliers],
-    [employees]
+    [employees],
+    [inventoryPeriods]
   ] = await Promise.all([
     pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 ORDER BY name`),
@@ -315,7 +465,8 @@ async function getAddData(serviceTag: string) {
     pool.query<RowDataPacket[]>(`SELECT id, name, product_line_id as parent_id FROM it_equipment_model WHERE status = 1 ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_vendor ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_supplier ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT employee_no, CONCAT(first_name, ' ', last_name) as name FROM it_employees_list WHERE status = 1 ORDER BY last_name, first_name`)
+    pool.query<RowDataPacket[]>(`SELECT employee_no, CONCAT(first_name, ' ', last_name) as name FROM it_employees_list WHERE status = 1 ORDER BY last_name, first_name`),
+    pool.query<RowDataPacket[]>(`SELECT id, inventory_nr as name, start_date, end_date FROM it_inventory_period ORDER BY start_date DESC`)
   ]);
 
   return {
@@ -331,7 +482,8 @@ async function getAddData(serviceTag: string) {
     models,
     vendors,
     suppliers,
-    employees
+    employees,
+    inventoryPeriods
   };
 }
 

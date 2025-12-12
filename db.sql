@@ -1,13 +1,13 @@
---http://192.168.1.84:3000/-- =====================================================
--- IMS Database Schema - Recreated from Scratch
+-- http://192.168.1.84:3000/-- =====================================================
+-- IT Database Schema - Recreated from Scratch
 -- All tables prefixed with it_
 -- =====================================================
 
 -- =====================================================
--- DATABASE: ims
+-- DATABASE: it
 -- =====================================================
 
-USE ims;
+USE it;
 
 -- Disable foreign key checks to allow dropping tables with dependencies
 SET FOREIGN_KEY_CHECKS = 0;
@@ -290,11 +290,6 @@ CREATE TABLE `it_equipment` (
     `imei2` BIGINT NULL,
     `ip` VARCHAR(45) NULL COMMENT 'IP address for device',
     `mac_addresses` text NULL COMMENT 'MAC addresses for device (separated by comma)',
-    `assigned_to` VARCHAR(9) NULL COMMENT 'Employee number - who the equipment is assigned to',
-    `equipment_sub_area_id` INT UNSIGNED NULL COMMENT 'Current location - sub_area level',
-    `updated_by` VARCHAR(9) NULL COMMENT 'Employee number - who last updated the record',
-    `comment` TEXT NULL COMMENT 'General comments/notes about the equipment',
-    `audit_period_id` INT UNSIGNED NULL COMMENT 'Reference to audit period',
     `bill_id` BIGINT UNSIGNED NULL COMMENT 'Reference to bill table',
     `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -306,19 +301,11 @@ CREATE TABLE `it_equipment` (
     KEY `idx_equipment_cerf` (`cerf`),
     KEY `idx_equipment_personal` (`is_personal`),
     KEY `idx_equipment_written_off` (`is_written_off`),
-    KEY `idx_equipment_assigned_to` (`assigned_to`),
-    KEY `idx_equipment_sub_area` (`equipment_sub_area_id`),
-    KEY `idx_equipment_updated_by` (`updated_by`),
-    KEY `idx_equipment_audit_period` (`audit_period_id`),
     KEY `idx_equipment_bill` (`bill_id`),
     CONSTRAINT `fk_equipment_model` FOREIGN KEY (`model_id`) REFERENCES `it_equipment_model` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_equipment_vendor` FOREIGN KEY (`vendor_id`) REFERENCES `it_equipment_vendor` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_equipment_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `it_equipment_supplier` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_equipment_written_off` FOREIGN KEY (`is_written_off`) REFERENCES `it_equipment_write_off_reason` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT `fk_equipment_assigned_to` FOREIGN KEY (`assigned_to`) REFERENCES `it_employees_list` (`employee_no`) ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT `fk_equipment_sub_area` FOREIGN KEY (`equipment_sub_area_id`) REFERENCES `it_equipment_sub_area` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT `fk_equipment_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `it_employees_list` (`employee_no`) ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT `fk_equipment_audit_period` FOREIGN KEY (`audit_period_id`) REFERENCES `it_equipment_audit_periods` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_equipment_bill` FOREIGN KEY (`bill_id`) REFERENCES `it_equipment_bills` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
