@@ -46,4 +46,12 @@
   .tab-active {
     @apply text-blue-700 bg-blue-50 border-blue-300 shadow-inner dark:text-blue-300 dark:bg-blue-900/30 dark:border-blue-600;
   }
+  
+  /* Animation for loading spinner */
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
 }
