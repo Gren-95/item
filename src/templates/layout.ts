@@ -4,7 +4,7 @@ export function layout(title: string, content: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} - Equipment Audit</title>
+  <title>${title} - IT Equipment Management</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/icons/icon.png" type="image/png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -42,7 +42,7 @@ export function layout(title: string, content: string): string {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
             </svg>
           </div>
-          <a href="/" class="text-xl font-bold text-gray-900 dark:text-white transition-colors">Equipment Audit</a>
+          <a href="/" class="text-xl font-bold text-gray-900 dark:text-white transition-colors">IT Equipment Management</a>
         </div>
         <button id="theme-toggle" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Toggle dark mode">
           <svg id="theme-icon-light" class="w-6 h-6 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">

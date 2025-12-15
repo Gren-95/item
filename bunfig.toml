@@ -1,0 +1,6 @@
+# Bun configuration file
+# This helps with module resolution
+
+[install]
+# Ensure all dependencies are installed
+production = false

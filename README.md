@@ -20,88 +20,12 @@ A server-side rendered application for auditing IT equipment, built with Bun, Ta
 
 ### Running the Application
 
-1. Start all services:
-
-```bash
-docker-compose up -d
+1. Copy set enviroment variables
+```bash 
+cp .env.example .env
 ```
 
-2. Access the application:
-   - **App**: http://localhost:3000
-   - **phpMyAdmin**: http://localhost:8080
-
-3. Stop services:
-
-```bash
-docker-compose down
-```
-
-## Development
-
-### Local Development (without Docker)
-
-1. Install Bun: https://bun.sh
-
-2. Install dependencies:
-
-```bash
-bun install
-```
-
-3. Build Tailwind CSS:
-
-```bash
-bun run build:css
-```
-
-4. Set environment variables:
-
-```bash
-export DATABASE_HOST=localhost
-export DATABASE_PORT=3306
-export DATABASE_USER=ims_user
-export DATABASE_PASSWORD=ims_password
-export DATABASE_NAME=ims
-```
-
-5. Run the development server:
-
-```bash
-bun run dev
-```
-
-## Project Structure
-
-```
-├── docker-compose.yml    # Docker services configuration
-├── Dockerfile            # App container configuration
-├── db.sql                # Database schema
-├── package.json          # Dependencies and scripts
-├── tailwind.config.js    # Tailwind CSS configuration
-├── public/
-│   └── css/              # Compiled CSS
-└── src/
-    ├── server.ts         # Main server entry point
-    ├── db.ts             # Database connection pool
-    ├── styles/
-    │   └── input.css     # Tailwind source CSS
-    └── templates/
-        ├── layout.ts     # Base HTML layout
-        ├── search.ts     # Search page template
-        └── audit.ts      # Audit form template
-```
-
-## Database
-
-The application uses MySQL with the following main tables:
-
-- `it_equipment` - Main equipment records
-- `it_equipment_audit` - Audit history
-- `it_equipment_type/product_line/model` - Equipment classification
-- `it_equipment_region/country/plant/department/area/sub_area` - Location hierarchy
-- `it_employees_list` - Employee records
-
-## Environment Variables
+#### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -111,3 +35,60 @@ The application uses MySQL with the following main tables:
 | `DATABASE_PASSWORD` | MySQL password | `ims_password` |
 | `DATABASE_NAME` | Database name | `ims` |
 | `PORT` | Server port | `3000` |
+| `BARTENDER_HOST` |Bartender printing service host| `http://localhost/`|
+| `HTTPS_CERT_FILE` | Path to TLS certificate (inside container) | `/app/certs/ssl.pem` |
+| `HTTPS_KEY_FILE` | Path to TLS key (inside container) | `/app/certs/ssl-key.pem` |
+| `HTTPS_PORT` | HTTPS port | `443` |
+
+
+
+
+2. Start all services:
+
+```bash
+docker compose up --build
+```
+
+3. Access the application:
+   - **App**: http://localhost:3000
+   - **phpMyAdmin**: http://localhost:8080
+   - **HTTPS (optional)**: https://localhost (see HTTPS setup below)
+
+4. Stop services:
+
+```bash
+docker compose down
+```
+
+5. Run Tests
+
+```bash
+docker compose exec app bun test
+```
+
+## HTTPS (mkcert or self-signed)
+
+1. Generate local certificates (uses mkcert when available, otherwise OpenSSL self-signed):
+```bash
+docker compose exec app bun certs
+```
+   - Output files: `./certs/ssl.pem` and `./certs/ssl-key.pem`
+   - The script installs mkcert's root CA if needed and cleans up intermediate files.
+
+2. (Optional) Override defaults via env vars if paths differ:
+```bash
+export HTTPS_CERT_FILE=/app/certs/ssl.pem
+export HTTPS_KEY_FILE=/app/certs/ssl-key.pem
+export HTTPS_PORT=443
+```
+
+3. Start services:
+```bash
+docker compose up --build
+```
+
+4. Access the app over HTTPS:
+```
+https://localhost
+```
+

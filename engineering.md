@@ -1,13 +1,69 @@
 ### Engineering Policy (Täiendatud versioon)
 
 #### 1. Versioonihaldus ja töövoog
-- Igale muudatusele peab eelnema issue.
-- Kõik poolikud muudatused arendatakse `feature` või `bugfix` harudes.
-- Kõik loodud haru nimed sisaldavad issue numbrit, millega haru seotud on. Nt: `124-fix-header`
-- Iga haru on seotud ainult ühe issuega.
-- Otse `main` harusse tehtud mitte-terviklikud ja/või issue'ga mitteseotud commitid on rangelt keelatud.
-- `main` haru peab olema alati *deployable* ja läbima kõik testid.
-- `main` haru *commit-sõnumid* kasutavad ühte/kahte üldist formaati (conventional commits, connextra vms).
+
+* Igale muudatusele peab eelnema issue.
+* Kõik poolikud muudatused arendatakse `feature` või `bugfix` harudes.
+* Kõik loodud haru nimed sisaldavad issue numbrit, millega haru seotud on. Nt: `124-fix-header`
+* Iga haru on seotud ainult ühe issuega.
+* Otse `main` harusse tehtud mitte-terviklikud ja/või issue'ga mitteseotud commitid on rangelt keelatud.
+* `main` haru peab olema alati *deployable* ja läbima kõik testid.
+* `main` haru *commit-sõnumid* kasutavad ühte/kahte üldist formaati (conventional commits, connextra vms).
+
+---
+
+#### 1.1 Issue'de tüübid ja vorming (**kohustuslik**)
+
+##### Feature issue
+
+**Title**
+
+```
+As a [role] I [can/want to] [action] so that [benefit]
+```
+
+**Body**
+
+```
+[1–3 lauset, mis selgitavad inglise keeles miks see funktsionaalsus on vajalik ja millist probleemi see lahendab]
+
+**Acceptance criteria**
+
+* Üks lause rea kohta
+* Algab suure tähega
+* Deklaratiivne ja testitav
+* Ei sisalda nummerdamist
+* Ei dubleeri implementatsiooni
+* Võib kasutada Given–When–Then struktuuri
+```
+
+Acceptance criteria moodustab **lepingu** ja **testimise aluse** – kood on valmis alles siis, kui kõik tingimused on täidetud.
+
+---
+
+##### Bug issue
+
+**Title**
+
+```
+Bug: [lühike ja konkreetne kirjeldus]
+```
+
+**Body**
+
+```
+1. Reproduction steps
+[Selged ja korduvad sammud vea taastootmiseks]
+
+Expected:
+[Kirjeldus oodatud käitumisest]
+
+Actual:
+[Kirjeldus tegelikust käitumisest]
+```
+
+* Bug-issue peab olema reprodutseeritav.
+* Bug-fix PR peab sisaldama regressioonitesti, mis ebaõnnestub enne parandust ja läbib pärast parandust.
 
 #### 2. Koodi kvaliteet ja stiil
 - Projekt kasutab ühtset koodiformaati ja lintimist, mis on CI-s jõustatud.
