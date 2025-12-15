@@ -16,6 +16,18 @@ import {
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { randomUUID } from "crypto";
 
+interface SearchResult {
+  id: number;
+  service_tag: string;
+  type_name: string | null;
+  product_line_name: string | null;
+  model_name: string | null;
+  vendor_name: string | null;
+  assigned_to_name: string | null;
+  location: string | null;
+  latest_audit_date: string | null;
+}
+
 const PORT = process.env.PORT || 3000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const DEFAULT_CERT_PATH = path.join(process.cwd(), "certs", "ssl.pem");
@@ -124,23 +136,89 @@ async function handleRequest(req: Request): Promise<Response> {
   try {
     // Home / Search page
     if (path === "/" && req.method === "GET") {
-      const serial = url.searchParams.get("serial");
+      const query = url.searchParams.get("q") || url.searchParams.get("serial") || "";
       
-      if (serial && serial.trim()) {
-        const trimmed = serial.trim();
-        logger.info("Search request", { traceId, serial: trimmed });
+      if (query && query.trim()) {
+        const trimmed = query.trim();
+        logger.info("Search request", { traceId, query: trimmed });
+        
+        // Comprehensive search query covering all fields
+        const searchTerm = `%${trimmed}%`;
         const [rows] = await pool.query<RowDataPacket[]>(
-          `SELECT id FROM it_equipment WHERE service_tag LIKE ? ORDER BY service_tag LIMIT 1`,
-          [`%${trimmed}%`]
+          `SELECT DISTINCT
+            e.id,
+            e.service_tag,
+            t.type_name,
+            pl.name as product_line_name,
+            m.name as model_name,
+            v.name as vendor_name,
+            CONCAT(emp.first_name, ' ', emp.last_name) as assigned_to_name,
+            CONCAT_WS(' > ',
+              r.name,
+              c.name,
+              p.name,
+              d.name,
+              a.name,
+              sa.name
+            ) as location,
+            log.created as latest_audit_date
+          FROM it_equipment e
+          LEFT JOIN it_equipment_model m ON e.model_id = m.id
+          LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
+          LEFT JOIN it_equipment_type t ON pl.type_id = t.id
+          LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
+          LEFT JOIN (
+            SELECT l1.* FROM it_equipment_log l1
+            INNER JOIN (
+              SELECT equipment_id, MAX(created) as max_created
+              FROM it_equipment_log
+              GROUP BY equipment_id
+            ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+          ) log ON e.id = log.equipment_id
+          LEFT JOIN it_employees_list emp ON log.assigned_to = emp.employee_no
+          LEFT JOIN it_equipment_sub_area sa ON log.equipment_sub_area_id = sa.id
+          LEFT JOIN it_equipment_area a ON sa.area_id = a.id
+          LEFT JOIN it_equipment_department d ON a.department_id = d.id
+          LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
+          LEFT JOIN it_equipment_country c ON p.country_id = c.id
+          LEFT JOIN it_equipment_region r ON c.region_id = r.id
+          WHERE 
+            e.service_tag LIKE ?
+            OR t.type_name LIKE ?
+            OR pl.name LIKE ?
+            OR m.name LIKE ?
+            OR v.name LIKE ?
+            OR CONCAT(emp.first_name, ' ', emp.last_name) LIKE ?
+            OR emp.first_name LIKE ?
+            OR emp.last_name LIKE ?
+            OR r.name LIKE ?
+            OR c.name LIKE ?
+            OR p.name LIKE ?
+            OR d.name LIKE ?
+            OR a.name LIKE ?
+            OR sa.name LIKE ?
+          ORDER BY e.service_tag
+          LIMIT 100`,
+          [
+            searchTerm, // service_tag
+            searchTerm, // type_name
+            searchTerm, // product_line name
+            searchTerm, // model name
+            searchTerm, // vendor name
+            searchTerm, // full name
+            searchTerm, // first_name
+            searchTerm, // last_name
+            searchTerm, // region
+            searchTerm, // country
+            searchTerm, // plant
+            searchTerm, // department
+            searchTerm, // area
+            searchTerm  // sub_area
+          ]
         );
 
-        if (rows.length > 0) {
-          logger.info("Search hit, redirecting to edit", { traceId, serial: trimmed, id: rows[0].id });
-          return Response.redirect(`${url.origin}/edit/${rows[0].id}`, 303);
-        }
-
-        logger.info("Search miss, showing empty state", { traceId, serial: trimmed });
-        return new Response(searchPage(trimmed, []), {
+        logger.info("Search results", { traceId, query: trimmed, count: rows.length });
+        return new Response(searchPage(trimmed, rows.length > 0 ? (rows as SearchResult[]) : []), {
           headers: { "Content-Type": "text/html" },
         });
       }
