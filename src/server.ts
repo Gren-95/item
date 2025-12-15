@@ -1,16 +1,59 @@
 import { serve, file } from "bun";
+import path from "path";
 import pool from "./db";
 import { searchPage } from "./templates/search";
 import { auditPage } from "./templates/audit";
 import { addPage } from "./templates/add";
 import { locationsPage } from "./templates/locations";
+import { logger } from "./utils/logger";
+import {
+  equipmentAddSchema,
+  equipmentEditSchema,
+  apiAddItemSchema,
+  locationsActionSchema,
+  printLabelSchema,
+} from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
+import { randomUUID } from "crypto";
 
 const PORT = process.env.PORT || 3000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
+const DEFAULT_CERT_PATH = path.join(process.cwd(), "certs", "ssl.pem");
+const DEFAULT_KEY_PATH = path.join(process.cwd(), "certs", "ssl-key.pem");
+const HTTPS_CERT_FILE = process.env.HTTPS_CERT_FILE || DEFAULT_CERT_PATH;
+const HTTPS_KEY_FILE = process.env.HTTPS_KEY_FILE || DEFAULT_KEY_PATH;
+
+async function getTlsOptions() {
+  try {
+    const certFile = Bun.file(HTTPS_CERT_FILE);
+    const keyFile = Bun.file(HTTPS_KEY_FILE);
+
+    if (!(await certFile.exists()) || !(await keyFile.exists())) {
+      console.warn(
+        `[HTTPS] TLS cert/key not found. Expected cert: ${HTTPS_CERT_FILE}, key: ${HTTPS_KEY_FILE}`
+      );
+      return null;
+    }
+
+    const [cert, key] = await Promise.all([certFile.text(), keyFile.text()]);
+    if (!cert.trim() || !key.trim()) {
+      console.warn("[HTTPS] TLS cert or key is empty");
+      return null;
+    }
+
+    return { cert, key };
+  } catch {
+    console.warn("[HTTPS] Failed to load TLS cert/key");
+    return null;
+  }
+}
 
 async function handleRequest(req: Request): Promise<Response> {
+  const traceId = randomUUID();
   const url = new URL(req.url);
   const path = url.pathname;
+  
+  logger.info("Request received", { traceId, method: req.method, path });
 
   // Static files
   if (path === "/favicon.ico") {
@@ -18,6 +61,22 @@ async function handleRequest(req: Request): Promise<Response> {
     if (await ico.exists()) {
       return new Response(ico, { headers: { "Content-Type": "image/png" } });
     }
+  }
+
+  // Serve qr-scanner library files
+  if (path === "/js/qr-scanner.umd.min.js") {
+    const libFile = file("./node_modules/qr-scanner/qr-scanner.umd.min.js");
+    if (await libFile.exists()) {
+      return new Response(libFile, { headers: { "Content-Type": "application/javascript" } });
+    }
+    return new Response("Not found", { status: 404 });
+  }
+  if (path === "/js/qr-scanner-worker.min.js") {
+    const workerFile = file("./node_modules/qr-scanner/qr-scanner-worker.min.js");
+    if (await workerFile.exists()) {
+      return new Response(workerFile, { headers: { "Content-Type": "application/javascript" } });
+    }
+    return new Response("Not found", { status: 404 });
   }
 
   if (path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/icons/") || path === "/manifest.webmanifest") {
@@ -29,6 +88,38 @@ async function handleRequest(req: Request): Promise<Response> {
     return new Response("Not found", { status: 404 });
   }
 
+  // Health check endpoint
+  if (path === "/health" && req.method === "GET") {
+    try {
+      // Check database connection
+      await pool.query("SELECT 1");
+      return new Response(
+        JSON.stringify({
+          status: "healthy",
+          timestamp: new Date().toISOString(),
+          traceId,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    } catch (err) {
+      logger.error("Health check failed", err, { traceId });
+      return new Response(
+        JSON.stringify({
+          status: "unhealthy",
+          timestamp: new Date().toISOString(),
+          traceId,
+        }),
+        {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+  }
+
   // Routes
   try {
     // Home / Search page
@@ -36,15 +127,22 @@ async function handleRequest(req: Request): Promise<Response> {
       const serial = url.searchParams.get("serial");
       
       if (serial && serial.trim()) {
+        const trimmed = serial.trim();
+        logger.info("Search request", { traceId, serial: trimmed });
         const [rows] = await pool.query<RowDataPacket[]>(
           `SELECT id FROM it_equipment WHERE service_tag LIKE ? ORDER BY service_tag LIMIT 1`,
-          [`%${serial.trim()}%`]
+          [`%${trimmed}%`]
         );
 
         if (rows.length > 0) {
-          // Redirect directly to edit page (prefilled form)
+          logger.info("Search hit, redirecting to edit", { traceId, serial: trimmed, id: rows[0].id });
           return Response.redirect(`${url.origin}/edit/${rows[0].id}`, 303);
         }
+
+        logger.info("Search miss, showing empty state", { traceId, serial: trimmed });
+        return new Response(searchPage(trimmed, []), {
+          headers: { "Content-Type": "text/html" },
+        });
       }
 
       return new Response(searchPage(), {
@@ -66,21 +164,41 @@ async function handleRequest(req: Request): Promise<Response> {
     if (path === "/add" && req.method === "POST") {
       const formData = await req.formData();
       
-      const service_tag = formData.get("service_tag") as string;
-      const vendor_id = formData.get("vendor_id") || null;
-      const supplier_id = formData.get("supplier_id") || null;
-      const model_id = formData.get("model_id") || null;
-      const purchase_date = formData.get("purchase_date") as string;
-      const warranty_expiry_date = formData.get("warranty_expiry_date") as string;
-      const equipment_sub_area_id = formData.get("equipment_sub_area_id") || null;
-      const assigned_to = formData.get("assigned_to") || null;
-      const teamviewer = formData.get("teamviewer") || null;
-      const cerf = formData.get("cerf") || 0;
-      const ip = formData.get("ip") || null;
-      const mac_addresses = formData.get("mac_addresses") || null;
-      const comment = formData.get("comment") || null;
+      // Validate input
+      const rawData = {
+        service_tag: formData.get("service_tag") as string,
+        vendor_id: formData.get("vendor_id") || null,
+        supplier_id: formData.get("supplier_id") || null,
+        model_id: formData.get("model_id") || null,
+        purchase_date: formData.get("purchase_date") as string,
+        warranty_expiry_date: formData.get("warranty_expiry_date") as string,
+        equipment_sub_area_id: formData.get("equipment_sub_area_id") || null,
+        assigned_to: formData.get("assigned_to") || null,
+        teamviewer: formData.get("teamviewer") || null,
+        cerf: formData.get("cerf") || "0",
+        ip: formData.get("ip") || null,
+        mac_addresses: formData.get("mac_addresses") || null,
+        comment: formData.get("comment") || null,
+        inventory_period_id: formData.get("inventory_period_id") || null,
+      };
 
       try {
+        const validated = equipmentAddSchema.parse(rawData);
+        
+        const service_tag = validated.service_tag;
+        const vendor_id = validated.vendor_id;
+        const supplier_id = validated.supplier_id;
+        const model_id = validated.model_id;
+        const purchase_date = validated.purchase_date;
+        const warranty_expiry_date = validated.warranty_expiry_date;
+        const equipment_sub_area_id = validated.equipment_sub_area_id;
+        const assigned_to = validated.assigned_to;
+        const teamviewer = validated.teamviewer;
+        const cerf = validated.cerf || 0;
+        const ip = validated.ip;
+        const mac_addresses = validated.mac_addresses;
+        const comment = validated.comment;
+        const inventory_period_id = validated.inventory_period_id;
         // Insert into equipment table (static data only)
         const [result] = await pool.query<ResultSetHeader>(`
           INSERT INTO it_equipment (
@@ -103,7 +221,6 @@ async function handleRequest(req: Request): Promise<Response> {
         const equipmentId = result.insertId;
 
         // Insert initial log entry (dynamic/audit data)
-        const inventory_period_id = formData.get("inventory_period_id") || null;
         await pool.query(`
           INSERT INTO it_equipment_log (
             equipment_id, service_tag, assigned_to, equipment_sub_area_id, inventory_period_id, comment
@@ -119,9 +236,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
         // Redirect to the edit page for the newly created equipment
         return Response.redirect(`${url.origin}/edit/${equipmentId}?success=1`, 303);
-      } catch (err: any) {
-        const addData = await getAddData(service_tag);
-        return new Response(addPage(addData, false, err.message), {
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to add equipment", err, { traceId, serviceTag: rawData.service_tag });
+        const addData = await getAddData(rawData.service_tag || "");
+        return new Response(addPage(addData, false, errorMessage), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -147,22 +266,39 @@ async function handleRequest(req: Request): Promise<Response> {
       const id = parseInt(path.split("/")[2]);
       const formData = await req.formData();
       
-      // Extract form values
-      const model_id = formData.get("model_id") || null;
-      const equipment_sub_area_id = formData.get("equipment_sub_area_id") || null;
-      const assigned_to = formData.get("assigned_to") || null;
-      const teamviewer = formData.get("teamviewer") || null;
-      const comment = formData.get("comment") || null;
-      const inventory_period_id = formData.get("inventory_period_id") || null;
-      const vendor_id = formData.get("vendor_id") || null;
-      const supplier_id = formData.get("supplier_id") || null;
-      const purchase_date = formData.get("purchase_date") || null;
-      const warranty_expiry_date = formData.get("warranty_expiry_date") || null;
-      const cerf = formData.get("cerf") || 0;
-      const ip = formData.get("ip") || null;
-      const mac_addresses = formData.get("mac_addresses") || null;
+      // Extract and validate form values
+      const rawData = {
+        model_id: formData.get("model_id") || null,
+        equipment_sub_area_id: formData.get("equipment_sub_area_id") || null,
+        assigned_to: formData.get("assigned_to") || null,
+        teamviewer: formData.get("teamviewer") || null,
+        comment: formData.get("comment") || null,
+        inventory_period_id: formData.get("inventory_period_id") || null,
+        vendor_id: formData.get("vendor_id") || null,
+        supplier_id: formData.get("supplier_id") || null,
+        purchase_date: formData.get("purchase_date") || null,
+        warranty_expiry_date: formData.get("warranty_expiry_date") || null,
+        cerf: formData.get("cerf") || "0",
+        ip: formData.get("ip") || null,
+        mac_addresses: formData.get("mac_addresses") || null,
+      };
 
       try {
+        const validated = equipmentEditSchema.parse(rawData);
+        
+        const model_id = validated.model_id;
+        const equipment_sub_area_id = validated.equipment_sub_area_id;
+        const assigned_to = validated.assigned_to;
+        const teamviewer = validated.teamviewer;
+        const comment = validated.comment;
+        const inventory_period_id = validated.inventory_period_id;
+        const vendor_id = validated.vendor_id;
+        const supplier_id = validated.supplier_id;
+        const purchase_date = validated.purchase_date;
+        const warranty_expiry_date = validated.warranty_expiry_date;
+        const cerf = validated.cerf || 0;
+        const ip = validated.ip;
+        const mac_addresses = validated.mac_addresses;
         // Get the equipment record for service_tag
         const [equipment] = await pool.query<RowDataPacket[]>(`
           SELECT service_tag FROM it_equipment WHERE id = ?
@@ -216,12 +352,14 @@ async function handleRequest(req: Request): Promise<Response> {
         ]);
 
         return Response.redirect(`${url.origin}/edit/${id}?success=1`, 303);
-      } catch (err: any) {
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to edit equipment", err, { traceId, equipmentId: id });
         const auditData = await getAuditData(id);
         if (!auditData) {
           return new Response("Equipment not found", { status: 404 });
         }
-        return new Response(auditPage(auditData, false, err.message), {
+        return new Response(auditPage(auditData, false, errorMessage), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -240,37 +378,46 @@ async function handleRequest(req: Request): Promise<Response> {
     // Locations management - POST (add/edit/activate/deactivate)
     if (path === "/locations" && req.method === "POST") {
       const form = await req.formData();
-      const action = (form.get("action") || "").toString();
-      const type = (form.get("type") || "").toString();
-      const id = form.get("id") ? Number(form.get("id")) : null;
-      const name = form.get("name") ? form.get("name")!.toString().trim() : "";
-      const parent_id = form.get("parent_id") ? Number(form.get("parent_id")) : null;
-
-      const map: Record<
-        string,
-        { table: string; parent?: string }
-      > = {
-        region: { table: "it_equipment_region" },
-        country: { table: "it_equipment_country", parent: "region_id" },
-        plant: { table: "it_equipment_plant", parent: "country_id" },
-        department: { table: "it_equipment_department", parent: "plant_id" },
-        area: { table: "it_equipment_area", parent: "department_id" },
-        sub_area: { table: "it_equipment_sub_area", parent: "area_id" },
+      const rawData = {
+        type: (form.get("type") || "").toString(),
+        action: (form.get("action") || "").toString(),
+        name: form.get("name") ? form.get("name")!.toString().trim() : undefined,
+        id: form.get("id") ? form.get("id")!.toString() : undefined,
+        parent_id: form.get("parent_id") ? form.get("parent_id")!.toString() : undefined,
       };
 
-      if (!map[type]) {
-        return Response.redirect(`/locations?error=${encodeURIComponent("Unknown type")}`, 303);
-      }
-
       try {
+        const validated = locationsActionSchema.parse(rawData);
+        const action = validated.action;
+        const type = validated.type;
+        const id = validated.id ? Number(validated.id) : null;
+        const name = validated.name || "";
+        const parent_id = validated.parent_id ? Number(validated.parent_id) : null;
+
+        const map: Record<
+          string,
+          { table: string; parent?: string }
+        > = {
+          region: { table: "it_equipment_region" },
+          country: { table: "it_equipment_country", parent: "region_id" },
+          plant: { table: "it_equipment_plant", parent: "country_id" },
+          department: { table: "it_equipment_department", parent: "plant_id" },
+          area: { table: "it_equipment_area", parent: "department_id" },
+          sub_area: { table: "it_equipment_sub_area", parent: "area_id" },
+        };
+
+        if (!map[type]) {
+          return Response.redirect(`/locations?error=${encodeURIComponent("Unknown type")}`, 303);
+        }
+
         const { table, parent } = map[type];
 
         if (action === "add") {
           if (!name) throw new Error("Name is required");
           if (parent && !parent_id) throw new Error("Parent is required");
           const cols = ["name", "status"];
-          const vals: any[] = [name, 1];
-          if (parent) {
+          const vals: (string | number)[] = [name!, 1];
+          if (parent && parent_id !== null) {
             cols.push(parent);
             vals.push(parent_id);
           }
@@ -292,8 +439,9 @@ async function handleRequest(req: Request): Promise<Response> {
         }
 
         return Response.redirect(`/locations?success=${encodeURIComponent("Saved")}`, 303);
-      } catch (err: any) {
-        return Response.redirect(`/locations?error=${encodeURIComponent(err.message)}`, 303);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        return Response.redirect(`/locations?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
 
@@ -319,11 +467,16 @@ async function handleRequest(req: Request): Promise<Response> {
         // Remove BOM if present
         responseText = responseText.replace(/^\uFEFF/, "");
         
-        const apiData = JSON.parse(responseText);
+        const apiData = JSON.parse(responseText) as Array<{
+          Location?: string;
+          DriverName?: string;
+          PortName?: string;
+          Name?: string;
+        }>;
 
         // Transform API response
         const result = apiData
-          .map((printer: any) => {
+          .map((printer) => {
             const location = printer.Location || "";
             let department = "";
             let area = "";
@@ -372,18 +525,26 @@ async function handleRequest(req: Request): Promise<Response> {
 
             return null;
           })
-          .filter((item: any) => item !== null);
+          .filter((item) => item !== null) as Array<{
+            name: string;
+            ip: string;
+            department: string;
+            area: string;
+            driver: string;
+            type: string;
+          }>;
 
         return new Response(JSON.stringify({ success: true, data: result }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
-      } catch (err: any) {
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         return new Response(
           JSON.stringify({
             error: true,
             message: "Failed to fetch printers. Printer server may be offline or the API may be down.",
-            details: err.message,
+            details: errorMessage,
           }),
           {
             status: 500,
@@ -397,23 +558,10 @@ async function handleRequest(req: Request): Promise<Response> {
     if (path === "/api/print" && req.method === "POST") {
       try {
         const body = await req.json();
-        const service_tag = body.service_tag;
-        const printer = body.printer || process.env.BARTENDER_PRINTER || "EERAK-PRT103";
+        const validated = printLabelSchema.parse(body);
+        const service_tag = validated.service_tag;
+        const printer = validated.printer || "EERAK-PRT103";
         const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
-
-        if (!service_tag) {
-          return new Response(JSON.stringify({ error: "Service tag is required" }), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-
-        if (!printer) {
-          return new Response(JSON.stringify({ error: "Printer is required" }), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
 
         // Remove trailing slash from host if present
         const host = bartenderHost.replace(/\/$/, "");
@@ -445,8 +593,9 @@ async function handleRequest(req: Request): Promise<Response> {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
-      } catch (err: any) {
-        return new Response(JSON.stringify({ error: err.message }), {
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        return new Response(JSON.stringify({ error: errorMessage }), {
           status: 500,
           headers: { "Content-Type": "application/json" },
         });
@@ -456,19 +605,14 @@ async function handleRequest(req: Request): Promise<Response> {
     // API Routes for adding new items
     if (path.startsWith("/api/") && req.method === "POST") {
       const body = await req.json();
-      const name = body.name?.trim();
-      const parent_id = body.parent_id || null;
-
-      if (!name) {
-        return new Response(JSON.stringify({ error: "Name is required" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+      const apiType = path.replace("/api/", "");
 
       try {
+        const validated = apiAddItemSchema.parse(body);
+        const name = validated.name;
+        const parent_id = validated.parent_id;
+        
         let result: ResultSetHeader;
-        const apiType = path.replace("/api/", "");
 
         switch (apiType) {
           case "regions":
@@ -555,8 +699,9 @@ async function handleRequest(req: Request): Promise<Response> {
           status: 201,
           headers: { "Content-Type": "application/json" },
         });
-      } catch (err: any) {
-        return new Response(JSON.stringify({ error: err.message }), {
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        return new Response(JSON.stringify({ error: errorMessage }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
         });
@@ -564,9 +709,10 @@ async function handleRequest(req: Request): Promise<Response> {
     }
 
     return new Response("Not found", { status: 404 });
-  } catch (err: any) {
-    console.error("Error:", err);
-    return new Response(searchPage("", null, err.message), {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+    logger.error("Request handler error", err, { traceId, path });
+    return new Response(searchPage("", null, errorMessage), {
       status: 500,
       headers: { "Content-Type": "text/html" },
     });
@@ -847,9 +993,34 @@ async function getLocationsData() {
   };
 }
 
-console.log(`🚀 Server running at http://localhost:${PORT}`);
+const tlsOptions = await getTlsOptions();
 
-serve({
-  port: PORT as number,
-  fetch: handleRequest,
-});
+if (tlsOptions) {
+  // HTTPS server
+  serve({
+    port: Number(HTTPS_PORT),
+    fetch: handleRequest,
+    tls: tlsOptions,
+  });
+
+  // HTTP server to redirect to HTTPS
+  serve({
+    port: Number(PORT),
+    fetch: (req: Request) => {
+      const url = new URL(req.url);
+      url.protocol = "https:";
+      url.port = HTTPS_PORT.toString();
+      return Response.redirect(url.toString(), 301);
+    },
+  });
+
+  console.log(`🔒 HTTPS enabled on port ${HTTPS_PORT}`);
+} else {
+  console.log(
+    `🚀 HTTPS not enabled (missing or invalid cert/key). Server running at http://localhost:${PORT}`
+  );
+  serve({
+    port: Number(PORT),
+    fetch: handleRequest,
+  });
+}

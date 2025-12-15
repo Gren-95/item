@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "80:3000"
+      - "443:443"
     environment:
       - DATABASE_HOST=${MYSQL_HOST}
       - DATABASE_PORT=${MYSQL_PORT}
@@ -13,13 +14,17 @@ services:
       - DATABASE_PASSWORD=${MYSQL_PASSWORD}
       - DATABASE_NAME=${MYSQL_DATABASE}
       - BARTENDER_HOST=${BARTENDER_HOST}
-      - BARTENDER_PRINTER=${BARTENDER_PRINTER}
+      - HTTPS_CERT_FILE=${HTTPS_CERT_FILE}
+      - HTTPS_KEY_FILE=${HTTPS_KEY_FILE}
+      - HTTPS_PORT=${HTTPS_PORT}
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./src:/app/src
       - ./public:/app/public
+      # Allow writing generated certs from inside the container when running the cert script
+      - ./certs:/app/certs
     restart: unless-stopped
 
   db:
