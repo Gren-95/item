@@ -2,10 +2,23 @@ FROM oven/bun:1
 
 WORKDIR /app
 
+# Install mkcert and dependencies for local TLS certificate generation
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    build-essential \
+    procps \
+    file \
+    mkcert \
+    libnss3-tools \
+  && rm -rf /var/lib/apt/lists/*
+
 # Copy package files
 COPY package.json bun.lockb* ./
 
-# Install dependencies
+# Install dependencies (including devDependencies by default)
 RUN bun install
 
 # Copy source code
