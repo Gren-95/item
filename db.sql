@@ -9,7 +9,7 @@
 
 USE it;
 
--- Disable foreign key checks to allow dropping tables with dependencies
+-- Disable foreign key checks during table creation
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- =====================================================
@@ -17,8 +17,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- =====================================================
 
 -- Regions (e.g., Europe, Asia, Americas)
-DROP TABLE IF EXISTS `it_equipment_region`;
-CREATE TABLE `it_equipment_region` (
+CREATE TABLE IF NOT EXISTS `it_equipment_region` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(255) NOT NULL,
     `code` VARCHAR(10) NULL,
@@ -31,8 +30,7 @@ CREATE TABLE `it_equipment_region` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Countries
-DROP TABLE IF EXISTS `it_equipment_country`;
-CREATE TABLE `it_equipment_country` (
+CREATE TABLE IF NOT EXISTS `it_equipment_country` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `region_id` INT UNSIGNED NOT NULL,
     `name` VARCHAR(255) NOT NULL,
@@ -47,8 +45,7 @@ CREATE TABLE `it_equipment_country` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Plants
-DROP TABLE IF EXISTS `it_equipment_plant`;
-CREATE TABLE `it_equipment_plant` (
+CREATE TABLE IF NOT EXISTS `it_equipment_plant` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `country_id` INT UNSIGNED NOT NULL,
     `name` VARCHAR(255) NOT NULL,
@@ -62,8 +59,7 @@ CREATE TABLE `it_equipment_plant` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Departments
-DROP TABLE IF EXISTS `it_equipment_department`;
-CREATE TABLE `it_equipment_department` (
+CREATE TABLE IF NOT EXISTS `it_equipment_department` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `plant_id` INT UNSIGNED NOT NULL,
     `name` VARCHAR(255) NOT NULL,
@@ -78,8 +74,7 @@ CREATE TABLE `it_equipment_department` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Areas
-DROP TABLE IF EXISTS `it_equipment_area`;
-CREATE TABLE `it_equipment_area` (
+CREATE TABLE IF NOT EXISTS `it_equipment_area` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `department_id` INT UNSIGNED NOT NULL,
     `name` VARCHAR(255) NOT NULL,
@@ -93,8 +88,7 @@ CREATE TABLE `it_equipment_area` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Sub_Areas (with coordinates for mapping)
-DROP TABLE IF EXISTS `it_equipment_sub_area`;
-CREATE TABLE `it_equipment_sub_area` (
+CREATE TABLE IF NOT EXISTS `it_equipment_sub_area` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `area_id` INT UNSIGNED NOT NULL,
     `name` VARCHAR(255) NOT NULL,
@@ -116,8 +110,7 @@ CREATE TABLE `it_equipment_sub_area` (
 -- =====================================================
 
 -- Equipment Types
-DROP TABLE IF EXISTS `it_equipment_type`;
-CREATE TABLE `it_equipment_type` (
+CREATE TABLE IF NOT EXISTS `it_equipment_type` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `type_name` VARCHAR(25) NOT NULL,
     `change_interval` TINYINT NULL COMMENT 'Maintenance interval in months',
@@ -130,8 +123,7 @@ CREATE TABLE `it_equipment_type` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Equipment Product Lines (goes between type and model)
-DROP TABLE IF EXISTS `it_equipment_product_line`;
-CREATE TABLE `it_equipment_product_line` (
+CREATE TABLE IF NOT EXISTS `it_equipment_product_line` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `type_id` INT UNSIGNED NOT NULL,
     `name` VARCHAR(255) NOT NULL,
@@ -146,8 +138,7 @@ CREATE TABLE `it_equipment_product_line` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Vendors (e.g., Dell, HP, Lenovo - the manufacturer/brand)
-DROP TABLE IF EXISTS `it_equipment_vendor`;
-CREATE TABLE `it_equipment_vendor` (
+CREATE TABLE IF NOT EXISTS `it_equipment_vendor` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(255) NOT NULL,
     `updated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -157,8 +148,7 @@ CREATE TABLE `it_equipment_vendor` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Suppliers (e.g., Company A, Company B - the purchasing company)
-DROP TABLE IF EXISTS `it_equipment_supplier`;
-CREATE TABLE `it_equipment_supplier` (
+CREATE TABLE IF NOT EXISTS `it_equipment_supplier` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(255) NOT NULL,
     `email` VARCHAR(255) NULL,
@@ -174,8 +164,7 @@ CREATE TABLE `it_equipment_supplier` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Equipment Models
-DROP TABLE IF EXISTS `it_equipment_model`;
-CREATE TABLE `it_equipment_model` (
+CREATE TABLE IF NOT EXISTS `it_equipment_model` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `product_line_id` INT UNSIGNED NOT NULL,
     `name` VARCHAR(255) NOT NULL,
@@ -189,8 +178,7 @@ CREATE TABLE `it_equipment_model` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Write-off Reasons
-DROP TABLE IF EXISTS `it_equipment_write_off_reason`;
-CREATE TABLE `it_equipment_write_off_reason` (
+CREATE TABLE IF NOT EXISTS `it_equipment_write_off_reason` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `reason` VARCHAR(255) NOT NULL,
     `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -202,8 +190,7 @@ CREATE TABLE `it_equipment_write_off_reason` (
 -- EMPLOYEES
 -- =====================================================
 
-DROP TABLE IF EXISTS `it_employees_list`;
-CREATE TABLE `it_employees_list` (
+CREATE TABLE IF NOT EXISTS `it_employees_list` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `employee_no` VARCHAR(9) NOT NULL,
     `user_id` VARCHAR(25) NOT NULL,
@@ -236,8 +223,7 @@ CREATE TABLE `it_employees_list` (
 -- EQUIPMENT BILLS TABLE
 -- =====================================================
 
-DROP TABLE IF EXISTS `it_equipment_bills`;
-CREATE TABLE `it_equipment_bills` (
+CREATE TABLE IF NOT EXISTS `it_equipment_bills` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `cerf` BIGINT NOT NULL DEFAULT 0,
     `sap_order_no` VARCHAR(255) NULL,
@@ -255,8 +241,7 @@ CREATE TABLE `it_equipment_bills` (
 -- EQUIPMENT COST VS DEPARTMENT TABLE
 -- =====================================================
 
-DROP TABLE IF EXISTS `it_equipment_cost_vs_dep`;
-CREATE TABLE `it_equipment_cost_vs_dep` (
+CREATE TABLE IF NOT EXISTS `it_equipment_cost_vs_dep` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `cost_no` BIGINT UNSIGNED NULL,
     `dep_id` INT UNSIGNED NULL,
@@ -272,8 +257,7 @@ CREATE TABLE `it_equipment_cost_vs_dep` (
 -- MAIN EQUIPMENT TABLE (Dynamic/Flexible Design)
 -- =====================================================
 
-DROP TABLE IF EXISTS `it_equipment`;
-CREATE TABLE `it_equipment` (
+CREATE TABLE IF NOT EXISTS `it_equipment` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `service_tag` VARCHAR(30) NOT NULL,
     `model_id` INT UNSIGNED NULL COMMENT 'Reference to equipment_model table',
@@ -313,8 +297,7 @@ CREATE TABLE `it_equipment` (
 -- AUDIT PERIODS TABLE
 -- =====================================================
 
-DROP TABLE IF EXISTS `it_equipment_audit_periods`;
-CREATE TABLE `it_equipment_audit_periods` (
+CREATE TABLE IF NOT EXISTS `it_equipment_audit_periods` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `auditors` VARCHAR(255) NULL,
     `comment` TEXT NULL,
@@ -331,8 +314,7 @@ CREATE TABLE `it_equipment_audit_periods` (
 -- INVENTORY PERIODS TABLE (Independent inventory cycles)
 -- =====================================================
 
-DROP TABLE IF EXISTS `it_inventory_period`;
-CREATE TABLE `it_inventory_period` (
+CREATE TABLE IF NOT EXISTS `it_inventory_period` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `inventory_nr` VARCHAR(50) NOT NULL COMMENT 'Inventory number/identifier (e.g., "INV-2024-Q1")',
     `start_date` DATE NOT NULL COMMENT 'Start date of inventory period',
@@ -355,8 +337,7 @@ CREATE TABLE `it_inventory_period` (
 -- EQUIPMENT LOG TABLE
 -- =====================================================
 
-DROP TABLE IF EXISTS `it_equipment_log`;
-CREATE TABLE `it_equipment_log` (
+CREATE TABLE IF NOT EXISTS `it_equipment_log` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `equipment_id` INT UNSIGNED NOT NULL,
     `service_tag` VARCHAR(30) NOT NULL,
@@ -390,8 +371,7 @@ CREATE TABLE `it_equipment_log` (
 -- EQUIPMENT AUDIT TABLE (Combines equipment and log data for comparison)
 -- =====================================================
 
-DROP TABLE IF EXISTS `it_equipment_audit`;
-CREATE TABLE `it_equipment_audit` (
+CREATE TABLE IF NOT EXISTS `it_equipment_audit` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `equipment_id` INT UNSIGNED NOT NULL COMMENT 'Reference to equipment table',
     `audit_period_id` INT UNSIGNED NULL COMMENT 'Reference to audit period',
@@ -445,8 +425,7 @@ CREATE TABLE `it_equipment_audit` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
-DROP TABLE IF EXISTS `it_request`;
-CREATE TABLE `it_request` (
+CREATE TABLE IF NOT EXISTS `it_request` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `created_by` VARCHAR(9) NOT NULL COMMENT 'Employee number - who created the request',
     `permission_required` VARCHAR(255) NOT NULL,
@@ -471,8 +450,7 @@ CREATE TABLE `it_request` (
 -- PC PASSWORD TABLE
 -- =====================================================
 
-DROP TABLE IF EXISTS `it_pc_pw`;
-CREATE TABLE `it_pc_pw` (
+CREATE TABLE IF NOT EXISTS `it_pc_pw` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `user` VARCHAR(255) NOT NULL,
     `evocon` VARCHAR(255) NULL,

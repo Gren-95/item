@@ -25,6 +25,8 @@ services:
       - ./public:/app/public
       # Allow writing generated certs from inside the container when running the cert script
       - ./certs:/app/certs
+      # Database exports directory - mounted to /tmp/db-exports in container
+      - ./tmp/db-exports:/tmp/db-exports
     restart: unless-stopped
 
   db:

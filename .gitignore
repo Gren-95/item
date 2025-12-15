@@ -55,3 +55,7 @@ mysql_data/
 # Test artifacts
 test-results/
 junit.xml
+
+# Database exports (keep directory structure, ignore SQL files)
+tmp/db-exports/*.sql
+tmp/db-exports/*.sql.gz
