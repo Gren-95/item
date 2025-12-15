@@ -1,4 +1,4 @@
-# Equipment Audit System
+# ITEM
 
 A server-side rendered application for auditing IT equipment, built with Bun, Tailwind CSS, MySQL, and Docker.
 

@@ -4,10 +4,12 @@ interface SearchResult {
   id: number;
   service_tag: string;
   type_name: string | null;
+  product_line_name: string | null;
   model_name: string | null;
   vendor_name: string | null;
   assigned_to_name: string | null;
   location: string | null;
+  latest_audit_date: string | null;
 }
 
 export function searchPage(
@@ -16,14 +18,14 @@ export function searchPage(
   error: string | null = null
 ): string {
   const content = `
-      <div class="max-w-4xl mx-auto">
+      <div class="max-w-6xl mx-auto">
       <div class="card mb-8">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Equipment Search</h1>
         
         <form id="search-form" action="/" method="GET" class="flex gap-4 items-end flex-wrap">
           <div class="w-full flex flex-col gap-2">
-            <label for="serial" class="label block mb-1 text-gray-700 dark:text-gray-200 font-medium">
-              Serial Number / Service Tag
+            <label for="q" class="label block mb-1 text-gray-700 dark:text-gray-200 font-medium">
+              Search by Serial Number, User Name, Type, Model, Product Line, or Location
             </label>
             <div class="flex items-stretch w-full">
               <button 
@@ -41,10 +43,10 @@ export function searchPage(
               </button>
               <input 
                 type="text" 
-                id="serial" 
-                name="serial" 
+                id="q" 
+                name="q" 
                 value="${escapeHtml(query)}"
-                placeholder="Enter serial number..."
+                placeholder="Search by serial, user, type, model, product line, or location..."
                 class="input-field rounded-none border-x-0 flex-1 min-w-0"
                 autofocus
               >
@@ -71,7 +73,49 @@ export function searchPage(
         </div>
       ` : ""}
 
-      ${results !== null ? `
+      ${results !== null && results.length > 0 ? `
+        <div class="card">
+          <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              Search Results (${results.length})
+            </h2>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700 text-left text-gray-600 dark:text-gray-400">
+                  <th class="py-3 px-2 md:px-4 sticky left-0 bg-white dark:bg-gray-800 z-10">Action</th>
+                  <th class="py-3 px-2 md:px-4">Serial/Service Tag</th>
+                  <th class="py-3 px-2 md:px-4 hidden md:table-cell">Type</th>
+                  <th class="py-3 px-2 md:px-4 hidden lg:table-cell">Product Line</th>
+                  <th class="py-3 px-2 md:px-4 hidden lg:table-cell">Model</th>
+                  <th class="py-3 px-2 md:px-4 hidden xl:table-cell">Vendor</th>
+                  <th class="py-3 px-2 md:px-4 hidden md:table-cell">Assigned To</th>
+                  <th class="py-3 px-2 md:px-4 hidden lg:table-cell">Location</th>
+                  <th class="py-3 px-2 md:px-4 hidden xl:table-cell">Last Audit</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${results.map(result => `
+                  <tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <td class="py-3 px-2 md:px-4 sticky left-0 bg-white dark:bg-gray-800 z-10">
+                      <a href="/edit/${result.id}" class="btn btn-primary btn-sm whitespace-nowrap">View</a>
+                    </td>
+                    <td class="py-3 px-2 md:px-4 font-mono text-gray-900 dark:text-white text-xs md:text-sm">${escapeHtml(result.service_tag || '')}</td>
+                    <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 hidden md:table-cell">${escapeHtml(result.type_name || '—')}</td>
+                    <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 hidden lg:table-cell">${escapeHtml(result.product_line_name || '—')}</td>
+                    <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 hidden lg:table-cell">${escapeHtml(result.model_name || '—')}</td>
+                    <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 hidden xl:table-cell">${escapeHtml(result.vendor_name || '—')}</td>
+                    <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 hidden md:table-cell">${escapeHtml(result.assigned_to_name || '—')}</td>
+                    <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 text-xs hidden lg:table-cell">${escapeHtml(result.location || '—')}</td>
+                    <td class="py-3 px-2 md:px-4 text-gray-500 dark:text-gray-400 text-xs hidden xl:table-cell">${result.latest_audit_date ? new Date(result.latest_audit_date).toLocaleDateString() : '—'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ` : results !== null && results.length === 0 ? `
         <div class="card">
           <div class="text-center py-8">
             <svg class="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -89,10 +133,10 @@ export function searchPage(
       ` : `
         <div class="text-center py-12">
           <svg class="w-24 h-24 text-gray-200 dark:text-gray-700 mx-auto mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
           </svg>
-          <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Start an Equipment Audit</h2>
-          <p class="text-gray-500 dark:text-gray-400">Enter a serial number above to search for equipment</p>
+          <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Start an Equipment Search</h2>
+          <p class="text-gray-500 dark:text-gray-400">Search by serial number, user name, device type, model, product line, or location</p>
         </div>
       `}
     </div>
@@ -138,7 +182,7 @@ export function searchPage(
         const qrVideo = document.getElementById('qrVideo');
         const qrLoading = document.getElementById('qrLoading');
         const qrStatus = document.getElementById('qrStatus');
-        const serialInput = document.getElementById('serial');
+        const searchInput = document.getElementById('q');
         let qrScanner = null;
         let isLoadingScript = false;
 
@@ -228,13 +272,13 @@ export function searchPage(
               qrVideo,
               (result) => {
                 if (result && result.data) {
-                  serialInput.value = result.data;
+                  searchInput.value = result.data;
                   try {
                     qrScanner.stop();
                     qrScanner.destroy();
                   } catch (e) {}
                   hideModal();
-                  const form = serialInput.form || document.getElementById('search-form');
+                  const form = searchInput.form || document.getElementById('search-form');
                   if (form && typeof form.submit === 'function') {
                     setTimeout(() => form.submit(), 0);
                   }
