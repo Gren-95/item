@@ -567,6 +567,20 @@ async function handleRequest(req: Request): Promise<Response> {
           } else {
             throw new Error("Unknown action");
           }
+        } else if (validated.type === "product-line") {
+          if (action === "add") {
+            await pool.query(
+              "INSERT INTO it_equipment_product_line (name, type_id, status) VALUES (?, ?, 1)",
+              [name!, parent_id!]
+            );
+          } else if (action === "edit") {
+            await pool.query("UPDATE it_equipment_product_line SET name = ? WHERE id = ?", [name!, id!]);
+          } else if (action === "deactivate" || action === "activate") {
+            const status = action === "activate" ? 1 : 0;
+            await pool.query("UPDATE it_equipment_product_line SET status = ? WHERE id = ?", [status, id!]);
+          } else {
+            throw new Error("Unknown action");
+          }
         } else if (validated.type === "model") {
           if (action === "add") {
             await pool.query(
@@ -1172,9 +1186,13 @@ async function getTypesData() {
       SELECT 
         pl.id,
         pl.name,
-        pl.type_id as parent_id
+        pl.type_id as parent_id,
+        pl.status,
+        COUNT(DISTINCT e.id) as equipment_count
       FROM it_equipment_product_line pl
-      WHERE pl.status = 1
+      LEFT JOIN it_equipment_model m ON m.product_line_id = pl.id
+      LEFT JOIN it_equipment e ON e.model_id = m.id
+      GROUP BY pl.id, pl.name, pl.type_id, pl.status
       ORDER BY pl.name
     `),
   ]);
@@ -1197,6 +1215,8 @@ async function getTypesData() {
       id: pl.id,
       name: pl.name,
       parent_id: pl.parent_id,
+      status: pl.status ? 1 : 0,
+      equipment_count: Number(pl.equipment_count) || 0,
     })),
   };
 }

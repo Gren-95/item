@@ -19,6 +19,8 @@ interface ProductLineItem {
   id: number;
   name: string;
   parent_id: number;
+  status: number;
+  equipment_count: number;
 }
 
 interface TypesData {
@@ -36,14 +38,15 @@ export function typesPage(data: TypesData, success = "", error = ""): string {
 
   const sections = [
     { title: "Types", type: "type", items: data.types },
-    { title: "Models", type: "model", items: data.models, parentLabel: "Product Line", parentOptions: data.productLines },
+    { title: "Product Lines", type: "product-line", items: data.productLines, parentLabel: "Type", parentOptions: data.types.map(t => ({ id: t.id, name: t.name })) },
+    { title: "Models", type: "model", items: data.models, parentLabel: "Product Line", parentOptions: data.productLines.map(pl => ({ id: pl.id, name: pl.name })) },
   ];
 
   const content = `
     <div class="max-w-6xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Equipment Types & Models</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Manage equipment types and models, see assigned equipment counts.</p>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Equipment Types, Product Lines & Models</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Manage equipment types, product lines, and models, see assigned equipment counts.</p>
       </div>
 
       ${alert}
@@ -118,13 +121,15 @@ export function typesPage(data: TypesData, success = "", error = ""): string {
 function renderSection(
   title: string,
   type: string,
-  items: TypeItem[] | ModelItem[],
+  items: TypeItem[] | ModelItem[] | ProductLineItem[],
   parentLabel?: string,
-  parentOptions?: ProductLineItem[],
+  parentOptions?: { id: number; name: string }[],
   active = false
 ): string {
   const isModel = type === "model";
+  const isProductLine = type === "product-line";
   const modelItems = isModel ? (items as ModelItem[]) : [];
+  const productLineItems = isProductLine ? (items as ProductLineItem[]) : [];
   
   return `
     <div class="card tab-panel ${active ? "" : "hidden"}">
@@ -141,7 +146,7 @@ function renderSection(
           <input type="hidden" name="type" value="${type}">
           <div>
             <label class="label">${title.slice(0, -1)} Name</label>
-            <input name="name" class="input-field" placeholder="New ${title.slice(0, -1).toLowerCase()} name" required ${isModel ? "" : 'maxlength="25"'}>
+            <input name="name" class="input-field" placeholder="New ${title.slice(0, -1).toLowerCase()} name" required ${isModel || isProductLine ? "" : 'maxlength="25"'}>
           </div>
           ${
             parentLabel && parentOptions
@@ -167,7 +172,7 @@ function renderSection(
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700 text-left text-gray-600 dark:text-gray-400">
               <th class="py-3 px-2">Name</th>
-              ${isModel ? `<th class="py-3 px-2">Product Line</th>` : ""}
+              ${isModel || isProductLine ? `<th class="py-3 px-2">${isModel ? "Product Line" : "Type"}</th>` : ""}
               <th class="py-3 px-2">Status</th>
               <th class="py-3 px-2">Equipment</th>
               <th class="py-3 px-2">Actions</th>
@@ -176,7 +181,7 @@ function renderSection(
           <tbody>
             ${
               items.length === 0
-                ? `<tr><td colspan="${isModel ? "5" : "4"}" class="py-4 px-2 text-gray-500 dark:text-gray-400">No ${title.toLowerCase()} yet.</td></tr>`
+                ? `<tr><td colspan="${isModel || isProductLine ? "5" : "4"}" class="py-4 px-2 text-gray-500 dark:text-gray-400">No ${title.toLowerCase()} yet.</td></tr>`
                 : isModel
                 ? modelItems
                     .map(
@@ -208,6 +213,47 @@ function renderSection(
                     <form method="POST" action="/types" class="inline">
                       <input type="hidden" name="action" value="${item.status ? "deactivate" : "activate"}">
                       <input type="hidden" name="type" value="model">
+                      <input type="hidden" name="id" value="${item.id}">
+                      <button type="submit" class="btn ${item.status ? "btn-secondary" : "btn-success"} text-xs">
+                        ${item.status ? "Deactivate" : "Activate"}
+                      </button>
+                    </form>
+                  </td>
+                </tr>`;
+                      }
+                    )
+                    .join("")
+                : isProductLine
+                ? productLineItems
+                    .map(
+                      (item) => {
+                        const type = parentOptions?.find((t) => t.id === item.parent_id);
+                        return `
+                <tr class="border-b border-gray-100 dark:border-gray-700">
+                  <td class="py-2 px-2">
+                    <form method="POST" action="/types" class="flex items-center gap-2">
+                      <input type="hidden" name="action" value="edit">
+                      <input type="hidden" name="type" value="product-line">
+                      <input type="hidden" name="id" value="${item.id}">
+                      <input name="name" value="${escapeHtml(item.name)}" class="input-field w-full" required>
+                      <button type="submit" class="btn btn-secondary text-xs whitespace-nowrap">Rename</button>
+                    </form>
+                  </td>
+                  <td class="py-2 px-2">
+                    <span class="text-gray-600 dark:text-gray-400">${type ? escapeHtml(type.name) : "Unknown"}</span>
+                  </td>
+                  <td class="py-2 px-2">
+                    <span class="px-2 py-1 rounded-full text-xs ${item.status ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}">
+                      ${item.status ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td class="py-2 px-2">
+                    <span class="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">${item.equipment_count}</span>
+                  </td>
+                  <td class="py-2 px-2 space-x-2">
+                    <form method="POST" action="/types" class="inline">
+                      <input type="hidden" name="action" value="${item.status ? "deactivate" : "activate"}">
+                      <input type="hidden" name="type" value="product-line">
                       <input type="hidden" name="id" value="${item.id}">
                       <button type="submit" class="btn ${item.status ? "btn-secondary" : "btn-success"} text-xs">
                         ${item.status ? "Deactivate" : "Activate"}
