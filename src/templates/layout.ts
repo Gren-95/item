@@ -41,6 +41,7 @@ export function layout(title: string, content: string): string {
               <a href="/types" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Configurations</a>
               <a href="/vendors" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Providers</a>
               <a href="/write-off-reasons" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Write-Off Reasons</a>
+              <a href="/repairs" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Repair Tracking</a>
             </div>
           </div>
           <div class="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">

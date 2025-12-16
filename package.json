@@ -12,7 +12,8 @@
     "certs": "bun run scripts/generate-certs.ts",
     "reset-db": "bun run scripts/reset-db.ts",
     "export-db": "bun run scripts/export-db.ts",
-    "import-db": "bun run scripts/import-db.ts"
+    "import-db": "bun run scripts/import-db.ts",
+    "migrate": "bun run src/migrations/migrate.ts"
   },
   "dependencies": {
     "mysql2": "^3.11.0",

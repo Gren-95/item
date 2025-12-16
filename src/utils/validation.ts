@@ -25,6 +25,9 @@ export const equipmentEditSchema = equipmentAddSchema.partial().extend({
   purchase_date: z.string().date().optional().nullable(),
   warranty_expiry_date: z.string().date().optional().nullable(),
   is_written_off: z.string().optional().nullable().or(z.literal("")),
+  repair_status: z.enum(["needs_repair", "at_supplier", "returned", "in_backup"]).optional().nullable().or(z.literal("")),
+  repair_note: z.string().max(65535).optional().nullable().or(z.literal("")),
+  repair_physical_location: z.string().max(255).optional().nullable().or(z.literal("")),
 });
 
 export const apiAddItemSchema = z.object({
