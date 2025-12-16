@@ -15,6 +15,7 @@ import {
   locationsActionSchema,
   typesActionSchema,
   vendorsActionSchema,
+  suppliersActionSchema,
   printLabelSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
@@ -527,56 +528,109 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Vendors management - GET
+    // Vendors & Suppliers management - GET
     if (path === "/vendors" && req.method === "GET") {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
-      const data = await getVendorsData();
+      const data = await getVendorsAndSuppliersData();
       return new Response(vendorsPage(data, success, error), {
         headers: { "Content-Type": "text/html" },
       });
     }
 
-    // Vendors management - POST (add/edit/delete)
+    // Vendors & Suppliers management - POST (add/edit/delete)
     if (path === "/vendors" && req.method === "POST") {
       const form = await req.formData();
-      const rawData = {
+      const entity = (form.get("entity") || "vendor").toString();
+      const rawCommon = {
         action: (form.get("action") || "").toString(),
         name: form.get("name") ? form.get("name")!.toString().trim() : undefined,
         id: form.get("id") ? form.get("id")!.toString() : undefined,
       };
 
       try {
-        const validated = vendorsActionSchema.parse(rawData);
-        const action = validated.action;
-        const id = validated.id ? Number(validated.id) : null;
-        const name = validated.name;
+        if (entity === "supplier") {
+          const rawSupplier = {
+            ...rawCommon,
+            email: form.get("email") ? form.get("email")!.toString().trim() : "",
+            phone_number: form.get("phone_number") ? form.get("phone_number")!.toString().trim() : "",
+            address: form.get("address") ? form.get("address")!.toString().trim() : "",
+            representative_name: form.get("representative_name") ? form.get("representative_name")!.toString().trim() : "",
+            sap_vendor_no: form.get("sap_vendor_no") ? form.get("sap_vendor_no")!.toString().trim() : "",
+            website: form.get("website") ? form.get("website")!.toString().trim() : "",
+          };
 
-        if (action === "add") {
-          await pool.query(
-            "INSERT INTO it_equipment_vendor (name) VALUES (?)",
-            [name!]
-          );
-        } else if (action === "edit") {
-          await pool.query("UPDATE it_equipment_vendor SET name = ? WHERE id = ?", [name!, id!]);
-        } else if (action === "delete") {
-          // Check if vendor is in use
-          const [equipment] = await pool.query<RowDataPacket[]>(
-            "SELECT COUNT(*) as count FROM it_equipment WHERE vendor_id = ?",
-            [id!]
-          );
-          if (equipment[0].count > 0) {
-            throw new Error("Cannot delete vendor that is in use");
+          const validated = suppliersActionSchema.parse(rawSupplier);
+          const action = validated.action;
+          const id = validated.id ? Number(validated.id) : null;
+          const name = validated.name;
+          const email = validated.email || null;
+          const phone_number = validated.phone_number || null;
+          const address = validated.address || null;
+          const representative_name = validated.representative_name || null;
+          const sap_vendor_no = validated.sap_vendor_no ? Number(validated.sap_vendor_no) : null;
+          const website = validated.website || null;
+
+          if (action === "add") {
+            await pool.query(
+              `INSERT INTO it_equipment_supplier (name, email, phone_number, address, representative_name, sap_vendor_no, website)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [name!, email, phone_number, address, representative_name, sap_vendor_no, website]
+            );
+          } else if (action === "edit") {
+            await pool.query(
+              `UPDATE it_equipment_supplier 
+                 SET name = ?, email = ?, phone_number = ?, address = ?, representative_name = ?, sap_vendor_no = ?, website = ?
+               WHERE id = ?`,
+              [name!, email, phone_number, address, representative_name, sap_vendor_no, website, id!]
+            );
+          } else if (action === "delete") {
+            // Check if supplier is in use
+            const [equipment] = await pool.query<RowDataPacket[]>(
+              "SELECT COUNT(*) as count FROM it_equipment WHERE supplier_id = ?",
+              [id!]
+            );
+            if (equipment[0].count > 0) {
+              throw new Error("Cannot delete supplier that is in use");
+            }
+            await pool.query("DELETE FROM it_equipment_supplier WHERE id = ?", [id!]);
+          } else {
+            throw new Error("Unknown action");
           }
-          await pool.query("DELETE FROM it_equipment_vendor WHERE id = ?", [id!]);
+        } else if (entity === "vendor") {
+          const validated = vendorsActionSchema.parse(rawCommon);
+          const action = validated.action;
+          const id = validated.id ? Number(validated.id) : null;
+          const name = validated.name;
+
+          if (action === "add") {
+            await pool.query(
+              "INSERT INTO it_equipment_vendor (name) VALUES (?)",
+              [name!]
+            );
+          } else if (action === "edit") {
+            await pool.query("UPDATE it_equipment_vendor SET name = ? WHERE id = ?", [name!, id!]);
+          } else if (action === "delete") {
+            // Check if vendor is in use
+            const [equipment] = await pool.query<RowDataPacket[]>(
+              "SELECT COUNT(*) as count FROM it_equipment WHERE vendor_id = ?",
+              [id!]
+            );
+            if (equipment[0].count > 0) {
+              throw new Error("Cannot delete vendor that is in use");
+            }
+            await pool.query("DELETE FROM it_equipment_vendor WHERE id = ?", [id!]);
+          } else {
+            throw new Error("Unknown action");
+          }
         } else {
-          throw new Error("Unknown action");
+          throw new Error("Unknown entity");
         }
 
         return Response.redirect(`/vendors?success=${encodeURIComponent("Saved")}`, 303);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-        logger.error("Failed to manage vendor", err, { traceId, action: rawData.action });
+        logger.error("Failed to manage vendor/supplier", err, { traceId, action: rawCommon.action, entity });
         return Response.redirect(`/vendors?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
@@ -1211,8 +1265,8 @@ async function getLocationsData() {
   };
 }
 
-async function getVendorsData() {
-  const [vendors] = await Promise.all([
+async function getVendorsAndSuppliersData() {
+  const [vendors, suppliers] = await Promise.all([
     pool.query<RowDataPacket[]>(`
       SELECT 
         v.id,
@@ -1223,6 +1277,22 @@ async function getVendorsData() {
       GROUP BY v.id, v.name
       ORDER BY v.name
     `),
+    pool.query<RowDataPacket[]>(`
+      SELECT 
+        s.id,
+        s.name,
+        s.email,
+        s.phone_number,
+        s.address,
+        s.representative_name,
+        s.sap_vendor_no,
+        s.website,
+        COUNT(DISTINCT e.id) as equipment_count
+      FROM it_equipment_supplier s
+      LEFT JOIN it_equipment e ON e.supplier_id = s.id
+      GROUP BY s.id, s.name, s.email, s.phone_number, s.address, s.representative_name, s.sap_vendor_no, s.website
+      ORDER BY s.name
+    `),
   ]);
 
   return {
@@ -1230,6 +1300,17 @@ async function getVendorsData() {
       id: v.id,
       name: v.name,
       equipment_count: Number(v.equipment_count) || 0,
+    })),
+    suppliers: suppliers[0].map((s) => ({
+      id: s.id,
+      name: s.name,
+      email: s.email || "",
+      phone_number: s.phone_number || "",
+      address: s.address || "",
+      representative_name: s.representative_name || "",
+      sap_vendor_no: s.sap_vendor_no === null || s.sap_vendor_no === undefined ? null : Number(s.sap_vendor_no),
+      website: s.website || "",
+      equipment_count: Number(s.equipment_count) || 0,
     })),
   };
 }

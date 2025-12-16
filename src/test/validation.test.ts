@@ -6,6 +6,7 @@ import {
   locationsActionSchema,
   typesActionSchema,
   vendorsActionSchema,
+  suppliersActionSchema,
   printLabelSchema,
   serviceTagSchema,
 } from "../utils/validation";
@@ -522,6 +523,94 @@ describe("Input Validation", () => {
 
       const result = vendorsActionSchema.safeParse(data);
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe("Suppliers Action Schema", () => {
+    test("should accept valid add supplier action", () => {
+      const data = {
+        action: "add",
+        name: "CDW",
+        email: "contact@cdw.com",
+        phone_number: "123",
+        address: "Addr",
+        representative_name: "Bob",
+        sap_vendor_no: "12345",
+        website: "https://cdw.com",
+      };
+
+      const result = suppliersActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should require name for add supplier action", () => {
+      const data = {
+        action: "add",
+      };
+
+      const result = suppliersActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should require id for edit supplier action", () => {
+      const data = {
+        action: "edit",
+        name: "Updated Supplier",
+      };
+
+      const result = suppliersActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should require name for edit supplier action", () => {
+      const data = {
+        action: "edit",
+        id: "1",
+      };
+
+      const result = suppliersActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should accept valid edit supplier action", () => {
+      const data = {
+        action: "edit",
+        id: "1",
+        name: "Updated Supplier",
+      };
+
+      const result = suppliersActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should require id for delete supplier action", () => {
+      const data = {
+        action: "delete",
+      };
+
+      const result = suppliersActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should accept valid delete supplier action", () => {
+      const data = {
+        action: "delete",
+        id: "1",
+      };
+
+      const result = suppliersActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should reject invalid sap_vendor_no", () => {
+      const data = {
+        action: "add",
+        name: "Bad SAP",
+        sap_vendor_no: "12abc",
+      };
+
+      const result = suppliersActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
     });
   });
 });

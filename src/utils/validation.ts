@@ -101,6 +101,30 @@ export const vendorsActionSchema = z.object({
   message: "Name required for add/edit, ID required for edit/delete",
 });
 
+export const suppliersActionSchema = z.object({
+  action: z.enum(["add", "edit", "delete"]),
+  name: z.string().min(1).max(255).trim().optional(),
+  email: z.string().email().max(255).optional().or(z.literal("")),
+  phone_number: z.string().max(255).optional().or(z.literal("")),
+  address: z.string().max(255).optional().or(z.literal("")),
+  representative_name: z.string().max(255).optional().or(z.literal("")),
+  sap_vendor_no: z.string().regex(/^[0-9]+$/).optional().or(z.literal("")),
+  website: z.string().url().max(255).optional().or(z.literal("")),
+  id: z.string().optional(),
+}).refine((data) => {
+  // If action is add or edit, name is required
+  if ((data.action === "add" || data.action === "edit") && !data.name) {
+    return false;
+  }
+  // If action is edit or delete, id is required
+  if ((data.action === "edit" || data.action === "delete") && !data.id) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Name required for add/edit, ID required for edit/delete",
+});
+
 export const printLabelSchema = z.object({
   service_tag: serviceTagSchema,
   printer: z.string().min(1).optional(),
@@ -112,4 +136,5 @@ export type ApiAddItemInput = z.infer<typeof apiAddItemSchema>;
 export type LocationsActionInput = z.infer<typeof locationsActionSchema>;
 export type TypesActionInput = z.infer<typeof typesActionSchema>;
 export type VendorsActionInput = z.infer<typeof vendorsActionSchema>;
+export type SuppliersActionInput = z.infer<typeof suppliersActionSchema>;
 export type PrintLabelInput = z.infer<typeof printLabelSchema>;
