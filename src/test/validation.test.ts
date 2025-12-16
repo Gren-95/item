@@ -5,6 +5,7 @@ import {
   apiAddItemSchema,
   locationsActionSchema,
   typesActionSchema,
+  vendorsActionSchema,
   printLabelSchema,
   serviceTagSchema,
 } from "../utils/validation";
@@ -425,6 +426,101 @@ describe("Input Validation", () => {
       };
 
       const result = printLabelSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("Vendors Action Schema", () => {
+    test("should accept valid add vendor action", () => {
+      const data = {
+        action: "add",
+        name: "Dell",
+      };
+
+      const result = vendorsActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.action).toBe("add");
+        expect(result.data.name).toBe("Dell");
+      }
+    });
+
+    test("should require name for add vendor action", () => {
+      const data = {
+        action: "add",
+      };
+
+      const result = vendorsActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should require id for edit vendor action", () => {
+      const data = {
+        action: "edit",
+        name: "Updated Vendor",
+      };
+
+      const result = vendorsActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should require name for edit vendor action", () => {
+      const data = {
+        action: "edit",
+        id: "1",
+      };
+
+      const result = vendorsActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should accept valid edit vendor action", () => {
+      const data = {
+        action: "edit",
+        name: "Updated Vendor",
+        id: "1",
+      };
+
+      const result = vendorsActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should require id for delete vendor action", () => {
+      const data = {
+        action: "delete",
+      };
+
+      const result = vendorsActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should accept valid delete vendor action", () => {
+      const data = {
+        action: "delete",
+        id: "1",
+      };
+
+      const result = vendorsActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should reject vendor name longer than 255 characters", () => {
+      const data = {
+        action: "add",
+        name: "A".repeat(256),
+      };
+
+      const result = vendorsActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should accept vendor name exactly 255 characters", () => {
+      const data = {
+        action: "add",
+        name: "A".repeat(255),
+      };
+
+      const result = vendorsActionSchema.safeParse(data);
       expect(result.success).toBe(true);
     });
   });
