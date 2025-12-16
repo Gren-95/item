@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 import { createTestRequest, parseJsonResponse, MockPool } from "./utils";
-import { vendorsActionSchema } from "../utils/validation";
+import { vendorsActionSchema, suppliersActionSchema } from "../utils/validation";
 import pool from "../db";
 
 // Mock the database pool
@@ -23,6 +23,22 @@ describe("Vendor Management (#5)", () => {
         GROUP BY v.id, v.name
         ORDER BY v.name
       `;
+      const selectSuppliersQuery = `
+        SELECT 
+          s.id,
+          s.name,
+          s.email,
+          s.phone_number,
+          s.address,
+          s.representative_name,
+          s.sap_vendor_no,
+          s.website,
+          COUNT(DISTINCT e.id) as equipment_count
+        FROM it_equipment_supplier s
+        LEFT JOIN it_equipment e ON e.supplier_id = s.id
+        GROUP BY s.id, s.name, s.email, s.phone_number, s.address, s.representative_name, s.sap_vendor_no, s.website
+        ORDER BY s.name
+      `;
       
       mockPool.mockQuery(selectVendorsQuery, [
         {
@@ -30,6 +46,13 @@ describe("Vendor Management (#5)", () => {
             { id: 1, name: "Dell", equipment_count: 5 },
             { id: 2, name: "HP", equipment_count: 3 },
             { id: 3, name: "Lenovo", equipment_count: 0 },
+          ],
+        },
+      ]);
+      mockPool.mockQuery(selectSuppliersQuery, [
+        {
+          rows: [
+            { id: 10, name: "CDW", email: "cdw@example.com", phone_number: "123", address: "Addr", representative_name: "Rep", sap_vendor_no: 123, website: "https://cdw.com", equipment_count: 2 },
           ],
         },
       ]);
@@ -50,8 +73,29 @@ describe("Vendor Management (#5)", () => {
         GROUP BY v.id, v.name
         ORDER BY v.name
       `;
+      const selectSuppliersQuery = `
+        SELECT 
+          s.id,
+          s.name,
+          s.email,
+          s.phone_number,
+          s.address,
+          s.representative_name,
+          s.sap_vendor_no,
+          s.website,
+          COUNT(DISTINCT e.id) as equipment_count
+        FROM it_equipment_supplier s
+        LEFT JOIN it_equipment e ON e.supplier_id = s.id
+        GROUP BY s.id, s.name, s.email, s.phone_number, s.address, s.representative_name, s.sap_vendor_no, s.website
+        ORDER BY s.name
+      `;
       
       mockPool.mockQuery(selectVendorsQuery, [
+        {
+          rows: [],
+        },
+      ]);
+      mockPool.mockQuery(selectSuppliersQuery, [
         {
           rows: [],
         },
@@ -281,6 +325,151 @@ describe("Vendor Management (#5)", () => {
     });
   });
 
+  describe("Supplier CRUD operations", () => {
+    test("should validate add supplier action", () => {
+      const formData = {
+        action: "add",
+        name: "CDW",
+        email: "contact@cdw.com",
+        phone_number: "123",
+        address: "123 Street",
+        representative_name: "Alice",
+        sap_vendor_no: "12345",
+        website: "https://cdw.com",
+      };
+
+      const result = suppliersActionSchema.safeParse(formData);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.name).toBe("CDW");
+      }
+    });
+
+    test("should create a new supplier with full details", async () => {
+      const insertQuery = `INSERT INTO it_equipment_supplier (name, email, phone_number, address, representative_name, sap_vendor_no, website)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`;
+      
+      mockPool.mockQuery(insertQuery, [
+        {
+          rows: [],
+          insertId: 7,
+          affectedRows: 1,
+        },
+      ]);
+
+      const formData = new FormData();
+      formData.append("entity", "supplier");
+      formData.append("action", "add");
+      formData.append("name", "CDW");
+      formData.append("email", "contact@cdw.com");
+      formData.append("phone_number", "123");
+      formData.append("address", "123 Street");
+      formData.append("representative_name", "Alice");
+      formData.append("sap_vendor_no", "12345");
+      formData.append("website", "https://cdw.com");
+
+      const req = createTestRequest("/vendors", {
+        method: "POST",
+        body: formData,
+      });
+
+      expect(req.method).toBe("POST");
+      expect(req.url).toContain("/vendors");
+    });
+
+    test("should require name for add supplier action", () => {
+      const formData = {
+        action: "add",
+      };
+
+      const result = suppliersActionSchema.safeParse(formData);
+      expect(result.success).toBe(false);
+    });
+
+    test("should update supplier with full details", async () => {
+      const updateQuery = `UPDATE it_equipment_supplier 
+                 SET name = ?, email = ?, phone_number = ?, address = ?, representative_name = ?, sap_vendor_no = ?, website = ?
+               WHERE id = ?`;
+      
+      mockPool.mockQuery(updateQuery, [
+        {
+          rows: [],
+          affectedRows: 1,
+        },
+      ]);
+
+      const formData = new FormData();
+      formData.append("entity", "supplier");
+      formData.append("action", "edit");
+      formData.append("id", "10");
+      formData.append("name", "Updated CDW");
+      formData.append("email", "new@cdw.com");
+      formData.append("phone_number", "999");
+      formData.append("address", "New Addr");
+      formData.append("representative_name", "Bob");
+      formData.append("sap_vendor_no", "98765");
+      formData.append("website", "https://cdw.com/partners");
+
+      const req = createTestRequest("/vendors", {
+        method: "POST",
+        body: formData,
+      });
+
+      expect(req.method).toBe("POST");
+      expect(req.url).toContain("/vendors");
+    });
+
+    test("should require id for edit supplier action", () => {
+      const formData = {
+        action: "edit",
+        name: "Updated Supplier",
+      };
+
+      const result = suppliersActionSchema.safeParse(formData);
+      expect(result.success).toBe(false);
+    });
+
+    test("should delete supplier when not in use", async () => {
+      const checkQuery = "SELECT COUNT(*) as count FROM it_equipment WHERE supplier_id = ?";
+      const deleteQuery = "DELETE FROM it_equipment_supplier WHERE id = ?";
+      
+      mockPool.mockQuery(checkQuery, [
+        {
+          rows: [{ count: 0 }],
+        },
+      ]);
+      
+      mockPool.mockQuery(deleteQuery, [
+        {
+          rows: [],
+          affectedRows: 1,
+        },
+      ]);
+
+      const formData = new FormData();
+      formData.append("entity", "supplier");
+      formData.append("action", "delete");
+      formData.append("id", "10");
+
+      const req = createTestRequest("/vendors", {
+        method: "POST",
+        body: formData,
+      });
+
+      expect(req.method).toBe("POST");
+      expect(req.url).toContain("/vendors");
+    });
+
+    test("should require id for delete supplier action", () => {
+      const formData = {
+        action: "delete",
+      };
+
+      const result = suppliersActionSchema.safeParse(formData);
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe("Vendor selection in equipment forms", () => {
     test("should include vendor selection box in add equipment form", async () => {
       const selectVendorsQuery = "SELECT id, name FROM it_equipment_vendor ORDER BY name";
@@ -323,6 +512,58 @@ describe("Vendor Management (#5)", () => {
           rows: [
             { id: 1, name: "Dell" },
             { id: 2, name: "HP" },
+          ],
+        },
+      ]);
+
+      const req = createTestRequest("/edit/1");
+      expect(req.method).toBe("GET");
+      expect(req.url).toContain("/edit/1");
+    });
+  });
+
+  describe("Supplier selection in equipment forms", () => {
+    test("should include supplier selection box in add equipment form", async () => {
+      const selectSuppliersQuery = "SELECT id, name FROM it_equipment_supplier ORDER BY name";
+      
+      mockPool.mockQuery(selectSuppliersQuery, [
+        {
+          rows: [
+            { id: 1, name: "CDW" },
+            { id: 2, name: "Insight" },
+          ],
+        },
+      ]);
+
+      const req = createTestRequest("/add");
+      expect(req.method).toBe("GET");
+      expect(req.url).toContain("/add");
+    });
+
+    test("should include 'Add new supplier' option in supplier selection", async () => {
+      const selectSuppliersQuery = "SELECT id, name FROM it_equipment_supplier ORDER BY name";
+      
+      mockPool.mockQuery(selectSuppliersQuery, [
+        {
+          rows: [
+            { id: 1, name: "CDW" },
+          ],
+        },
+      ]);
+
+      const req = createTestRequest("/add");
+      expect(req.method).toBe("GET");
+      // Template should include option with value="__add_new__"
+    });
+
+    test("should include supplier selection box in edit equipment form", async () => {
+      const selectSuppliersQuery = "SELECT id, name FROM it_equipment_supplier ORDER BY name";
+      
+      mockPool.mockQuery(selectSuppliersQuery, [
+        {
+          rows: [
+            { id: 1, name: "CDW" },
+            { id: 2, name: "Insight" },
           ],
         },
       ]);
