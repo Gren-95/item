@@ -6,6 +6,7 @@ import { auditPage } from "./templates/audit";
 import { addPage } from "./templates/add";
 import { locationsPage } from "./templates/locations";
 import { typesPage } from "./templates/types";
+import { vendorsPage } from "./templates/vendors";
 import { logger } from "./utils/logger";
 import {
   equipmentAddSchema,
@@ -13,6 +14,7 @@ import {
   apiAddItemSchema,
   locationsActionSchema,
   typesActionSchema,
+  vendorsActionSchema,
   printLabelSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
@@ -522,6 +524,60 @@ async function handleRequest(req: Request): Promise<Response> {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         return Response.redirect(`/locations?error=${encodeURIComponent(errorMessage)}`, 303);
+      }
+    }
+
+    // Vendors management - GET
+    if (path === "/vendors" && req.method === "GET") {
+      const success = url.searchParams.get("success") || "";
+      const error = url.searchParams.get("error") || "";
+      const data = await getVendorsData();
+      return new Response(vendorsPage(data, success, error), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // Vendors management - POST (add/edit/delete)
+    if (path === "/vendors" && req.method === "POST") {
+      const form = await req.formData();
+      const rawData = {
+        action: (form.get("action") || "").toString(),
+        name: form.get("name") ? form.get("name")!.toString().trim() : undefined,
+        id: form.get("id") ? form.get("id")!.toString() : undefined,
+      };
+
+      try {
+        const validated = vendorsActionSchema.parse(rawData);
+        const action = validated.action;
+        const id = validated.id ? Number(validated.id) : null;
+        const name = validated.name;
+
+        if (action === "add") {
+          await pool.query(
+            "INSERT INTO it_equipment_vendor (name) VALUES (?)",
+            [name!]
+          );
+        } else if (action === "edit") {
+          await pool.query("UPDATE it_equipment_vendor SET name = ? WHERE id = ?", [name!, id!]);
+        } else if (action === "delete") {
+          // Check if vendor is in use
+          const [equipment] = await pool.query<RowDataPacket[]>(
+            "SELECT COUNT(*) as count FROM it_equipment WHERE vendor_id = ?",
+            [id!]
+          );
+          if (equipment[0].count > 0) {
+            throw new Error("Cannot delete vendor that is in use");
+          }
+          await pool.query("DELETE FROM it_equipment_vendor WHERE id = ?", [id!]);
+        } else {
+          throw new Error("Unknown action");
+        }
+
+        return Response.redirect(`/vendors?success=${encodeURIComponent("Saved")}`, 303);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to manage vendor", err, { traceId, action: rawData.action });
+        return Response.redirect(`/vendors?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
 
@@ -1152,6 +1208,29 @@ async function getLocationsData() {
     departments,
     areas,
     subAreas
+  };
+}
+
+async function getVendorsData() {
+  const [vendors] = await Promise.all([
+    pool.query<RowDataPacket[]>(`
+      SELECT 
+        v.id,
+        v.name,
+        COUNT(DISTINCT e.id) as equipment_count
+      FROM it_equipment_vendor v
+      LEFT JOIN it_equipment e ON e.vendor_id = v.id
+      GROUP BY v.id, v.name
+      ORDER BY v.name
+    `),
+  ]);
+
+  return {
+    vendors: vendors[0].map((v) => ({
+      id: v.id,
+      name: v.name,
+      equipment_count: Number(v.equipment_count) || 0,
+    })),
   };
 }
 
