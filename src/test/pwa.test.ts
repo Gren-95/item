@@ -50,4 +50,41 @@ describe("PWA Manifest (#21)", () => {
       expect(iconPath.startsWith("/icons/")).toBe(true);
     }
   });
+
+  test("manifest should have icons with proper sizes and purposes", () => {
+    const manifestPath = join(import.meta.dir, "../../public/manifest.webmanifest");
+    const manifest = readFileSync(manifestPath, "utf-8");
+    const parsed = JSON.parse(manifest);
+
+    expect(parsed.icons).toBeDefined();
+    expect(parsed.icons.length).toBeGreaterThan(0);
+
+    // Check for required icon sizes
+    const iconSizes = parsed.icons.map((icon: { sizes: string }) => icon.sizes);
+    expect(iconSizes).toContain("192x192");
+    expect(iconSizes).toContain("512x512");
+
+    // Check for proper purposes
+    const purposes = parsed.icons.map((icon: { purpose?: string }) => icon.purpose || "any");
+    expect(purposes.some((p: string) => p.includes("any"))).toBe(true);
+    expect(purposes.some((p: string) => p.includes("maskable"))).toBe(true);
+  });
+
+  test("manifest theme_color should match branding palette", () => {
+    const manifestPath = join(import.meta.dir, "../../public/manifest.webmanifest");
+    const manifest = readFileSync(manifestPath, "utf-8");
+    const parsed = JSON.parse(manifest);
+
+    // Primary blue color from branding palette
+    expect(parsed.theme_color).toBe("#2563eb");
+  });
+
+  test("manifest background_color should match branding palette", () => {
+    const manifestPath = join(import.meta.dir, "../../public/manifest.webmanifest");
+    const manifest = readFileSync(manifestPath, "utf-8");
+    const parsed = JSON.parse(manifest);
+
+    // Light gray background from branding palette
+    expect(parsed.background_color).toBe("#f9fafb");
+  });
 });
