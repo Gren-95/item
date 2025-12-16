@@ -51,6 +51,34 @@ export const locationsActionSchema = z.object({
   message: "Name required for add/edit, ID required for edit/activate/deactivate",
 });
 
+export const typesActionSchema = z.object({
+  type: z.enum(["type", "model"]),
+  action: z.enum(["add", "edit", "activate", "deactivate"]),
+  name: z.string().min(1).max(255).trim().optional(),
+  id: z.string().optional(),
+  parent_id: z.string().optional(),
+}).refine((data) => {
+  // If action is add or edit, name is required
+  if ((data.action === "add" || data.action === "edit") && !data.name) {
+    return false;
+  }
+  // If action is edit, activate, or deactivate, id is required
+  if ((data.action === "edit" || data.action === "activate" || data.action === "deactivate") && !data.id) {
+    return false;
+  }
+  // If type is model and action is add, parent_id is required
+  if (data.type === "model" && data.action === "add" && !data.parent_id) {
+    return false;
+  }
+  // If type is type, name must be max 25 characters
+  if (data.type === "type" && data.name && data.name.length > 25) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Name required for add/edit, ID required for edit/activate/deactivate, parent_id required for model add",
+});
+
 export const printLabelSchema = z.object({
   service_tag: serviceTagSchema,
   printer: z.string().min(1).optional(),
@@ -60,4 +88,5 @@ export type EquipmentAddInput = z.infer<typeof equipmentAddSchema>;
 export type EquipmentEditInput = z.infer<typeof equipmentEditSchema>;
 export type ApiAddItemInput = z.infer<typeof apiAddItemSchema>;
 export type LocationsActionInput = z.infer<typeof locationsActionSchema>;
+export type TypesActionInput = z.infer<typeof typesActionSchema>;
 export type PrintLabelInput = z.infer<typeof printLabelSchema>;
