@@ -323,6 +323,80 @@ describe("Input Validation", () => {
       const result = typesActionSchema.safeParse(data);
       expect(result.success).toBe(true);
     });
+
+    test("should accept valid add product-line action", () => {
+      const data = {
+        type: "product-line",
+        action: "add",
+        name: "ThinkPad",
+        parent_id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.action).toBe("add");
+        expect(result.data.type).toBe("product-line");
+        expect(result.data.name).toBe("ThinkPad");
+        expect(result.data.parent_id).toBe("1");
+      }
+    });
+
+    test("should require parent_id for add product-line action", () => {
+      const data = {
+        type: "product-line",
+        action: "add",
+        name: "ThinkPad",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should require name for add product-line action", () => {
+      const data = {
+        type: "product-line",
+        action: "add",
+        parent_id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should accept valid edit product-line action", () => {
+      const data = {
+        type: "product-line",
+        action: "edit",
+        name: "Updated Product Line",
+        id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should accept valid activate product-line action", () => {
+      const data = {
+        type: "product-line",
+        action: "activate",
+        id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should accept valid deactivate product-line action", () => {
+      const data = {
+        type: "product-line",
+        action: "deactivate",
+        id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
   });
 
   describe("Print Label Schema", () => {

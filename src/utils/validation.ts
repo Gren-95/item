@@ -52,7 +52,7 @@ export const locationsActionSchema = z.object({
 });
 
 export const typesActionSchema = z.object({
-  type: z.enum(["type", "model"]),
+  type: z.enum(["type", "product-line", "model"]),
   action: z.enum(["add", "edit", "activate", "deactivate"]),
   name: z.string().min(1).max(255).trim().optional(),
   id: z.string().optional(),
@@ -70,13 +70,17 @@ export const typesActionSchema = z.object({
   if (data.type === "model" && data.action === "add" && !data.parent_id) {
     return false;
   }
+  // If type is product-line and action is add, parent_id is required
+  if (data.type === "product-line" && data.action === "add" && !data.parent_id) {
+    return false;
+  }
   // If type is type, name must be max 25 characters
   if (data.type === "type" && data.name && data.name.length > 25) {
     return false;
   }
   return true;
 }, {
-  message: "Name required for add/edit, ID required for edit/activate/deactivate, parent_id required for model add",
+  message: "Name required for add/edit, ID required for edit/activate/deactivate, parent_id required for model/product-line add",
 });
 
 export const printLabelSchema = z.object({
