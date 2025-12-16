@@ -5,6 +5,7 @@ import { searchPage } from "./templates/search";
 import { auditPage } from "./templates/audit";
 import { addPage } from "./templates/add";
 import { locationsPage } from "./templates/locations";
+import { typesPage } from "./templates/types";
 import { logger } from "./utils/logger";
 import {
   equipmentAddSchema,
@@ -520,6 +521,59 @@ async function handleRequest(req: Request): Promise<Response> {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         return Response.redirect(`/locations?error=${encodeURIComponent(errorMessage)}`, 303);
+      }
+    }
+
+    // Types management - GET
+    if (path === "/types" && req.method === "GET") {
+      const success = url.searchParams.get("success") || "";
+      const error = url.searchParams.get("error") || "";
+      const data = await getTypesData();
+      return new Response(typesPage(data, success, error), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // Types management - POST (add/edit/activate/deactivate)
+    if (path === "/types" && req.method === "POST") {
+      const form = await req.formData();
+      const rawData = {
+        type: (form.get("type") || "").toString(),
+        action: (form.get("action") || "").toString(),
+        name: form.get("name") ? form.get("name")!.toString().trim() : undefined,
+        id: form.get("id") ? form.get("id")!.toString() : undefined,
+      };
+
+      try {
+        const action = rawData.action;
+        const id = rawData.id ? Number(rawData.id) : null;
+        const name = rawData.name;
+
+        if (action === "add") {
+          if (!name) throw new Error("Name is required");
+          if (name.length > 25) throw new Error("Type name must be 25 characters or less");
+          await pool.query(
+            "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)",
+            [name]
+          );
+        } else if (action === "edit") {
+          if (!id) throw new Error("ID is required");
+          if (!name) throw new Error("Name is required");
+          if (name.length > 25) throw new Error("Type name must be 25 characters or less");
+          await pool.query("UPDATE it_equipment_type SET type_name = ? WHERE id = ?", [name, id]);
+        } else if (action === "deactivate" || action === "activate") {
+          if (!id) throw new Error("ID is required");
+          const status = action === "activate" ? 1 : 0;
+          await pool.query("UPDATE it_equipment_type SET status = ? WHERE id = ?", [status, id]);
+        } else {
+          throw new Error("Unknown action");
+        }
+
+        return Response.redirect(`/types?success=${encodeURIComponent("Saved")}`, 303);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to manage type", err, { traceId, action: rawData.action });
+        return Response.redirect(`/types?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
 
@@ -1068,6 +1122,31 @@ async function getLocationsData() {
     departments,
     areas,
     subAreas
+  };
+}
+
+async function getTypesData() {
+  const [types] = await pool.query<RowDataPacket[]>(`
+    SELECT 
+      t.id,
+      t.type_name as name,
+      t.status,
+      COUNT(DISTINCT e.id) as equipment_count
+    FROM it_equipment_type t
+    LEFT JOIN it_equipment_product_line pl ON pl.type_id = t.id
+    LEFT JOIN it_equipment_model m ON m.product_line_id = pl.id
+    LEFT JOIN it_equipment e ON e.model_id = m.id
+    GROUP BY t.id, t.type_name, t.status
+    ORDER BY t.type_name
+  `);
+
+  return {
+    types: types.map((t) => ({
+      id: t.id,
+      name: t.name,
+      status: t.status ? 1 : 0,
+      equipment_count: Number(t.equipment_count) || 0,
+    })),
   };
 }
 

@@ -4,9 +4,14 @@ This directory contains tests for the equipment audit application, covering func
 
 ## Test Structure
 
-- `equipment.test.ts` - Tests for equipment search, add, and edit (#1, #13)
+- `equipment.test.ts` - Tests for equipment search, add, and edit (#1, #13, #14)
+- `types.test.ts` - Tests for equipment types management (#4)
 - `locations.test.ts` - Tests for locations management (#7)
 - `print.test.ts` - Tests for print label API (#11)
+- `camera.test.ts` - Tests for camera scanning functionality (#17)
+- `https.test.ts` - Tests for HTTPS support (#18)
+- `database.test.ts` - Tests for database configuration (#26)
+- `darkmode.test.ts` - Tests for dark mode theme (#29)
 - `pwa.test.ts` - Tests for PWA manifest (#21)
 - `health.test.ts` - Tests for health check endpoint
 - `validation.test.ts` - Tests for input validation schemas
@@ -54,6 +59,33 @@ These tests cover the acceptance criteria from the following closed issues:
 - ✅ Valid manifest.json file
 - ✅ Required PWA fields (name, icons, start URL, etc.)
 - ✅ Correctly linked in HTML
+
+### Issue #17: Camera Scanning
+- ✅ Scan button available in search form
+- ✅ QR scanner modal opens on button click
+- ✅ QR scanner library files are served
+- ✅ Modal includes camera video element
+- ✅ Modal supports close and cancel actions
+- ✅ Flashlight toggle support
+
+### Issue #18: HTTPS Support
+- ✅ Environment variables for certificate paths
+- ✅ Graceful fallback to HTTP when certificates unavailable
+- ✅ HTTP to HTTPS redirect when certificates available
+- ✅ Certificate generation script exists
+
+### Issue #26: Database Configuration
+- ✅ Environment variables for database connection
+- ✅ Support for internal database (Docker Compose)
+- ✅ Support for external database connection
+- ✅ Database initialization script exists
+
+### Issue #29: Dark Mode
+- ✅ Theme toggle button in navigation
+- ✅ Theme preference saved to localStorage
+- ✅ System preference detection
+- ✅ Theme persists across page reloads
+- ✅ Tailwind dark mode configuration
 
 ## Notes
 
