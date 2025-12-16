@@ -29,6 +29,7 @@ interface Equipment {
   inventory_nr: string | null;
   is_written_off: number | null;
   write_off_reason: string | null;
+  repair_status: 'needs_repair' | 'at_supplier' | 'returned' | 'in_backup' | null;
 }
 
 interface SelectOption {
@@ -383,59 +384,202 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           </div>
         </div>
 
-        <!-- Write-Off Status -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
-            Write-Off Status
-          </h2>
-          
-          ${eq.is_written_off ? `
-            <div class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <div class="flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
-                <span class="font-semibold">Equipment is currently written off</span>
+        <!-- Write-Off Status and Repair Status -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <!-- Write-Off Status -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              Write-Off Status
+            </h2>
+            
+            <div class="flex flex-col gap-3">
+              <div>
+                <p class="text-sm text-gray-700 dark:text-gray-300">
+                  ${eq.is_written_off ? `
+                    <span class="font-semibold">Current Status:</span> 
+                    <span class="px-2 py-1 rounded-full text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                      Written Off
+                    </span>
+                    <span class="ml-2 text-gray-600 dark:text-gray-400">(${escapeHtml(eq.write_off_reason || "Unknown")})</span>
+                  ` : '<span class="text-gray-500 dark:text-gray-400">Not written off (Active)</span>'}
+                </p>
               </div>
-              <p class="text-sm text-red-600 dark:text-red-300">Reason: ${escapeHtml(eq.write_off_reason || "Unknown")}</p>
+              <button 
+                type="button" 
+                onclick="openWriteOffModal()"
+                class="btn btn-secondary w-full"
+              >
+                <span class="flex items-center justify-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                  </svg>
+                  ${eq.is_written_off ? 'Edit Write-Off Status' : 'Set Write-Off Status'}
+                </span>
+              </button>
             </div>
-          ` : ""}
-          
-          <div class="grid grid-cols-1 gap-4">
-            <div>
-              <label for="is_written_off" class="label">Write-Off Reason</label>
-              <select id="is_written_off" name="is_written_off" class="select-field" onchange="toggleWriteOffComment(this.value)">
-                <option value="">Not written off (Active)</option>
-                ${data.writeOffReasons.map(r => `
-                  <option value="${r.id}" ${eq.is_written_off === r.id ? "selected" : ""}>${escapeHtml(r.name)}</option>
-                `).join("")}
-              </select>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                ${eq.is_written_off ? "Select 'Not written off' to restore this equipment to active status." : "Select a reason to write off this equipment."}
-              </p>
+          </div>
+
+        <!-- Write-Off Status Modal -->
+        <div id="writeOffModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 transition-colors">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Write-Off Status</h3>
+              <button onclick="closeWriteOffModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
             </div>
-            <div id="write-off-comment-container" class="${eq.is_written_off ? "" : "hidden"}">
-              <label for="write_off_comment" class="label">Write-Off Comment <span class="text-red-500">*</span></label>
-              <textarea 
-                id="write_off_comment" 
-                name="write_off_comment"
-                rows="3"
-                placeholder="Please provide a comment explaining why this equipment is being written off..."
-                class="input-field"
-                ${eq.is_written_off ? "required" : ""}
-              ></textarea>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">A comment is required when writing off equipment.</p>
+            <form id="write-off-modal-form" onsubmit="return submitWriteOffModal(event)">
+              <div class="space-y-4">
+                <div>
+                  <label for="modal_is_written_off" class="label">Write-Off Reason</label>
+                  <select id="modal_is_written_off" name="is_written_off" class="select-field" onchange="toggleModalWriteOffComment(this.value)">
+                    <option value="">Not written off (Active)</option>
+                    ${data.writeOffReasons.map(r => `
+                      <option value="${r.id}" ${eq.is_written_off === r.id ? "selected" : ""}>${escapeHtml(r.name)}</option>
+                    `).join("")}
+                  </select>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    ${eq.is_written_off ? "Select 'Not written off' to restore this equipment to active status." : "Select a reason to write off this equipment."}
+                  </p>
+                </div>
+                <div id="modal-write-off-comment-container" class="${eq.is_written_off ? "" : "hidden"}">
+                  <label for="modal_write_off_comment" class="label">Write-Off Comment <span class="text-red-500">*</span></label>
+                  <textarea 
+                    id="modal_write_off_comment" 
+                    name="write_off_comment"
+                    rows="3"
+                    placeholder="Please provide a comment explaining why this equipment is being written off..."
+                    class="input-field"
+                    ${eq.is_written_off ? "required" : ""}
+                  ></textarea>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">A comment is required when writing off equipment.</p>
+                </div>
+              </div>
+              <div class="flex justify-end gap-3 mt-6">
+                <button type="button" onclick="closeWriteOffModal()" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-success">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+          <!-- Repair Status -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+              Repair Status
+            </h2>
+            
+            <div class="flex flex-col gap-3">
+              <div>
+                <p class="text-sm text-gray-700 dark:text-gray-300">
+                  ${eq.repair_status ? `
+                    <span class="font-semibold">Current Status:</span> 
+                    <span class="px-2 py-1 rounded-full text-xs ${
+                      eq.repair_status === 'needs_repair' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                      eq.repair_status === 'at_supplier' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+                      eq.repair_status === 'returned' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                      'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300'
+                    }">
+                      ${eq.repair_status === 'needs_repair' ? 'Needs Repair' :
+                        eq.repair_status === 'at_supplier' ? 'At Supplier' :
+                        eq.repair_status === 'returned' ? 'Returned' :
+                        'In Use'}
+                    </span>
+                  ` : '<span class="text-gray-500 dark:text-gray-400">Not in repair (Active)</span>'}
+                </p>
+                ${eq.repair_note ? `<p class="text-xs text-gray-600 dark:text-gray-400 mt-1">${escapeHtml(eq.repair_note.substring(0, 100))}${eq.repair_note.length > 100 ? '...' : ''}</p>` : ''}
+              </div>
+              <button 
+                type="button" 
+                onclick="openRepairModal()"
+                class="btn btn-secondary w-full"
+              >
+                <span class="flex items-center justify-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                  </svg>
+                  ${eq.repair_status ? 'Edit Repair Status' : 'Set Repair Status'}
+                </span>
+              </button>
             </div>
           </div>
         </div>
 
+        <!-- Repair Status Modal -->
+        <div id="repairModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 transition-colors">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Repair Status</h3>
+              <button onclick="closeRepairModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <form id="repair-modal-form" onsubmit="return submitRepairModal(event)">
+              <div class="space-y-4">
+                <div>
+                  <label for="modal_repair_status" class="label">Repair Status</label>
+                  <select id="modal_repair_status" name="repair_status" class="select-field" onchange="toggleModalRepairFields(this.value)">
+                    <option value="">Not in repair (Active)</option>
+                    <option value="needs_repair" ${eq.repair_status === 'needs_repair' ? 'selected' : ''}>Needs Repair</option>
+                    <option value="at_supplier" ${eq.repair_status === 'at_supplier' ? 'selected' : ''}>At Supplier</option>
+                    <option value="returned" ${eq.repair_status === 'returned' ? 'selected' : ''}>Returned</option>
+                    <option value="in_backup" ${eq.repair_status === 'in_backup' ? 'selected' : ''}>In Use</option>
+                  </select>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Select repair status to track equipment sent for repair.
+                  </p>
+                </div>
+                <div id="modal-repair-fields-container" class="${eq.repair_status ? '' : 'hidden'}">
+                  <div>
+                    <label for="modal_repair_note" class="label">Repair Issue Note <span class="text-red-500">*</span></label>
+                    <textarea 
+                      id="modal_repair_note" 
+                      name="repair_note"
+                      rows="3"
+                      placeholder="Describe the repair issue..."
+                      class="input-field"
+                      ${eq.repair_status === 'needs_repair' ? 'required' : ''}
+                    >${escapeHtml(eq.repair_note || '')}</textarea>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">A note is required when registering equipment for repair.</p>
+                  </div>
+                  <div class="mt-4">
+                    <label for="modal_repair_physical_location" class="label">Physical Location</label>
+                    <input
+                      type="text"
+                      id="modal_repair_physical_location"
+                      name="repair_physical_location"
+                      placeholder="e.g., Cupboard, Storage Room A"
+                      value="${escapeHtml(eq.repair_physical_location || '')}"
+                      class="input-field"
+                      maxlength="255"
+                    >
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Record where the equipment is physically located.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="flex justify-end gap-3 mt-6">
+                <button type="button" onclick="closeRepairModal()" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-success">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
         <script>
-          function toggleWriteOffComment(value) {
-            const container = document.getElementById('write-off-comment-container');
-            const commentField = document.getElementById('write_off_comment');
+          function toggleModalWriteOffComment(value) {
+            const container = document.getElementById('modal-write-off-comment-container');
+            const commentField = document.getElementById('modal_write_off_comment');
             if (value && value !== '') {
               container.classList.remove('hidden');
               commentField.setAttribute('required', 'required');
@@ -445,6 +589,181 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
               commentField.value = '';
             }
           }
+
+          function openWriteOffModal() {
+            const modal = document.getElementById('writeOffModal');
+            const writeOffSelect = document.getElementById('modal_is_written_off');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            if (writeOffSelect) {
+              toggleModalWriteOffComment(writeOffSelect.value);
+            }
+          }
+
+          function closeWriteOffModal() {
+            const modal = document.getElementById('writeOffModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+          }
+
+          function submitWriteOffModal(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            
+            // Get the main form
+            const mainForm = document.querySelector('form[action*="/edit/"]');
+            if (!mainForm) return false;
+            
+            // Update hidden fields in main form or add them
+            const isWrittenOff = formData.get('is_written_off');
+            const writeOffComment = formData.get('write_off_comment');
+            
+            // Remove existing write-off fields
+            const existingWrittenOff = mainForm.querySelector('select[name="is_written_off"], input[name="is_written_off"]');
+            const existingComment = mainForm.querySelector('textarea[name="write_off_comment"], input[name="write_off_comment"]');
+            
+            if (existingWrittenOff) existingWrittenOff.remove();
+            if (existingComment) existingComment.remove();
+            
+            // Add new hidden fields
+            if (isWrittenOff) {
+              const writtenOffInput = document.createElement('input');
+              writtenOffInput.type = 'hidden';
+              writtenOffInput.name = 'is_written_off';
+              writtenOffInput.value = isWrittenOff.toString();
+              mainForm.appendChild(writtenOffInput);
+            }
+            
+            if (writeOffComment) {
+              const commentInput = document.createElement('input');
+              commentInput.type = 'hidden';
+              commentInput.name = 'write_off_comment';
+              commentInput.value = writeOffComment.toString();
+              mainForm.appendChild(commentInput);
+            }
+            
+            // Validate if writing off and no comment
+            if (isWrittenOff && isWrittenOff !== '' && !writeOffComment) {
+              alert('Write-off comment is required when writing off equipment.');
+              return false;
+            }
+            
+            // Close modal and submit main form
+            closeWriteOffModal();
+            mainForm.submit();
+            return false;
+          }
+
+          window.openWriteOffModal = openWriteOffModal;
+          window.closeWriteOffModal = closeWriteOffModal;
+          window.toggleModalWriteOffComment = toggleModalWriteOffComment;
+          window.submitWriteOffModal = submitWriteOffModal;
+          
+          function toggleModalRepairFields(value) {
+            const container = document.getElementById('modal-repair-fields-container');
+            const noteField = document.getElementById('modal_repair_note');
+            
+            if (value && value !== '') {
+              container.classList.remove('hidden');
+              if (value === 'needs_repair') {
+                noteField.setAttribute('required', 'required');
+              } else {
+                noteField.removeAttribute('required');
+              }
+            } else {
+              container.classList.add('hidden');
+              noteField.removeAttribute('required');
+            }
+          }
+
+          function openRepairModal() {
+            const modal = document.getElementById('repairModal');
+            const repairStatus = document.getElementById('modal_repair_status');
+            
+            // Store original value to detect if sending to repair
+            if (repairStatus) {
+              repairStatus.dataset.originalValue = repairStatus.value || '';
+            }
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            if (repairStatus) {
+              toggleModalRepairFields(repairStatus.value);
+            }
+          }
+
+
+          function closeRepairModal() {
+            const modal = document.getElementById('repairModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+          }
+
+          function submitRepairModal(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            
+            // Get the main form
+            const mainForm = document.querySelector('form[action*="/edit/"]');
+            if (!mainForm) return false;
+            
+            // Update hidden fields in main form or add them
+            const repairStatus = formData.get('repair_status');
+            const repairNote = formData.get('repair_note');
+            const repairLocation = formData.get('repair_physical_location');
+            
+            // Remove existing repair fields
+            const existingStatus = mainForm.querySelector('input[name="repair_status"]');
+            const existingNote = mainForm.querySelector('textarea[name="repair_note"], input[name="repair_note"]');
+            const existingLocation = mainForm.querySelector('input[name="repair_physical_location"]');
+            
+            if (existingStatus) existingStatus.remove();
+            if (existingNote) existingNote.remove();
+            if (existingLocation) existingLocation.remove();
+            
+            // Add new hidden fields
+            if (repairStatus) {
+              const statusInput = document.createElement('input');
+              statusInput.type = 'hidden';
+              statusInput.name = 'repair_status';
+              statusInput.value = repairStatus.toString();
+              mainForm.appendChild(statusInput);
+            }
+            
+            if (repairNote) {
+              const noteInput = document.createElement('input');
+              noteInput.type = 'hidden';
+              noteInput.name = 'repair_note';
+              noteInput.value = repairNote.toString();
+              mainForm.appendChild(noteInput);
+            }
+            
+            if (repairLocation) {
+              const locationInput = document.createElement('input');
+              locationInput.type = 'hidden';
+              locationInput.name = 'repair_physical_location';
+              locationInput.value = repairLocation.toString();
+              mainForm.appendChild(locationInput);
+            }
+            
+            // Validate if needs_repair and no note
+            if (repairStatus === 'needs_repair' && !repairNote) {
+              alert('Repair note is required when registering equipment for repair.');
+              return false;
+            }
+            
+            // Close modal and submit main form
+            closeRepairModal();
+            mainForm.submit();
+            return false;
+          }
+
+          window.openRepairModal = openRepairModal;
+          window.closeRepairModal = closeRepairModal;
+          window.toggleModalRepairFields = toggleModalRepairFields;
+          window.submitRepairModal = submitRepairModal;
           
           function restoreWarrantyDates() {
             const purchaseDateInput = document.getElementById('purchase_date');
@@ -462,9 +781,33 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           
           // Initialize on page load
           document.addEventListener('DOMContentLoaded', function() {
-            const select = document.getElementById('is_written_off');
-            if (select) {
-              toggleWriteOffComment(select.value);
+            // Modals are opened on button click, no initialization needed
+          });
+
+          // Close modals on escape key
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+              const repairModal = document.getElementById('repairModal');
+              const writeOffModal = document.getElementById('writeOffModal');
+              if (repairModal && !repairModal.classList.contains('hidden')) {
+                closeRepairModal();
+              }
+              if (writeOffModal && !writeOffModal.classList.contains('hidden')) {
+                closeWriteOffModal();
+              }
+            }
+          });
+
+          // Close modals on background click
+          document.getElementById('repairModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+              closeRepairModal();
+            }
+          });
+
+          document.getElementById('writeOffModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+              closeWriteOffModal();
             }
           });
         </script>
@@ -632,6 +975,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 loadPrinters();
               });
             }
+            
             
             function escapeHtml(str) {
               return String(str)

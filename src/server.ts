@@ -8,6 +8,7 @@ import { locationsPage } from "./templates/locations";
 import { typesPage } from "./templates/types";
 import { vendorsPage } from "./templates/vendors";
 import { writeOffReasonsPage } from "./templates/writeOffReasons";
+import { repairsPage } from "./templates/repairs";
 import { logger } from "./utils/logger";
 import {
   equipmentAddSchema,
@@ -22,6 +23,7 @@ import {
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { randomUUID } from "crypto";
+import { runMigrations } from "./migrations/migrate";
 
 interface SearchResult {
   id: number;
@@ -352,6 +354,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const formData = await req.formData();
       
       // Extract and validate form values
+      const action = formData.get("action")?.toString();
       const rawData = {
         model_id: formData.get("model_id") || null,
         equipment_sub_area_id: formData.get("equipment_sub_area_id") || null,
@@ -368,6 +371,9 @@ async function handleRequest(req: Request): Promise<Response> {
         mac_addresses: formData.get("mac_addresses") || null,
         is_written_off: formData.get("is_written_off") || null,
         write_off_comment: formData.get("write_off_comment") || null,
+        repair_status: formData.get("repair_status") || null,
+        repair_note: formData.get("repair_note") || null,
+        repair_physical_location: formData.get("repair_physical_location") || null,
       };
 
       try {
@@ -388,6 +394,9 @@ async function handleRequest(req: Request): Promise<Response> {
         const mac_addresses = validated.mac_addresses;
         const is_written_off = validated.is_written_off ? Number(validated.is_written_off) : null;
         const write_off_comment = rawData.write_off_comment ? rawData.write_off_comment.toString().trim() : null;
+        const repair_status = rawData.repair_status ? rawData.repair_status.toString() : null;
+        const repair_note = rawData.repair_note ? rawData.repair_note.toString().trim() : null;
+        const repair_physical_location = rawData.repair_physical_location ? rawData.repair_physical_location.toString().trim() : null;
         
         // Validate: if writing off, comment is required
         if (is_written_off && !write_off_comment) {
@@ -396,6 +405,17 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(auditPage(auditData, false, "Write-off comment is required when writing off equipment."), {
+            headers: { "Content-Type": "text/html" },
+          });
+        }
+        
+        // Validate: if registering for repair, note is required
+        if (repair_status === "needs_repair" && !repair_note) {
+          const auditData = await getAuditData(id);
+          if (!auditData) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(auditPage(auditData, false, "Repair note is required when registering equipment for repair."), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -412,6 +432,34 @@ async function handleRequest(req: Request): Promise<Response> {
         const service_tag = equipment[0].service_tag;
 
         // Update the equipment table (static data only)
+        // Handle repair status: if setting to needs_repair, set sent_date to null; if clearing, clear all repair fields
+        let repairSentDate = null;
+        let repairReturnedDate = null;
+        let repairMarkedBackupDate = null;
+        
+        if (repair_status === "needs_repair") {
+          // Keep existing sent_date if already set, otherwise null
+          const [existing] = await pool.query<RowDataPacket[]>(
+            "SELECT repair_sent_date FROM it_equipment WHERE id = ?",
+            [id]
+          );
+          repairSentDate = existing[0]?.repair_sent_date || null;
+        } else if (!repair_status) {
+          // Clearing repair status - clear all repair fields
+          repairSentDate = null;
+          repairReturnedDate = null;
+          repairMarkedBackupDate = null;
+        } else {
+          // Keep existing dates
+          const [existing] = await pool.query<RowDataPacket[]>(
+            "SELECT repair_sent_date, repair_returned_date, repair_marked_backup_date FROM it_equipment WHERE id = ?",
+            [id]
+          );
+          repairSentDate = existing[0]?.repair_sent_date || null;
+          repairReturnedDate = existing[0]?.repair_returned_date || null;
+          repairMarkedBackupDate = existing[0]?.repair_marked_backup_date || null;
+        }
+        
         await pool.query(`
           UPDATE it_equipment SET
             model_id = ?,
@@ -424,6 +472,12 @@ async function handleRequest(req: Request): Promise<Response> {
             mac_addresses = ?,
             teamviewer = ?,
             is_written_off = ?,
+            repair_status = ?,
+            repair_note = ?,
+            repair_physical_location = ?,
+            repair_sent_date = ?,
+            repair_returned_date = ?,
+            repair_marked_backup_date = ?,
             updated = CURRENT_TIMESTAMP
           WHERE id = ?
         `, [
@@ -437,6 +491,12 @@ async function handleRequest(req: Request): Promise<Response> {
           mac_addresses || null,
           teamviewer || null,
           is_written_off,
+          repair_status || null,
+          repair_note || null,
+          repair_physical_location || null,
+          repairSentDate,
+          repairReturnedDate,
+          repairMarkedBackupDate,
           id
         ]);
 
@@ -471,6 +531,11 @@ async function handleRequest(req: Request): Promise<Response> {
           logComment,
           is_written_off || null
         ]);
+
+        // If "send_to_repair" action, redirect to repairs page
+        if (action === "send_to_repair") {
+          return Response.redirect(`${url.origin}/repairs?success=${encodeURIComponent("Equipment sent to repair")}`, 303);
+        }
 
         return Response.redirect(`${url.origin}/edit/${id}?success=1`, 303);
       } catch (err) {
@@ -810,6 +875,88 @@ async function handleRequest(req: Request): Promise<Response> {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         logger.error("Failed to manage write-off reason", err, { traceId, rawData });
         return Response.redirect(`/write-off-reasons?error=${encodeURIComponent(errorMessage)}`, 303);
+      }
+    }
+
+    // Repair Tracking - GET
+    if (path === "/repairs" && req.method === "GET") {
+      const success = url.searchParams.get("success") || "";
+      const error = url.searchParams.get("error") || "";
+      const data = await getRepairsData();
+      return new Response(repairsPage(data, success, error), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // Repair Tracking - POST (status changes)
+    if (path === "/repairs" && req.method === "POST") {
+      const form = await req.formData();
+      const rawData = {
+        action: (form.get("action") || "").toString(),
+        equipment_id: form.get("equipment_id") ? form.get("equipment_id")!.toString() : undefined,
+      };
+
+      try {
+        const action = rawData.action;
+        const equipmentId = rawData.equipment_id ? Number(rawData.equipment_id) : null;
+
+        if (!equipmentId) {
+          throw new Error("Equipment ID is required");
+        }
+
+        if (action === "mark_sent") {
+          await pool.query(
+            `UPDATE it_equipment 
+             SET repair_status = 'at_supplier', repair_sent_date = CURRENT_DATE 
+             WHERE id = ?`,
+            [equipmentId]
+          );
+        } else if (action === "mark_returned") {
+          await pool.query(
+            `UPDATE it_equipment 
+             SET repair_status = 'returned', repair_returned_date = CURRENT_DATE 
+             WHERE id = ?`,
+            [equipmentId]
+          );
+        } else if (action === "mark_backup") {
+          // Get service_tag for log entry
+          const [equipment] = await pool.query<RowDataPacket[]>(
+            `SELECT service_tag FROM it_equipment WHERE id = ?`,
+            [equipmentId]
+          );
+          
+          if (equipment.length === 0) {
+            throw new Error("Equipment not found");
+          }
+          
+          const service_tag = equipment[0].service_tag;
+          
+          // Update equipment status and clear repair comment
+          await pool.query(
+            `UPDATE it_equipment 
+             SET repair_status = 'in_backup', 
+                 repair_marked_backup_date = CURRENT_DATE,
+                 repair_note = NULL
+             WHERE id = ?`,
+            [equipmentId]
+          );
+          
+          // Insert log entry with empty location and user
+          await pool.query(
+            `INSERT INTO it_equipment_log (
+              equipment_id, service_tag, assigned_to, equipment_sub_area_id, comment
+            ) VALUES (?, ?, NULL, NULL, ?)`,
+            [equipmentId, service_tag, '']
+          );
+        } else {
+          throw new Error("Unknown action");
+        }
+
+        return Response.redirect(`/repairs?success=${encodeURIComponent("Status updated")}`, 303);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to update repair status", err, { traceId, rawData });
+        return Response.redirect(`/repairs?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
 
@@ -1437,6 +1584,139 @@ async function getWriteOffReasonsData() {
   };
 }
 
+async function getRepairsData() {
+  const [needsRepair, atSupplier, returned] = await Promise.all([
+    pool.query<RowDataPacket[]>(`
+      SELECT 
+        e.id,
+        e.service_tag,
+        m.name as model_name,
+        v.name as vendor_name,
+        s.name as supplier_name,
+        s.email as supplier_email,
+        e.repair_status,
+        e.repair_note,
+        e.repair_physical_location,
+        e.repair_sent_date,
+        e.repair_returned_date,
+        e.repair_marked_backup_date,
+        CASE 
+          WHEN e.repair_sent_date IS NOT NULL 
+          THEN DATEDIFF(CURRENT_DATE, e.repair_sent_date)
+          ELSE NULL
+        END as days_in_repair
+      FROM it_equipment e
+      LEFT JOIN it_equipment_model m ON e.model_id = m.id
+      LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
+      LEFT JOIN it_equipment_supplier s ON e.supplier_id = s.id
+      WHERE e.repair_status = 'needs_repair'
+      ORDER BY e.repair_sent_date DESC, e.service_tag
+    `),
+    pool.query<RowDataPacket[]>(`
+      SELECT 
+        e.id,
+        e.service_tag,
+        m.name as model_name,
+        v.name as vendor_name,
+        s.name as supplier_name,
+        s.email as supplier_email,
+        e.repair_status,
+        e.repair_note,
+        e.repair_physical_location,
+        e.repair_sent_date,
+        e.repair_returned_date,
+        e.repair_marked_backup_date,
+        CASE 
+          WHEN e.repair_sent_date IS NOT NULL 
+          THEN DATEDIFF(CURRENT_DATE, e.repair_sent_date)
+          ELSE NULL
+        END as days_in_repair
+      FROM it_equipment e
+      LEFT JOIN it_equipment_model m ON e.model_id = m.id
+      LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
+      LEFT JOIN it_equipment_supplier s ON e.supplier_id = s.id
+      WHERE e.repair_status = 'at_supplier'
+      ORDER BY e.repair_sent_date DESC, e.service_tag
+    `),
+    pool.query<RowDataPacket[]>(`
+      SELECT 
+        e.id,
+        e.service_tag,
+        m.name as model_name,
+        v.name as vendor_name,
+        s.name as supplier_name,
+        s.email as supplier_email,
+        e.repair_status,
+        e.repair_note,
+        e.repair_physical_location,
+        e.repair_sent_date,
+        e.repair_returned_date,
+        e.repair_marked_backup_date,
+        CASE 
+          WHEN e.repair_sent_date IS NOT NULL AND e.repair_returned_date IS NOT NULL
+          THEN DATEDIFF(e.repair_returned_date, e.repair_sent_date)
+          WHEN e.repair_sent_date IS NOT NULL
+          THEN DATEDIFF(CURRENT_DATE, e.repair_sent_date)
+          ELSE NULL
+        END as days_in_repair
+      FROM it_equipment e
+      LEFT JOIN it_equipment_model m ON e.model_id = m.id
+      LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
+      LEFT JOIN it_equipment_supplier s ON e.supplier_id = s.id
+      WHERE e.repair_status = 'returned'
+      ORDER BY e.repair_returned_date DESC, e.service_tag
+    `),
+  ]);
+
+  return {
+    needsRepair: needsRepair[0].map((item: any) => ({
+      id: item.id,
+      service_tag: item.service_tag,
+      model_name: item.model_name,
+      vendor_name: item.vendor_name,
+      supplier_name: item.supplier_name,
+      supplier_email: item.supplier_email,
+      repair_status: item.repair_status,
+      repair_note: item.repair_note,
+      repair_physical_location: item.repair_physical_location,
+      repair_sent_date: item.repair_sent_date ? item.repair_sent_date.toISOString().split('T')[0] : null,
+      repair_returned_date: item.repair_returned_date ? item.repair_returned_date.toISOString().split('T')[0] : null,
+      repair_marked_backup_date: item.repair_marked_backup_date ? item.repair_marked_backup_date.toISOString().split('T')[0] : null,
+      days_in_repair: item.days_in_repair !== null ? Number(item.days_in_repair) : null,
+    })),
+    atSupplier: atSupplier[0].map((item: any) => ({
+      id: item.id,
+      service_tag: item.service_tag,
+      model_name: item.model_name,
+      vendor_name: item.vendor_name,
+      supplier_name: item.supplier_name,
+      supplier_email: item.supplier_email,
+      repair_status: item.repair_status,
+      repair_note: item.repair_note,
+      repair_physical_location: item.repair_physical_location,
+      repair_sent_date: item.repair_sent_date ? item.repair_sent_date.toISOString().split('T')[0] : null,
+      repair_returned_date: item.repair_returned_date ? item.repair_returned_date.toISOString().split('T')[0] : null,
+      repair_marked_backup_date: item.repair_marked_backup_date ? item.repair_marked_backup_date.toISOString().split('T')[0] : null,
+      days_in_repair: item.days_in_repair !== null ? Number(item.days_in_repair) : null,
+    })),
+    returned: returned[0].map((item: any) => ({
+      id: item.id,
+      service_tag: item.service_tag,
+      model_name: item.model_name,
+      vendor_name: item.vendor_name,
+      supplier_name: item.supplier_name,
+      supplier_email: item.supplier_email,
+      repair_status: item.repair_status,
+      repair_note: item.repair_note,
+      repair_physical_location: item.repair_physical_location,
+      repair_sent_date: item.repair_sent_date ? item.repair_sent_date.toISOString().split('T')[0] : null,
+      repair_returned_date: item.repair_returned_date ? item.repair_returned_date.toISOString().split('T')[0] : null,
+      repair_marked_backup_date: item.repair_marked_backup_date ? item.repair_marked_backup_date.toISOString().split('T')[0] : null,
+      days_in_repair: item.days_in_repair !== null ? Number(item.days_in_repair) : null,
+    })),
+  };
+}
+
 async function getTypesData() {
   const [types, models, productLines] = await Promise.all([
     pool.query<RowDataPacket[]>(`
@@ -1501,6 +1781,15 @@ async function getTypesData() {
       equipment_count: Number(pl.equipment_count) || 0,
     })),
   };
+}
+
+// Run migrations on startup (before starting server)
+try {
+  await runMigrations();
+  console.log("✅ Database migrations completed");
+} catch (err) {
+  logger.error("Failed to run migrations on startup", err);
+  console.error("⚠️  Migration failed, but continuing server startup:", err);
 }
 
 const tlsOptions = await getTlsOptions();

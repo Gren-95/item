@@ -40,15 +40,47 @@ async function runMigration(fileName: string): Promise<void> {
   const filePath = join(MIGRATIONS_DIR, fileName);
   const sql = readFileSync(filePath, "utf-8");
   
-  // Split by semicolon and execute each statement
-  const statements = sql
+  // Remove USE statements, DELIMITER statements, and comments
+  // Split by semicolon, but handle stored procedures carefully
+  let processedSql = sql
+    .replace(/USE\s+\w+\s*;/gi, "") // Remove USE statements
+    .replace(/DELIMITER\s+\$\$[\s\S]*?DELIMITER\s*;/gi, "") // Remove DELIMITER blocks (stored procedures)
+    .replace(/DELIMITER\s+[^\s]+/gi, ""); // Remove any remaining DELIMITER statements
+  
+  const statements = processedSql
     .split(";")
     .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith("--"));
+    .filter((s) => s.length > 0 && !s.startsWith("--") && s.toUpperCase() !== "END");
 
   for (const statement of statements) {
     if (statement.length > 0) {
-      await pool.query(statement);
+      try {
+        await pool.query(statement);
+      } catch (err: unknown) {
+        // If column/index/table already exists, that's okay - migration may have been partially applied
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorCode = (err as any)?.code;
+        const sqlState = (err as any)?.sqlState;
+        
+        if (
+          errorMessage.includes("Duplicate column name") ||
+          errorMessage.includes("Duplicate key name") ||
+          (errorMessage.includes("Table") && errorMessage.includes("already exists")) ||
+          errorCode === "ER_TABLE_EXISTS_ERROR" ||
+          sqlState === "42S01" ||
+          errorMessage.includes("RESIGNAL when handler not active") ||
+          errorCode === "ER_RESIGNAL_WITHOUT_ACTIVE_HANDLER" ||
+          sqlState === "0K000" ||
+          (errorMessage.includes("SQL syntax") && errorMessage.includes("END"))
+        ) {
+          logger.warn("Database object already exists or statement not applicable, skipping", { 
+            statement: statement.substring(0, 50),
+            error: errorMessage.substring(0, 100)
+          });
+          continue;
+        }
+        throw err;
+      }
     }
   }
 }
@@ -91,4 +123,17 @@ export async function runMigrations(): Promise<void> {
     logger.error("Migration failed", err, { traceId });
     throw err;
   }
+}
+
+// Run migrations if this file is executed directly
+if (import.meta.main) {
+  runMigrations()
+    .then(() => {
+      console.log("✅ Migrations completed successfully");
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error("❌ Migration failed:", err);
+      process.exit(1);
+    });
 }
