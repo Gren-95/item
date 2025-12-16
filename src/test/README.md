@@ -13,6 +13,7 @@ This directory contains tests for the equipment audit application, covering func
 - `database.test.ts` - Tests for database configuration (#26)
 - `darkmode.test.ts` - Tests for dark mode theme (#29)
 - `pwa.test.ts` - Tests for PWA manifest (#21)
+- `branding.test.ts` - Tests for branding, color palette, and icons (#31)
 - `health.test.ts` - Tests for health check endpoint
 - `validation.test.ts` - Tests for input validation schemas
 - `utils.ts` - Test utilities and helpers
@@ -64,6 +65,13 @@ These tests cover the acceptance criteria from the following closed issues:
 - ✅ Scan button available in search form
 - ✅ QR scanner modal opens on button click
 - ✅ QR scanner library files are served
+
+### Issue #31: Consistent Branding
+- ✅ Color palette defined and documented
+- ✅ Theme colors configured in HTML meta tags
+- ✅ Favicon links configured correctly
+- ✅ Manifest includes proper icon sizes and purposes
+- ✅ Icon file structure follows consistent naming
 - ✅ Modal includes camera video element
 - ✅ Modal supports close and cancel actions
 - ✅ Flashlight toggle support
