@@ -7,6 +7,7 @@ import { addPage } from "./templates/add";
 import { locationsPage } from "./templates/locations";
 import { typesPage } from "./templates/types";
 import { vendorsPage } from "./templates/vendors";
+import { writeOffReasonsPage } from "./templates/writeOffReasons";
 import { logger } from "./utils/logger";
 import {
   equipmentAddSchema,
@@ -16,6 +17,7 @@ import {
   typesActionSchema,
   vendorsActionSchema,
   suppliersActionSchema,
+  writeOffReasonsActionSchema,
   printLabelSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
@@ -364,6 +366,8 @@ async function handleRequest(req: Request): Promise<Response> {
         cerf: formData.get("cerf") || "0",
         ip: formData.get("ip") || null,
         mac_addresses: formData.get("mac_addresses") || null,
+        is_written_off: formData.get("is_written_off") || null,
+        write_off_comment: formData.get("write_off_comment") || null,
       };
 
       try {
@@ -382,6 +386,20 @@ async function handleRequest(req: Request): Promise<Response> {
         const cerf = validated.cerf || 0;
         const ip = validated.ip;
         const mac_addresses = validated.mac_addresses;
+        const is_written_off = validated.is_written_off ? Number(validated.is_written_off) : null;
+        const write_off_comment = rawData.write_off_comment ? rawData.write_off_comment.toString().trim() : null;
+        
+        // Validate: if writing off, comment is required
+        if (is_written_off && !write_off_comment) {
+          const auditData = await getAuditData(id);
+          if (!auditData) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(auditPage(auditData, false, "Write-off comment is required when writing off equipment."), {
+            headers: { "Content-Type": "text/html" },
+          });
+        }
+        
         // Get the equipment record for service_tag
         const [equipment] = await pool.query<RowDataPacket[]>(`
           SELECT service_tag FROM it_equipment WHERE id = ?
@@ -405,6 +423,7 @@ async function handleRequest(req: Request): Promise<Response> {
             ip = ?,
             mac_addresses = ?,
             teamviewer = ?,
+            is_written_off = ?,
             updated = CURRENT_TIMESTAMP
           WHERE id = ?
         `, [
@@ -417,21 +436,40 @@ async function handleRequest(req: Request): Promise<Response> {
           ip || null,
           mac_addresses || null,
           teamviewer || null,
+          is_written_off,
           id
         ]);
+
+        // Combine comment and write-off comment if writing off
+        let logComment = comment || null;
+        if (is_written_off && write_off_comment) {
+          if (logComment) {
+            logComment = `[Write-Off: ${write_off_comment}] ${logComment}`;
+          } else {
+            logComment = `[Write-Off: ${write_off_comment}]`;
+          }
+        } else if (!is_written_off && write_off_comment) {
+          // If un-writing off, add a note about restoration
+          if (logComment) {
+            logComment = `[Restored from write-off] ${logComment}`;
+          } else {
+            logComment = `[Restored from write-off]`;
+          }
+        }
 
         // Insert new log entry (dynamic/audit data)
         await pool.query(`
           INSERT INTO it_equipment_log (
-            equipment_id, service_tag, assigned_to, equipment_sub_area_id, inventory_period_id, comment
-          ) VALUES (?, ?, ?, ?, ?, ?)
+            equipment_id, service_tag, assigned_to, equipment_sub_area_id, inventory_period_id, comment, is_written_off
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `, [
           id,
           service_tag,
           assigned_to || null,
           equipment_sub_area_id || null,
           inventory_period_id || null,
-          comment || null
+          logComment,
+          is_written_off || null
         ]);
 
         return Response.redirect(`${url.origin}/edit/${id}?success=1`, 303);
@@ -714,6 +752,64 @@ async function handleRequest(req: Request): Promise<Response> {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         logger.error("Failed to manage type/model", err, { traceId, rawData });
         return Response.redirect(`/types?error=${encodeURIComponent(errorMessage)}`, 303);
+      }
+    }
+
+    // Write-Off Reasons management - GET
+    if (path === "/write-off-reasons" && req.method === "GET") {
+      const success = url.searchParams.get("success") || "";
+      const error = url.searchParams.get("error") || "";
+      const data = await getWriteOffReasonsData();
+      return new Response(writeOffReasonsPage(data, success, error), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // Write-Off Reasons management - POST (add/edit/delete)
+    if (path === "/write-off-reasons" && req.method === "POST") {
+      const form = await req.formData();
+      const rawData = {
+        action: (form.get("action") || "").toString(),
+        reason: form.get("reason") ? form.get("reason")!.toString().trim() : undefined,
+        id: form.get("id") ? form.get("id")!.toString() : undefined,
+      };
+
+      try {
+        const validated = writeOffReasonsActionSchema.parse(rawData);
+        const action = validated.action;
+        const id = validated.id ? Number(validated.id) : null;
+        const reason = validated.reason;
+
+        if (action === "add") {
+          if (!reason) throw new Error("Reason is required");
+          await pool.query(
+            "INSERT INTO it_equipment_write_off_reason (reason) VALUES (?)",
+            [reason]
+          );
+        } else if (action === "edit") {
+          if (!id) throw new Error("ID is required");
+          if (!reason) throw new Error("Reason is required");
+          await pool.query("UPDATE it_equipment_write_off_reason SET reason = ? WHERE id = ?", [reason, id]);
+        } else if (action === "delete") {
+          if (!id) throw new Error("ID is required");
+          // Check if reason is in use
+          const [inUse] = await pool.query<RowDataPacket[]>(
+            "SELECT COUNT(*) as count FROM it_equipment WHERE is_written_off = ?",
+            [id]
+          );
+          if (inUse[0].count > 0) {
+            throw new Error("Cannot delete write-off reason that is in use");
+          }
+          await pool.query("DELETE FROM it_equipment_write_off_reason WHERE id = ?", [id]);
+        } else {
+          throw new Error("Unknown action");
+        }
+
+        return Response.redirect(`/write-off-reasons?success=${encodeURIComponent("Saved")}`, 303);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to manage write-off reason", err, { traceId, rawData });
+        return Response.redirect(`/write-off-reasons?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
 
@@ -1013,7 +1109,8 @@ async function getAuditData(id: number) {
       d.plant_id,
       p.country_id,
       c.region_id,
-      log.created as latest_audit_date
+      log.created as latest_audit_date,
+      wor.reason as write_off_reason
     FROM it_equipment e
     LEFT JOIN it_equipment_model m ON e.model_id = m.id
     LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
@@ -1034,6 +1131,7 @@ async function getAuditData(id: number) {
     LEFT JOIN it_equipment_department d ON a.department_id = d.id
     LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
     LEFT JOIN it_equipment_country c ON p.country_id = c.id
+    LEFT JOIN it_equipment_write_off_reason wor ON e.is_written_off = wor.id
     WHERE e.id = ?
   `, [id]);
 
@@ -1055,7 +1153,8 @@ async function getAuditData(id: number) {
     [employees],
     [inventoryPeriods],
     [vendors],
-    [suppliers]
+    [suppliers],
+    [writeOffReasons]
   ] = await Promise.all([
     pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 ORDER BY name`),
@@ -1069,7 +1168,8 @@ async function getAuditData(id: number) {
     pool.query<RowDataPacket[]>(`SELECT employee_no, CONCAT(first_name, ' ', last_name) as name FROM it_employees_list WHERE status = 1 ORDER BY last_name, first_name`),
     pool.query<RowDataPacket[]>(`SELECT id, inventory_nr as name, start_date, end_date FROM it_inventory_period ORDER BY start_date DESC`),
     pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_vendor ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_supplier ORDER BY name`)
+    pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_supplier ORDER BY name`),
+    pool.query<RowDataPacket[]>(`SELECT id, reason as name FROM it_equipment_write_off_reason ORDER BY reason`)
   ]);
 
   return {
@@ -1086,7 +1186,8 @@ async function getAuditData(id: number) {
     employees,
     inventoryPeriods,
     vendors,
-    suppliers
+    suppliers,
+    writeOffReasons
   };
 }
 
@@ -1311,6 +1412,27 @@ async function getVendorsAndSuppliersData() {
       sap_vendor_no: s.sap_vendor_no === null || s.sap_vendor_no === undefined ? null : Number(s.sap_vendor_no),
       website: s.website || "",
       equipment_count: Number(s.equipment_count) || 0,
+    })),
+  };
+}
+
+async function getWriteOffReasonsData() {
+  const [writeOffReasons] = await pool.query<RowDataPacket[]>(`
+    SELECT 
+      wor.id,
+      wor.reason,
+      COUNT(DISTINCT e.id) as equipment_count
+    FROM it_equipment_write_off_reason wor
+    LEFT JOIN it_equipment e ON e.is_written_off = wor.id
+    GROUP BY wor.id, wor.reason
+    ORDER BY wor.reason
+  `);
+
+  return {
+    writeOffReasons: writeOffReasons.map((w: any) => ({
+      id: w.id,
+      reason: w.reason,
+      equipment_count: Number(w.equipment_count) || 0,
     })),
   };
 }

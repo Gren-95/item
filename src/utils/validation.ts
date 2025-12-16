@@ -24,6 +24,7 @@ export const equipmentEditSchema = equipmentAddSchema.partial().extend({
   service_tag: serviceTagSchema.optional(),
   purchase_date: z.string().date().optional().nullable(),
   warranty_expiry_date: z.string().date().optional().nullable(),
+  is_written_off: z.string().optional().nullable().or(z.literal("")),
 });
 
 export const apiAddItemSchema = z.object({
@@ -125,6 +126,24 @@ export const suppliersActionSchema = z.object({
   message: "Name required for add/edit, ID required for edit/delete",
 });
 
+export const writeOffReasonsActionSchema = z.object({
+  action: z.enum(["add", "edit", "delete"]),
+  reason: z.string().min(1).max(255).trim().optional(),
+  id: z.string().optional(),
+}).refine((data) => {
+  // If action is add or edit, reason is required
+  if ((data.action === "add" || data.action === "edit") && !data.reason) {
+    return false;
+  }
+  // If action is edit or delete, id is required
+  if ((data.action === "edit" || data.action === "delete") && !data.id) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Reason required for add/edit, ID required for edit/delete",
+});
+
 export const printLabelSchema = z.object({
   service_tag: serviceTagSchema,
   printer: z.string().min(1).optional(),
@@ -137,4 +156,5 @@ export type LocationsActionInput = z.infer<typeof locationsActionSchema>;
 export type TypesActionInput = z.infer<typeof typesActionSchema>;
 export type VendorsActionInput = z.infer<typeof vendorsActionSchema>;
 export type SuppliersActionInput = z.infer<typeof suppliersActionSchema>;
+export type WriteOffReasonsActionInput = z.infer<typeof writeOffReasonsActionSchema>;
 export type PrintLabelInput = z.infer<typeof printLabelSchema>;
