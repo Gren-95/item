@@ -4,6 +4,7 @@ import {
   equipmentEditSchema,
   apiAddItemSchema,
   locationsActionSchema,
+  typesActionSchema,
   printLabelSchema,
   serviceTagSchema,
 } from "../utils/validation";
@@ -173,6 +174,153 @@ describe("Input Validation", () => {
       };
 
       const result = locationsActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("Types Action Schema", () => {
+    test("should accept valid add type action", () => {
+      const data = {
+        type: "type",
+        action: "add",
+        name: "Tablet",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.action).toBe("add");
+        expect(result.data.type).toBe("type");
+        expect(result.data.name).toBe("Tablet");
+      }
+    });
+
+    test("should require name for add type action", () => {
+      const data = {
+        type: "type",
+        action: "add",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should require id for edit type action", () => {
+      const data = {
+        type: "type",
+        action: "edit",
+        name: "Updated Type",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should accept valid edit type action", () => {
+      const data = {
+        type: "type",
+        action: "edit",
+        name: "Updated Type",
+        id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should reject type name longer than 25 characters", () => {
+      const data = {
+        type: "type",
+        action: "add",
+        name: "A".repeat(26),
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should accept type name exactly 25 characters", () => {
+      const data = {
+        type: "type",
+        action: "add",
+        name: "A".repeat(25),
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should accept valid add model action", () => {
+      const data = {
+        type: "model",
+        action: "add",
+        name: "New Model",
+        parent_id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.action).toBe("add");
+        expect(result.data.type).toBe("model");
+        expect(result.data.name).toBe("New Model");
+        expect(result.data.parent_id).toBe("1");
+      }
+    });
+
+    test("should require parent_id for add model action", () => {
+      const data = {
+        type: "model",
+        action: "add",
+        name: "New Model",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should require name for add model action", () => {
+      const data = {
+        type: "model",
+        action: "add",
+        parent_id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(false);
+    });
+
+    test("should accept valid edit model action", () => {
+      const data = {
+        type: "model",
+        action: "edit",
+        name: "Updated Model",
+        id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should accept valid activate model action", () => {
+      const data = {
+        type: "model",
+        action: "activate",
+        id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    test("should accept valid deactivate model action", () => {
+      const data = {
+        type: "model",
+        action: "deactivate",
+        id: "1",
+      };
+
+      const result = typesActionSchema.safeParse(data);
       expect(result.success).toBe(true);
     });
   });

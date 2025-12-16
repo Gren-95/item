@@ -12,6 +12,7 @@ import {
   equipmentEditSchema,
   apiAddItemSchema,
   locationsActionSchema,
+  typesActionSchema,
   printLabelSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
@@ -542,37 +543,52 @@ async function handleRequest(req: Request): Promise<Response> {
         action: (form.get("action") || "").toString(),
         name: form.get("name") ? form.get("name")!.toString().trim() : undefined,
         id: form.get("id") ? form.get("id")!.toString() : undefined,
+        parent_id: form.get("parent_id") ? form.get("parent_id")!.toString() : undefined,
       };
 
       try {
-        const action = rawData.action;
-        const id = rawData.id ? Number(rawData.id) : null;
-        const name = rawData.name;
+        const validated = typesActionSchema.parse(rawData);
+        const action = validated.action;
+        const id = validated.id ? Number(validated.id) : null;
+        const name = validated.name;
+        const parent_id = validated.parent_id ? Number(validated.parent_id) : null;
 
-        if (action === "add") {
-          if (!name) throw new Error("Name is required");
-          if (name.length > 25) throw new Error("Type name must be 25 characters or less");
-          await pool.query(
-            "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)",
-            [name]
-          );
-        } else if (action === "edit") {
-          if (!id) throw new Error("ID is required");
-          if (!name) throw new Error("Name is required");
-          if (name.length > 25) throw new Error("Type name must be 25 characters or less");
-          await pool.query("UPDATE it_equipment_type SET type_name = ? WHERE id = ?", [name, id]);
-        } else if (action === "deactivate" || action === "activate") {
-          if (!id) throw new Error("ID is required");
-          const status = action === "activate" ? 1 : 0;
-          await pool.query("UPDATE it_equipment_type SET status = ? WHERE id = ?", [status, id]);
+        if (validated.type === "type") {
+          if (action === "add") {
+            await pool.query(
+              "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)",
+              [name!]
+            );
+          } else if (action === "edit") {
+            await pool.query("UPDATE it_equipment_type SET type_name = ? WHERE id = ?", [name!, id!]);
+          } else if (action === "deactivate" || action === "activate") {
+            const status = action === "activate" ? 1 : 0;
+            await pool.query("UPDATE it_equipment_type SET status = ? WHERE id = ?", [status, id!]);
+          } else {
+            throw new Error("Unknown action");
+          }
+        } else if (validated.type === "model") {
+          if (action === "add") {
+            await pool.query(
+              "INSERT INTO it_equipment_model (name, product_line_id, status) VALUES (?, ?, 1)",
+              [name!, parent_id!]
+            );
+          } else if (action === "edit") {
+            await pool.query("UPDATE it_equipment_model SET name = ? WHERE id = ?", [name!, id!]);
+          } else if (action === "deactivate" || action === "activate") {
+            const status = action === "activate" ? 1 : 0;
+            await pool.query("UPDATE it_equipment_model SET status = ? WHERE id = ?", [status, id!]);
+          } else {
+            throw new Error("Unknown action");
+          }
         } else {
-          throw new Error("Unknown action");
+          throw new Error("Unknown type");
         }
 
         return Response.redirect(`/types?success=${encodeURIComponent("Saved")}`, 303);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-        logger.error("Failed to manage type", err, { traceId, action: rawData.action });
+        logger.error("Failed to manage type/model", err, { traceId, rawData });
         return Response.redirect(`/types?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
@@ -1126,26 +1142,61 @@ async function getLocationsData() {
 }
 
 async function getTypesData() {
-  const [types] = await pool.query<RowDataPacket[]>(`
-    SELECT 
-      t.id,
-      t.type_name as name,
-      t.status,
-      COUNT(DISTINCT e.id) as equipment_count
-    FROM it_equipment_type t
-    LEFT JOIN it_equipment_product_line pl ON pl.type_id = t.id
-    LEFT JOIN it_equipment_model m ON m.product_line_id = pl.id
-    LEFT JOIN it_equipment e ON e.model_id = m.id
-    GROUP BY t.id, t.type_name, t.status
-    ORDER BY t.type_name
-  `);
+  const [types, models, productLines] = await Promise.all([
+    pool.query<RowDataPacket[]>(`
+      SELECT 
+        t.id,
+        t.type_name as name,
+        t.status,
+        COUNT(DISTINCT e.id) as equipment_count
+      FROM it_equipment_type t
+      LEFT JOIN it_equipment_product_line pl ON pl.type_id = t.id
+      LEFT JOIN it_equipment_model m ON m.product_line_id = pl.id
+      LEFT JOIN it_equipment e ON e.model_id = m.id
+      GROUP BY t.id, t.type_name, t.status
+      ORDER BY t.type_name
+    `),
+    pool.query<RowDataPacket[]>(`
+      SELECT 
+        m.id,
+        m.name,
+        m.product_line_id as parent_id,
+        m.status,
+        COUNT(DISTINCT e.id) as equipment_count
+      FROM it_equipment_model m
+      LEFT JOIN it_equipment e ON e.model_id = m.id
+      GROUP BY m.id, m.name, m.product_line_id, m.status
+      ORDER BY m.name
+    `),
+    pool.query<RowDataPacket[]>(`
+      SELECT 
+        pl.id,
+        pl.name,
+        pl.type_id as parent_id
+      FROM it_equipment_product_line pl
+      WHERE pl.status = 1
+      ORDER BY pl.name
+    `),
+  ]);
 
   return {
-    types: types.map((t) => ({
+    types: types[0].map((t) => ({
       id: t.id,
       name: t.name,
       status: t.status ? 1 : 0,
       equipment_count: Number(t.equipment_count) || 0,
+    })),
+    models: models[0].map((m) => ({
+      id: m.id,
+      name: m.name,
+      parent_id: m.parent_id,
+      status: m.status ? 1 : 0,
+      equipment_count: Number(m.equipment_count) || 0,
+    })),
+    productLines: productLines[0].map((pl) => ({
+      id: pl.id,
+      name: pl.name,
+      parent_id: pl.parent_id,
     })),
   };
 }
