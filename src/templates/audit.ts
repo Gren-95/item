@@ -27,6 +27,8 @@ interface Equipment {
   comment: string | null;
   inventory_period_id: number | null;
   inventory_nr: string | null;
+  is_written_off: number | null;
+  write_off_reason: string | null;
 }
 
 interface SelectOption {
@@ -57,6 +59,7 @@ interface AuditData {
   inventoryPeriods: InventoryPeriod[];
   vendors: SelectOption[];
   suppliers: SelectOption[];
+  writeOffReasons: SelectOption[];
 }
 
 export function auditPage(data: AuditData, success: boolean = false, error: string | null = null): string {
@@ -109,13 +112,25 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label for="purchase_date" class="label">Warranty Start</label>
-              <input
-                type="date"
-                id="purchase_date"
-                name="purchase_date"
-                value="${eq.purchase_date}"
-                class="input-field"
-              >
+              <div class="flex items-center gap-2">
+                <input
+                  type="date"
+                  id="purchase_date"
+                  name="purchase_date"
+                  value="${formatDateForInput(eq.purchase_date)}"
+                  class="input-field flex-1"
+                >
+                <button
+                  type="button"
+                  onclick="restoreWarrantyDates()"
+                  class="btn btn-secondary text-xs whitespace-nowrap"
+                  title="Restore warranty dates from database"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div>
               <label for="warranty_expiry_date" class="label">Warranty Expiry</label>
@@ -123,7 +138,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 type="date"
                 id="warranty_expiry_date"
                 name="warranty_expiry_date"
-                value="${eq.warranty_expiry_date}"
+                value="${formatDateForInput(eq.warranty_expiry_date)}"
                 class="input-field ${isExpired(eq.warranty_expiry_date) ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" : ""}"
               >
             </div>
@@ -368,6 +383,92 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           </div>
         </div>
 
+        <!-- Write-Off Status -->
+        <div class="card mb-6">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            Write-Off Status
+          </h2>
+          
+          ${eq.is_written_off ? `
+            <div class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <div class="flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <span class="font-semibold">Equipment is currently written off</span>
+              </div>
+              <p class="text-sm text-red-600 dark:text-red-300">Reason: ${escapeHtml(eq.write_off_reason || "Unknown")}</p>
+            </div>
+          ` : ""}
+          
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <label for="is_written_off" class="label">Write-Off Reason</label>
+              <select id="is_written_off" name="is_written_off" class="select-field" onchange="toggleWriteOffComment(this.value)">
+                <option value="">Not written off (Active)</option>
+                ${data.writeOffReasons.map(r => `
+                  <option value="${r.id}" ${eq.is_written_off === r.id ? "selected" : ""}>${escapeHtml(r.name)}</option>
+                `).join("")}
+              </select>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                ${eq.is_written_off ? "Select 'Not written off' to restore this equipment to active status." : "Select a reason to write off this equipment."}
+              </p>
+            </div>
+            <div id="write-off-comment-container" class="${eq.is_written_off ? "" : "hidden"}">
+              <label for="write_off_comment" class="label">Write-Off Comment <span class="text-red-500">*</span></label>
+              <textarea 
+                id="write_off_comment" 
+                name="write_off_comment"
+                rows="3"
+                placeholder="Please provide a comment explaining why this equipment is being written off..."
+                class="input-field"
+                ${eq.is_written_off ? "required" : ""}
+              ></textarea>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">A comment is required when writing off equipment.</p>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          function toggleWriteOffComment(value) {
+            const container = document.getElementById('write-off-comment-container');
+            const commentField = document.getElementById('write_off_comment');
+            if (value && value !== '') {
+              container.classList.remove('hidden');
+              commentField.setAttribute('required', 'required');
+            } else {
+              container.classList.add('hidden');
+              commentField.removeAttribute('required');
+              commentField.value = '';
+            }
+          }
+          
+          function restoreWarrantyDates() {
+            const purchaseDateInput = document.getElementById('purchase_date');
+            const warrantyExpiryInput = document.getElementById('warranty_expiry_date');
+            const originalPurchaseDate = '${formatDateForInput(eq.purchase_date)}';
+            const originalWarrantyExpiry = '${formatDateForInput(eq.warranty_expiry_date)}';
+            
+            if (purchaseDateInput) {
+              purchaseDateInput.value = originalPurchaseDate;
+            }
+            if (warrantyExpiryInput) {
+              warrantyExpiryInput.value = originalWarrantyExpiry;
+            }
+          }
+          
+          // Initialize on page load
+          document.addEventListener('DOMContentLoaded', function() {
+            const select = document.getElementById('is_written_off');
+            if (select) {
+              toggleWriteOffComment(select.value);
+            }
+          });
+        </script>
+
         <!-- Submit -->
         <div class="flex justify-end gap-4">
           <a href="/" class="btn btn-secondary">Cancel</a>
@@ -570,4 +671,27 @@ function formatDate(dateStr: string): string {
 function isExpired(dateStr: string): boolean {
   if (!dateStr) return false;
   return new Date(dateStr) < new Date();
+}
+
+function formatDateForInput(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  // MySQL DATE format is already YYYY-MM-DD, but handle Date objects or other formats
+  if (dateStr instanceof Date) {
+    return dateStr.toISOString().split('T')[0];
+  }
+  // If it's already in YYYY-MM-DD format, return as is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  // Try to parse and format
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return year + "-" + month + "-" + day;
+  } catch {
+    return "";
+  }
 }
