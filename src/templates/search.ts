@@ -15,7 +15,8 @@ interface SearchResult {
 export function searchPage(
   query: string = "",
   results: SearchResult[] | null = null,
-  error: string | null = null
+  error: string | null = null,
+  isAdmin: boolean = false
 ): string {
   const content = `
       <div class="max-w-6xl mx-auto">
@@ -410,7 +411,7 @@ export function searchPage(
     </script>
   `;
 
-  return layout("Search", content);
+  return layout("Search", content, isAdmin);
 }
 
 function escapeHtml(str: string): string {

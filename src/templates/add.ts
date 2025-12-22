@@ -31,7 +31,7 @@ interface AddData {
   inventoryPeriods: InventoryPeriod[];
 }
 
-export function addPage(data: AddData, success: boolean = false, error: string | null = null): string {
+export function addPage(data: AddData, success: boolean = false, error: string | null = null, isAdmin: boolean = false): string {
   const content = `
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-4 mb-6">
@@ -553,7 +553,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
     ${getScriptsHtml()}
   `;
 
-  return layout("Add Equipment", content);
+  return layout("Add Equipment", content, isAdmin);
 }
 
 function escapeHtml(str: string): string {

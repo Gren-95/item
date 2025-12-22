@@ -1,3 +1,4 @@
 001_initial_schema.sql
 002_add_repair_tracking.sql
 003_add_sample_employees.sql
+004_add_users_and_permissions.sql

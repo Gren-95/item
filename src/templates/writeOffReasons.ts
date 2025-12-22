@@ -10,7 +10,7 @@ interface WriteOffReasonsData {
   writeOffReasons: WriteOffReasonItem[];
 }
 
-export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", error = ""): string {
+export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", error = "", isAdmin: boolean = false): string {
   const alert = success
     ? `<div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6 text-green-700 dark:text-green-400">✅ ${escapeHtml(success)}</div>`
     : error
@@ -98,7 +98,7 @@ export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", err
     </div>
   `;
 
-  return layout("Write-Off Reasons", content);
+  return layout("Write-Off Reasons", content, isAdmin);
 }
 
 function escapeHtml(str: string): string {

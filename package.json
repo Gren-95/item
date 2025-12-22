@@ -13,7 +13,9 @@
     "reset-db": "bun run scripts/reset-db.ts",
     "export-db": "bun run scripts/export-db.ts",
     "import-db": "bun run scripts/import-db.ts",
-    "migrate": "bun run src/migrations/migrate.ts"
+    "migrate": "bun run src/migrations/migrate.ts",
+    "migrate:force": "bun run src/migrations/migrate.ts --force",
+    "migrate:reset": "bun run src/migrations/migrate.ts --reset"
   },
   "dependencies": {
     "mysql2": "^3.11.0",

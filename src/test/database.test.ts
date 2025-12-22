@@ -14,19 +14,19 @@ describe("Database Configuration (#26)", () => {
   });
 
   test("DATABASE_USER environment variable should be configurable", () => {
-    const defaultUser = "ims_user";
+    const defaultUser = "root";
     const envUser = process.env.DATABASE_USER || defaultUser;
     expect(envUser).toBeDefined();
   });
 
   test("DATABASE_PASSWORD environment variable should be configurable", () => {
-    const defaultPassword = "ims_password";
+    const defaultPassword = process.env.MYSQL_ROOT_PASSWORD || "";
     const envPassword = process.env.DATABASE_PASSWORD || defaultPassword;
     expect(envPassword).toBeDefined();
   });
 
   test("DATABASE_NAME environment variable should be configurable", () => {
-    const defaultName = "ims";
+    const defaultName = "it";
     const envName = process.env.DATABASE_NAME || defaultName;
     expect(envName).toBeDefined();
   });

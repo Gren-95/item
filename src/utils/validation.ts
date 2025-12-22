@@ -152,6 +152,15 @@ export const printLabelSchema = z.object({
   printer: z.string().min(1).optional(),
 });
 
+export const changePasswordSchema = z.object({
+  old_password: z.string().min(1),
+  new_password: z.string().min(8),
+  confirm_password: z.string().min(1),
+}).refine((data) => data.new_password === data.confirm_password, {
+  message: "New password and confirmation password must match",
+  path: ["confirm_password"],
+});
+
 export type EquipmentAddInput = z.infer<typeof equipmentAddSchema>;
 export type EquipmentEditInput = z.infer<typeof equipmentEditSchema>;
 export type ApiAddItemInput = z.infer<typeof apiAddItemSchema>;

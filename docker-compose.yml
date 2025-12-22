@@ -10,10 +10,12 @@ services:
     environment:
       - DATABASE_HOST=${MYSQL_HOST}
       - DATABASE_PORT=${MYSQL_PORT}
-      - DATABASE_USER=${MYSQL_USER}
-      - DATABASE_PASSWORD=${MYSQL_PASSWORD}
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - DATABASE_NAME=${MYSQL_DATABASE}
       - BARTENDER_HOST=${BARTENDER_HOST}
+      - AUTH_ENDPOINT=${AUTH_ENDPOINT}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - HTTPS_CERT_FILE=${HTTPS_CERT_FILE}
       - HTTPS_KEY_FILE=${HTTPS_KEY_FILE}
       - HTTPS_PORT=${HTTPS_PORT}
@@ -36,8 +38,6 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
       - ./db.sql:/docker-entrypoint-initdb.d/init.sql
@@ -53,8 +53,8 @@ services:
       - "8080:80"
     environment:
       PMA_HOST: ${MYSQL_HOST}
-      PMA_USER: ${MYSQL_USER}
-      PMA_PASSWORD: ${MYSQL_PASSWORD}
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     depends_on:
       - db
     restart: unless-stopped

@@ -14,45 +14,45 @@ describe("Equipment Type Management (#4)", () => {
   describe("GET /types page", () => {
 
     test("should create a new type via API", async () => {
-      const insertQuery = "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)";
-      
-      mockPool.mockQuery(insertQuery, [
-        {
-          rows: [],
-          insertId: 5,
-          affectedRows: 1,
-        },
-      ]);
+    const insertQuery = "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)";
+    
+    mockPool.mockQuery(insertQuery, [
+      {
+        rows: [],
+        insertId: 5,
+        affectedRows: 1,
+      },
+    ]);
 
-      const body = JSON.stringify({ name: "Tablet" });
-      const req = createTestRequest("/api/types", {
-        method: "POST",
-        body,
-      });
-
-      expect(req.method).toBe("POST");
-      expect(req.url).toContain("/api/types");
+    const body = JSON.stringify({ name: "Tablet" });
+    const req = createTestRequest("/api/types", {
+      method: "POST",
+      body,
     });
+
+    expect(req.method).toBe("POST");
+    expect(req.url).toContain("/api/types");
+  });
 
     test("should reject empty name via API", async () => {
-      const body = JSON.stringify({ name: "" });
-      const req = createTestRequest("/api/types", {
-        method: "POST",
-        body,
-      });
-
-      expect(req.method).toBe("POST");
-      // Handler should validate and reject empty name
+    const body = JSON.stringify({ name: "" });
+    const req = createTestRequest("/api/types", {
+      method: "POST",
+      body,
     });
 
-    test("should reject missing name via API", async () => {
-      const body = JSON.stringify({});
-      const req = createTestRequest("/api/types", {
-        method: "POST",
-        body,
-      });
+    expect(req.method).toBe("POST");
+      // Handler should validate and reject empty name
+  });
 
-      expect(req.method).toBe("POST");
+    test("should reject missing name via API", async () => {
+    const body = JSON.stringify({});
+    const req = createTestRequest("/api/types", {
+      method: "POST",
+      body,
+    });
+
+    expect(req.method).toBe("POST");
       // Handler should validate and require name
     });
   });
@@ -66,54 +66,54 @@ describe("Equipment Model Management (#3)", () => {
   describe("Model CRUD operations", () => {
 
     test("should include type selection box in add equipment form", async () => {
-      const selectTypesQuery = "SELECT id, type_name as name FROM it_equipment_type WHERE status = 1 ORDER BY type_name";
-      
-      mockPool.mockQuery(selectTypesQuery, [
-        {
-          rows: [
-            { id: 1, name: "Laptop" },
-            { id: 2, name: "Desktop" },
-            { id: 3, name: "Monitor" },
-          ],
-        },
-      ]);
+    const selectTypesQuery = "SELECT id, type_name as name FROM it_equipment_type WHERE status = 1 ORDER BY type_name";
+    
+    mockPool.mockQuery(selectTypesQuery, [
+      {
+        rows: [
+          { id: 1, name: "Laptop" },
+          { id: 2, name: "Desktop" },
+          { id: 3, name: "Monitor" },
+        ],
+      },
+    ]);
 
-      const req = createTestRequest("/add");
-      expect(req.method).toBe("GET");
-      expect(req.url).toContain("/add");
-    });
+    const req = createTestRequest("/add");
+    expect(req.method).toBe("GET");
+    expect(req.url).toContain("/add");
+  });
 
     test("should include type selection box in edit equipment form", async () => {
-      const selectTypesQuery = "SELECT id, type_name as name FROM it_equipment_type WHERE status = 1 ORDER BY type_name";
-      
-      mockPool.mockQuery(selectTypesQuery, [
-        {
-          rows: [
-            { id: 1, name: "Laptop" },
-            { id: 2, name: "Desktop" },
-          ],
-        },
-      ]);
+    const selectTypesQuery = "SELECT id, type_name as name FROM it_equipment_type WHERE status = 1 ORDER BY type_name";
+    
+    mockPool.mockQuery(selectTypesQuery, [
+      {
+        rows: [
+          { id: 1, name: "Laptop" },
+          { id: 2, name: "Desktop" },
+        ],
+      },
+    ]);
 
-      const req = createTestRequest("/edit/1");
-      expect(req.method).toBe("GET");
-      expect(req.url).toContain("/edit/1");
-    });
+    const req = createTestRequest("/edit/1");
+    expect(req.method).toBe("GET");
+    expect(req.url).toContain("/edit/1");
+  });
 
     test("should include 'Add new type' option in type selection", async () => {
-      const selectTypesQuery = "SELECT id, type_name as name FROM it_equipment_type WHERE status = 1 ORDER BY type_name";
-      
-      mockPool.mockQuery(selectTypesQuery, [
-        {
-          rows: [
-            { id: 1, name: "Laptop" },
-          ],
-        },
-      ]);
+    const selectTypesQuery = "SELECT id, type_name as name FROM it_equipment_type WHERE status = 1 ORDER BY type_name";
+    
+    mockPool.mockQuery(selectTypesQuery, [
+      {
+        rows: [
+          { id: 1, name: "Laptop" },
+        ],
+      },
+    ]);
 
-      const req = createTestRequest("/add");
-      expect(req.method).toBe("GET");
-      // Template should include option with value="__add_new__"
+    const req = createTestRequest("/add");
+    expect(req.method).toBe("GET");
+    // Template should include option with value="__add_new__"
     });
   });
 
