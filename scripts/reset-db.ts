@@ -4,8 +4,8 @@ import path from "path";
 
 const DB_HOST = process.env.DATABASE_HOST || "localhost";
 const DB_PORT = parseInt(process.env.DATABASE_PORT || "3306");
-const DB_USER = process.env.DATABASE_USER || "ims_user";
-const DB_PASSWORD = process.env.DATABASE_PASSWORD || "ims_password";
+const DB_USER = process.env.DATABASE_USER || "root";
+const DB_PASSWORD = process.env.DATABASE_PASSWORD || process.env.MYSQL_ROOT_PASSWORD || "";
 const DB_NAME = process.env.DATABASE_NAME || "it"; // Default to "it" to match db.sql
 
 async function resetDatabase() {

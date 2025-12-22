@@ -31,11 +31,14 @@ cp .env.example .env
 |----------|-------------|---------|
 | `DATABASE_HOST` | MySQL host | `localhost` |
 | `DATABASE_PORT` | MySQL port | `3306` |
-| `DATABASE_USER` | MySQL user | `ims_user` |
-| `DATABASE_PASSWORD` | MySQL password | `ims_password` |
-| `DATABASE_NAME` | Database name | `ims` |
+| `DATABASE_USER` | MySQL user | `root` |
+| `DATABASE_PASSWORD` | MySQL password | Uses `MYSQL_ROOT_PASSWORD` |
+| `DATABASE_NAME` | Database name | `it` |
 | `PORT` | Server port | `3000` |
 | `BARTENDER_HOST` |Bartender printing service host| `http://localhost/`|
+| `AUTH_ENDPOINT` | Authentication endpoint URL | `http://rakintra/lswkpi/ajax/t6nu/verifyLogin.php` |
+| `CHANGE_PASSWORD_ENDPOINT` | Password change endpoint URL | Auto-constructed from `PMS_DB_HOST` or `http://rakintra/lswkpi/ajax/t6nu/changePass.php` |
+| `PMS_DB_HOST` | Database host for constructing auth endpoints | Not set |
 | `HTTPS_CERT_FILE` | Path to TLS certificate (inside container) | `/app/certs/ssl.pem` |
 | `HTTPS_KEY_FILE` | Path to TLS key (inside container) | `/app/certs/ssl-key.pem` |
 | `HTTPS_PORT` | HTTPS port | `443` |

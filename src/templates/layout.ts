@@ -1,4 +1,4 @@
-export function layout(title: string, content: string): string {
+export function layout(title: string, content: string, isAdmin: boolean = false): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,6 +42,12 @@ export function layout(title: string, content: string): string {
               <a href="/vendors" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Providers</a>
               <a href="/write-off-reasons" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Write-Off Reasons</a>
               <a href="/repairs" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Repair Tracking</a>
+              <div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+              <a href="/change-password" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Change Password</a>
+              ${isAdmin 
+                ? '<a href="/permissions" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">User Permissions</a>'
+                : '<span class="block text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50 font-medium">User Permissions</span>'
+              }
             </div>
           </div>
           <div class="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
@@ -51,14 +57,21 @@ export function layout(title: string, content: string): string {
           </div>
           <a href="/" class="text-xl font-bold text-gray-900 dark:text-white transition-colors">IT Equipment Management</a>
         </div>
-        <button id="theme-toggle" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Toggle dark mode">
+        <div class="flex items-center gap-2">
+          <a href="/logout" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Logout" title="Logout">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+          </a>
+          <button id="theme-toggle" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Toggle dark mode">
           <svg id="theme-icon-light" class="w-6 h-6 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
           </svg>
           <svg id="theme-icon-dark" class="w-6 h-6 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-          </svg>
-        </button>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   </nav>

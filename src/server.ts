@@ -9,7 +9,12 @@ import { typesPage } from "./templates/types";
 import { vendorsPage } from "./templates/vendors";
 import { writeOffReasonsPage } from "./templates/writeOffReasons";
 import { repairsPage } from "./templates/repairs";
+import { loginPage } from "./templates/login";
+import { changePasswordPage } from "./templates/changePassword";
+import { permissionsPage } from "./templates/permissions";
 import { logger } from "./utils/logger";
+import { getSessionFromRequest, createSession, deleteSession, createSessionCookie, deleteSessionCookie } from "./utils/session";
+import { verifyCredentials, changePassword, hasItemLoginPermission, hasAdminPermission } from "./utils/auth";
 import {
   equipmentAddSchema,
   equipmentEditSchema,
@@ -20,6 +25,7 @@ import {
   suppliersActionSchema,
   writeOffReasonsActionSchema,
   printLabelSchema,
+  changePasswordSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { randomUUID } from "crypto";
@@ -141,8 +147,285 @@ async function handleRequest(req: Request): Promise<Response> {
     }
   }
 
+  // Public routes that don't require authentication
+  const publicRoutes = ["/login", "/logout", "/repairs", "/health"];
+  const isPublicRoute = publicRoutes.includes(path) || path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/icons/") || path === "/manifest.webmanifest" || path === "/favicon.ico";
+
+  // Check authentication for protected routes and get admin status
+  let isAdmin = false;
+  if (!isPublicRoute) {
+    const session = getSessionFromRequest(req);
+    if (!session) {
+      // Redirect to login page, preserving the original URL
+      const loginUrl = `/login?redirect=${encodeURIComponent(path)}`;
+      return Response.redirect(loginUrl, 302);
+    }
+    // Check admin permission for authenticated users
+    isAdmin = await hasAdminPermission(session.username, pool);
+  }
+
   // Routes
   try {
+    // Login page - GET
+    if (path === "/login" && req.method === "GET") {
+      // If already logged in, redirect to home
+      const session = getSessionFromRequest(req);
+      if (session) {
+        const redirect = url.searchParams.get("redirect") || "/";
+        return Response.redirect(redirect, 302);
+      }
+
+      const error = url.searchParams.get("error") || null;
+      const redirect = url.searchParams.get("redirect") || null;
+      return new Response(loginPage(error, redirect, false), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // Login page - POST
+    if (path === "/login" && req.method === "POST") {
+      const formData = await req.formData();
+      const username = (formData.get("username") || "").toString().trim();
+      const password = (formData.get("password") || "").toString();
+      const redirect = (formData.get("redirect") || "").toString() || "/";
+
+      if (!username || !password) {
+        return new Response(loginPage("Username and password are required", redirect || null, false), {
+          headers: { "Content-Type": "text/html" },
+        });
+      }
+
+      try {
+        const isValid = await verifyCredentials(username, password);
+        
+        if (!isValid) {
+          logger.info("Failed login attempt", { traceId, username });
+          return new Response(loginPage("Invalid username or password", redirect || null, false), {
+            headers: { "Content-Type": "text/html" },
+          });
+        }
+
+        // Check if user has item_login permission
+        const hasPermission = await hasItemLoginPermission(username, pool);
+        
+        if (!hasPermission) {
+          logger.info("Login denied - missing item_login permission", { traceId, username });
+          return new Response(loginPage("You do not have permission to access this system. Please contact your administrator.", redirect || null, false), {
+            headers: { "Content-Type": "text/html" },
+          });
+        }
+
+        // Create session
+        const sessionId = createSession(username);
+        
+        logger.info("User logged in", { traceId, username });
+        
+        return new Response(null, {
+          status: 302,
+          headers: {
+            "Location": redirect,
+            "Set-Cookie": createSessionCookie(sessionId),
+          },
+        });
+      } catch (err) {
+        logger.error("Login error", err, { traceId, username });
+        return new Response(loginPage("An error occurred during login. Please try again.", redirect || null, false), {
+          headers: { "Content-Type": "text/html" },
+        });
+      }
+    }
+
+    // Logout route
+    if (path === "/logout" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (session) {
+        deleteSession(session.sessionId);
+        logger.info("User logged out", { traceId, username: session.username });
+      }
+      
+      return new Response(null, {
+        status: 302,
+        headers: {
+          "Location": "/login",
+          "Set-Cookie": deleteSessionCookie(),
+        },
+      });
+    }
+
+    // Change password - GET
+    if (path === "/change-password" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/change-password", 302);
+      }
+
+      const success = url.searchParams.get("success") || null;
+      const error = url.searchParams.get("error") || null;
+      return new Response(changePasswordPage(success, error, isAdmin), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // Change password - POST
+    if (path === "/change-password" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/change-password", 302);
+      }
+
+      const formData = await req.formData();
+      const rawData = {
+        old_password: formData.get("old_password")?.toString() || "",
+        new_password: formData.get("new_password")?.toString() || "",
+        confirm_password: formData.get("confirm_password")?.toString() || "",
+      };
+
+      try {
+        // Validate form data
+        const validated = changePasswordSchema.parse(rawData);
+
+        // Call password change function
+        const result = await changePassword(
+          session.username,
+          validated.old_password,
+          validated.new_password
+        );
+
+        if (result.success) {
+          logger.info("Password changed successfully", { traceId, username: session.username });
+          return Response.redirect("/change-password?success=" + encodeURIComponent(result.message || "Password changed successfully"), 303);
+        } else {
+          logger.info("Password change failed", { traceId, username: session.username, error: result.error });
+          return Response.redirect("/change-password?error=" + encodeURIComponent(result.error || "Password change failed"), 303);
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Invalid input. Please check your entries.";
+        logger.error("Password change validation error", err, { traceId, username: session.username });
+        return Response.redirect("/change-password?error=" + encodeURIComponent(errorMessage), 303);
+      }
+    }
+
+    // Permissions page - GET
+    if (path === "/permissions" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/permissions", 302);
+      }
+
+      const success = url.searchParams.get("success") || "";
+      const error = url.searchParams.get("error") || "";
+
+      // If not admin, show insufficient permissions message without loading data
+      if (!isAdmin) {
+        return new Response(
+          permissionsPage(
+            { users: [], permissions: [] },
+            false,
+            "",
+            ""
+          ),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
+      try {
+        // Get all users
+        const [users] = await pool.query<RowDataPacket[]>(
+          "SELECT id, user, name, mail, active, employee_no FROM `core`.`users` ORDER BY name"
+        );
+
+        // Get all permissions
+        const [permissions] = await pool.query<RowDataPacket[]>(
+          `SELECT id, user_id, access_key, value, comment, 
+                  DATE_FORMAT(start_date, '%Y-%m-%d') as start_date,
+                  DATE_FORMAT(end_date, '%Y-%m-%d') as end_date
+           FROM \`core\`.\`user_permissions\`
+           WHERE access_key = 'item'
+           ORDER BY user_id, value`
+        );
+
+        return new Response(
+          permissionsPage(
+            {
+              users: users as any[],
+              permissions: permissions as any[],
+            },
+            isAdmin,
+            success,
+            error
+          ),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      } catch (err) {
+        logger.error("Error loading permissions page", err, { traceId });
+        return new Response(
+          permissionsPage({ users: [], permissions: [] }, false, "", "Error loading permissions"),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+    }
+
+    // Permissions page - POST
+    if (path === "/permissions" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/permissions", 302);
+      }
+
+      if (!isAdmin) {
+        return Response.redirect("/permissions?error=" + encodeURIComponent("You do not have admin permission"), 303);
+      }
+
+      const formData = await req.formData();
+      const action = formData.get("action")?.toString();
+
+      try {
+        if (action === "add") {
+          const user_id = parseInt(formData.get("user_id")?.toString() || "0");
+          const access_key = formData.get("access_key")?.toString() || "";
+          const value = formData.get("value")?.toString() || "";
+          const comment = formData.get("comment")?.toString() || "";
+
+          if (!user_id || !access_key || !value || !comment) {
+            return Response.redirect("/permissions?error=" + encodeURIComponent("All fields are required"), 303);
+          }
+
+          await pool.query(
+            `INSERT INTO \`core\`.\`user_permissions\` 
+             (user_id, access_key, value, comment, start_date, end_date)
+             VALUES (?, ?, ?, ?, '1970-01-01', '2099-12-31')`,
+            [user_id, access_key, value, comment]
+          );
+
+          logger.info("Permission added", { traceId, user_id, access_key, value });
+          return Response.redirect("/permissions?success=" + encodeURIComponent("Permission added successfully"), 303);
+        } else if (action === "delete") {
+          const permission_id = parseInt(formData.get("permission_id")?.toString() || "0");
+
+          if (!permission_id) {
+            return Response.redirect("/permissions?error=" + encodeURIComponent("Invalid permission ID"), 303);
+          }
+
+          await pool.query("DELETE FROM `core`.`user_permissions` WHERE id = ?", [permission_id]);
+
+          logger.info("Permission deleted", { traceId, permission_id });
+          return Response.redirect("/permissions?success=" + encodeURIComponent("Permission deleted successfully"), 303);
+        } else {
+          return Response.redirect("/permissions?error=" + encodeURIComponent("Invalid action"), 303);
+        }
+      } catch (err) {
+        logger.error("Error processing permission action", err, { traceId, action });
+        const errorMessage = err instanceof Error ? err.message : "An error occurred";
+        return Response.redirect("/permissions?error=" + encodeURIComponent(errorMessage), 303);
+      }
+    }
+
     // Home / Search page
     if (path === "/" && req.method === "GET") {
       const query = url.searchParams.get("q") || url.searchParams.get("serial") || "";
@@ -227,12 +510,12 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         logger.info("Search results", { traceId, query: trimmed, count: rows.length });
-        return new Response(searchPage(trimmed, rows.length > 0 ? (rows as SearchResult[]) : []), {
+        return new Response(searchPage(trimmed, rows.length > 0 ? (rows as SearchResult[]) : [], null, isAdmin), {
           headers: { "Content-Type": "text/html" },
         });
       }
 
-      return new Response(searchPage(), {
+      return new Response(searchPage("", null, null, isAdmin), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -242,7 +525,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const serial = url.searchParams.get("serial") || "";
       const addData = await getAddData(serial);
       
-      return new Response(addPage(addData), {
+      return new Response(addPage(addData, false, null, isAdmin), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -327,7 +610,7 @@ async function handleRequest(req: Request): Promise<Response> {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         logger.error("Failed to add equipment", err, { traceId, serviceTag: rawData.service_tag });
         const addData = await getAddData(rawData.service_tag || "");
-        return new Response(addPage(addData, false, errorMessage), {
+        return new Response(addPage(addData, false, errorMessage, isAdmin), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -343,7 +626,7 @@ async function handleRequest(req: Request): Promise<Response> {
         return new Response("Equipment not found", { status: 404 });
       }
 
-      return new Response(auditPage(auditData, success), {
+      return new Response(auditPage(auditData, success, null, isAdmin), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -404,7 +687,7 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditData, false, "Write-off comment is required when writing off equipment."), {
+          return new Response(auditPage(auditData, false, "Write-off comment is required when writing off equipment.", isAdmin), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -415,7 +698,7 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditData, false, "Repair note is required when registering equipment for repair."), {
+          return new Response(auditPage(auditData, false, "Repair note is required when registering equipment for repair.", isAdmin), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -545,7 +828,7 @@ async function handleRequest(req: Request): Promise<Response> {
         if (!auditData) {
           return new Response("Equipment not found", { status: 404 });
         }
-        return new Response(auditPage(auditData, false, errorMessage), {
+        return new Response(auditPage(auditData, false, errorMessage, isAdmin), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -556,7 +839,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getLocationsData();
-      return new Response(locationsPage(data, success, error), {
+      return new Response(locationsPage(data, success, error, isAdmin), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -636,7 +919,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getVendorsAndSuppliersData();
-      return new Response(vendorsPage(data, success, error), {
+      return new Response(vendorsPage(data, success, error, isAdmin), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -743,7 +1026,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getTypesData();
-      return new Response(typesPage(data, success, error), {
+      return new Response(typesPage(data, success, error, isAdmin), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -825,7 +1108,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getWriteOffReasonsData();
-      return new Response(writeOffReasonsPage(data, success, error), {
+      return new Response(writeOffReasonsPage(data, success, error, isAdmin), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -883,7 +1166,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getRepairsData();
-      return new Response(repairsPage(data, success, error), {
+      return new Response(repairsPage(data, success, error, isAdmin), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -1227,7 +1510,7 @@ async function handleRequest(req: Request): Promise<Response> {
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
     logger.error("Request handler error", err, { traceId, path });
-    return new Response(searchPage("", null, errorMessage), {
+    return new Response(searchPage("", null, errorMessage, false), {
       status: 500,
       headers: { "Content-Type": "text/html" },
     });

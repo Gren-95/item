@@ -17,7 +17,7 @@ interface LocationsData {
   subAreas: LocationItem[];
 }
 
-export function locationsPage(data: LocationsData, success = "", error = ""): string {
+export function locationsPage(data: LocationsData, success = "", error = "", isAdmin: boolean = false): string {
   const alert = success
     ? `<div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6 text-green-700 dark:text-green-400">✅ ${escapeHtml(success)}</div>`
     : error
@@ -112,7 +112,7 @@ export function locationsPage(data: LocationsData, success = "", error = ""): st
     </div>
   `;
 
-  return layout("Locations", content);
+  return layout("Locations", content, isAdmin);
 }
 
 function renderSection(

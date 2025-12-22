@@ -42,7 +42,7 @@ function formatDate(dateStr: string | null | undefined): string {
   }
 }
 
-export function repairsPage(data: RepairsData, success = "", error = ""): string {
+export function repairsPage(data: RepairsData, success = "", error = "", isAdmin: boolean = false): string {
   const alert = success
     ? `<div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6 text-green-700 dark:text-green-400">✅ ${escapeHtml(success)}</div>`
     : error
@@ -263,7 +263,7 @@ export function repairsPage(data: RepairsData, success = "", error = ""): string
     </div>
   `;
 
-  return layout("Repair Tracking", content);
+  return layout("Repair Tracking", content, isAdmin);
 }
 
 function renderRepairSection(
