@@ -25,7 +25,7 @@ export function loginPage(error: string | null = null, redirect: string | null =
 
         ${errorAlert}
 
-        <form method="POST" action="/login" class="space-y-6">
+        <form method="POST" action="/login" class="space-y-6" autocomplete="off">
           ${redirectInput}
           <div>
             <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -37,6 +37,7 @@ export function loginPage(error: string | null = null, redirect: string | null =
               name="username"
               required
               autofocus
+              autocomplete="off"
               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors"
               placeholder="Enter your username"
             />
@@ -51,6 +52,7 @@ export function loginPage(error: string | null = null, redirect: string | null =
               id="password"
               name="password"
               required
+              autocomplete="off"
               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors"
               placeholder="Enter your password"
             />
