@@ -21,6 +21,101 @@ async function ensureMigrationsTable(): Promise<void> {
       UNIQUE KEY uk_migration_name (name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // Ensure it_user_permissions exists in the IT database (plant-based, user_id keyed)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS it_user_permissions (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id VARCHAR(50) NOT NULL,
+      plant_id INT UNSIGNED NOT NULL,
+      permission VARCHAR(100) NOT NULL,
+      role ENUM('user','admin') NOT NULL,
+      comment VARCHAR(255) NOT NULL DEFAULT '',
+      created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_user_access (user_id, plant_id, permission, role),
+      KEY idx_plant (plant_id),
+      KEY idx_user (user_id),
+      KEY idx_permission (permission)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // Ensure plant_id column exists (older tables may lack it)
+  try {
+    await pool.query(`
+      ALTER TABLE it_user_permissions
+      ADD COLUMN plant_id INT UNSIGNED NOT NULL DEFAULT 0 AFTER user_id
+    `);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    const code = err?.code;
+    if (code !== "ER_DUP_FIELDNAME" && !msg.includes("Duplicate column name")) {
+      throw err;
+    }
+  }
+
+  // Rename/ensure permission & role columns; drop legacy columns
+  try {
+    await pool.query(`ALTER TABLE it_user_permissions CHANGE COLUMN access_key permission VARCHAR(100) NOT NULL`);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    if (!msg.includes("Unknown column 'access_key'")) {
+      throw err;
+    }
+  }
+  try {
+    await pool.query(`ALTER TABLE it_user_permissions CHANGE COLUMN value role ENUM('user','admin') NOT NULL`);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    if (!msg.includes("Unknown column 'value'")) {
+      throw err;
+    }
+  }
+  try {
+    await pool.query(`ALTER TABLE it_user_permissions DROP COLUMN start_date`);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    if (
+      !msg.includes("Unknown column 'start_date'") &&
+      !msg.includes("Can't DROP 'start_date'") &&
+      !msg.includes("Check that column/key exists")
+    ) {
+      throw err;
+    }
+  }
+  try {
+    await pool.query(`ALTER TABLE it_user_permissions DROP COLUMN end_date`);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    if (
+      !msg.includes("Unknown column 'end_date'") &&
+      !msg.includes("Can't DROP 'end_date'") &&
+      !msg.includes("Check that column/key exists")
+    ) {
+      throw err;
+    }
+  }
+
+  // Recreate unique key on new columns
+  try {
+    await pool.query(`ALTER TABLE it_user_permissions DROP INDEX uk_user_access`);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    if (!msg.includes("check that column/key exists") && !msg.includes("can't DROP")) {
+      // ignore missing
+    }
+  }
+  try {
+    await pool.query(`ALTER TABLE it_user_permissions ADD UNIQUE KEY uk_user_access (user_id, plant_id, permission, role)`);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    if (!msg.includes("Duplicate key name") && !msg.includes("already exists")) {
+      throw err;
+    }
+  }
+
+  // Backfill existing rows without plant_id to global (0)
+  await pool.query(`UPDATE it_user_permissions SET plant_id = 0 WHERE plant_id IS NULL`);
 }
 
 async function getAppliedMigrations(): Promise<Set<number>> {
@@ -104,6 +199,15 @@ async function runMigration(fileName: string): Promise<void> {
           
           // Check if statement targets core database
           const targetsCore = trimmedStatement.includes("`core`") || trimmedStatement.includes("core.");
+
+          // Skip any statement that targets the legacy core database
+          if (targetsCore) {
+            logger.info("Skipping statement targeting core database", {
+              statementIndex: i,
+              statement: trimmedStatement.substring(0, 150),
+            });
+            continue;
+          }
           
           if (isCreateDatabase) {
             logger.info("Executing CREATE DATABASE statement", { 

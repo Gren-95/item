@@ -16,6 +16,7 @@ This directory contains tests for the equipment audit application, covering func
 - `branding.test.ts` - Tests for branding, color palette, and icons (#31)
 - `health.test.ts` - Tests for health check endpoint
 - `validation.test.ts` - Tests for input validation schemas
+- `auth.test.ts` - Tests for authentication and permission checks
 - `utils.ts` - Test utilities and helpers
 
 ## Running Tests

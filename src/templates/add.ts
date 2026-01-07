@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { renderAlert, escapeHtml } from "./components";
 import { getModalHtml, getScriptsHtml } from "./components";
 
 interface SelectOption {
@@ -43,27 +44,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Add New Equipment</h1>
       </div>
 
-      ${success ? `
-        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
-          <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
-            <span>Equipment added successfully!</span>
-          </div>
-        </div>
-      ` : ""}
-
-      ${error ? `
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
-          <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <span>${escapeHtml(error)}</span>
-          </div>
-        </div>
-      ` : ""}
+      ${renderAlert(success, error)}
 
       <form action="/add" method="POST">
         <!-- Basic Information -->

@@ -93,7 +93,7 @@ export function searchPage(
                   <th class="py-3 px-2 md:px-4 hidden xl:table-cell">Vendor</th>
                   <th class="py-3 px-2 md:px-4 hidden md:table-cell">Assigned To</th>
                   <th class="py-3 px-2 md:px-4 hidden lg:table-cell">Location</th>
-                  <th class="py-3 px-2 md:px-4 hidden xl:table-cell">Last Audit</th>
+                  <th class="py-3 px-2 md:px-4 hidden xl:table-cell">Last Update</th>
                 </tr>
               </thead>
               <tbody>

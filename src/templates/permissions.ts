@@ -12,16 +12,24 @@ interface User {
 interface Permission {
   id: number;
   user_id: number;
-  access_key: string;
-  value: string;
+  permission: string;
+  role: string;
   comment: string;
   start_date: string;
   end_date: string;
+  plant_id?: number;
+}
+
+interface Plant {
+  id: number;
+  name: string;
 }
 
 interface PermissionsData {
   users: User[];
   permissions: Permission[];
+  plantMap?: Record<number, string>;
+  plants?: Plant[];
 }
 
 function escapeHtml(str: string | null | undefined): string {
@@ -95,30 +103,68 @@ export function permissionsPage(
               </select>
             </div>
             <div>
-              <label class="label">Access Key</label>
+              <label class="label">Plant</label>
+              <select name="plant_id" id="plant-select" class="select-field" required>
+                <option value="">Select Plant (use 0 for global)</option>
+                <option value="0">All (global)</option>
+                ${data.plants && data.plants.length > 0
+                  ? data.plants
+                      .map((plant) => `<option value="${plant.id}">${escapeHtml(plant.name)}</option>`)
+                      .join("")
+                  : ""}
+              </select>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="plant-help-text">
+                Use 0 for global permissions (login, global_admin). Other permissions can be plant-specific.
+              </p>
+            </div>
+            <div>
+              <label class="label">Permission</label>
               <input
                 type="text"
                 name="access_key"
+                id="permission-input"
                 class="input-field"
-                value="item"
+                list="permission-access-keys"
+                autocomplete="off"
+                placeholder="Enter permission (e.g., login, search, add, edit)"
                 required
               />
+              <datalist id="permission-access-keys">
+                <option value="login">login - Access to login to the system (global only, plant_id=0)</option>
+                <option value="global_admin">global_admin - Full access across all plants (plant_id=0)</option>
+                <option value="search">search - Search/view equipment</option>
+                <option value="add">add - Add new equipment</option>
+                <option value="edit">edit - Edit existing equipment</option>
+                <option value="locations_view">locations_view - View locations</option>
+                <option value="locations_add">locations_add - Add locations</option>
+                <option value="locations_edit">locations_edit - Edit locations</option>
+                <option value="locations_delete">locations_delete - Delete locations</option>
+                <option value="types_view">types_view - View types/configurations</option>
+                <option value="types_add">types_add - Add types/configurations</option>
+                <option value="types_edit">types_edit - Edit types/configurations</option>
+                <option value="types_delete">types_delete - Delete types/configurations</option>
+                <option value="vendors_view">vendors_view - View vendors/suppliers</option>
+                <option value="vendors_add">vendors_add - Add vendors/suppliers</option>
+                <option value="vendors_edit">vendors_edit - Edit vendors/suppliers</option>
+                <option value="vendors_delete">vendors_delete - Delete vendors/suppliers</option>
+                <option value="write_off_reasons_view">write_off_reasons_view - View write-off reasons</option>
+                <option value="write_off_reasons_add">write_off_reasons_add - Add write-off reasons</option>
+                <option value="write_off_reasons_edit">write_off_reasons_edit - Edit write-off reasons</option>
+                <option value="write_off_reasons_delete">write_off_reasons_delete - Delete write-off reasons</option>
+                <option value="repairs">repairs - View and manage repairs</option>
+                <option value="repairs_send">repairs_send - Send equipment to repair</option>
+              </datalist>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Note: "login" permission is always global (plant_id=0). Other permissions can be plant-specific.
+              </p>
             </div>
             <div>
-              <label class="label">Value</label>
-              <input
-                type="text"
-                name="value"
-                class="input-field"
-                list="permission-values"
-                autocomplete="off"
-                placeholder="Enter permission value"
-                required
-              />
-              <datalist id="permission-values">
-                <option value="login">Login</option>
-                <option value="admin">Admin</option>
-              </datalist>
+              <label class="label">Role</label>
+              <select name="value" class="select-field" required>
+                <option value="">Select Role</option>
+                <option value="user">user - Can perform actions immediately</option>
+                <option value="admin">admin - Receives emails about approval requests and can approve/deny</option>
+              </select>
             </div>
             <div>
               <label class="label">Comment</label>
@@ -136,6 +182,30 @@ export function permissionsPage(
               </button>
             </div>
           </form>
+          <script>
+            (function() {
+              const permissionInput = document.getElementById('permission-input');
+              const plantSelect = document.getElementById('plant-select');
+              const helpText = document.getElementById('plant-help-text');
+              
+              if (permissionInput && plantSelect && helpText) {
+                permissionInput.addEventListener('input', function() {
+                  const permission = this.value.trim().toLowerCase();
+                  if (permission === 'login' || permission === 'global_admin') {
+                    // Force plant_id to 0 for global permissions
+                    plantSelect.value = '0';
+                    plantSelect.disabled = true;
+                    helpText.textContent = 'This permission is global only (plant_id=0 is required).';
+                    helpText.classList.add('text-blue-600', 'dark:text-blue-400');
+                  } else {
+                    plantSelect.disabled = false;
+                    helpText.textContent = 'Use 0 for global permissions (login, global_admin). Other permissions can be plant-specific.';
+                    helpText.classList.remove('text-blue-600', 'dark:text-blue-400');
+                  }
+                });
+              }
+            })();
+          </script>
         </div>
 
         <div class="overflow-x-auto">
@@ -143,6 +213,7 @@ export function permissionsPage(
             <thead>
               <tr class="border-b border-gray-200 dark:border-gray-700 text-left text-gray-600 dark:text-gray-400">
                 <th class="py-3 px-2">User</th>
+                <th class="py-3 px-2">Plant</th>
                 <th class="py-3 px-2">Access Key</th>
                 <th class="py-3 px-2">Value</th>
                 <th class="py-3 px-2">Comment</th>
@@ -154,15 +225,17 @@ export function permissionsPage(
             <tbody>
               ${data.permissions.length === 0
                 ? `<tr>
-                    <td colspan="7" class="py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colspan="8" class="py-8 text-center text-gray-500 dark:text-gray-400">
                       No permissions found
                     </td>
                   </tr>`
                 : data.permissions
-                    .map(
-                      (perm) => {
-                        const user = data.users.find((u) => u.id === perm.user_id);
-                        return `
+                    .map((perm) => {
+                      const user = data.users.find((u) => u.id === perm.user_id);
+                      const plantName = perm.plant_id === 0 
+                        ? "All (global)" 
+                        : (perm.plant_id && data.plantMap?.[perm.plant_id] ? data.plantMap[perm.plant_id] : "Unknown");
+                      return `
                         <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                           <td class="py-3 px-2">
                             <div class="font-medium text-gray-900 dark:text-white">
@@ -172,19 +245,20 @@ export function permissionsPage(
                               ${escapeHtml(user?.user || "")}
                             </div>
                           </td>
-                          <td class="py-3 px-2 text-gray-700 dark:text-gray-300">${escapeHtml(perm.access_key)}</td>
+                          <td class="py-3 px-2 text-white dark:text-white">${escapeHtml(plantName)}</td>
+                          <td class="py-3 px-2 font-mono text-xs text-white dark:text-white">${escapeHtml(perm.permission)}</td>
                           <td class="py-3 px-2">
                             <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                              perm.value === "admin"
+                              perm.role === "admin"
                                 ? "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
                                 : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
                             }">
-                              ${escapeHtml(perm.value)}
+                              ${escapeHtml(perm.role)}
                             </span>
                           </td>
-                          <td class="py-3 px-2 text-gray-700 dark:text-gray-300">${escapeHtml(perm.comment)}</td>
-                          <td class="py-3 px-2 text-gray-700 dark:text-gray-300">${escapeHtml(perm.start_date)}</td>
-                          <td class="py-3 px-2 text-gray-700 dark:text-gray-300">${escapeHtml(perm.end_date)}</td>
+                          <td class="py-3 px-2 text-white dark:text-white">${escapeHtml(perm.comment)}</td>
+                          <td class="py-3 px-2 text-white dark:text-white">${escapeHtml(perm.start_date)}</td>
+                          <td class="py-3 px-2 text-white dark:text-white">${escapeHtml(perm.end_date)}</td>
                           <td class="py-3 px-2">
                             <form method="POST" action="/permissions" class="inline" onsubmit="return confirm('Are you sure you want to delete this permission?');">
                               <input type="hidden" name="action" value="delete">
@@ -196,8 +270,7 @@ export function permissionsPage(
                           </td>
                         </tr>
                       `;
-                      }
-                    )
+                    })
                     .join("")}
             </tbody>
           </table>

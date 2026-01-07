@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { renderAlert, escapeHtml } from "./components";
 
 interface LocationItem {
   id: number;
@@ -18,11 +19,7 @@ interface LocationsData {
 }
 
 export function locationsPage(data: LocationsData, success = "", error = "", isAdmin: boolean = false): string {
-  const alert = success
-    ? `<div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6 text-green-700 dark:text-green-400">✅ ${escapeHtml(success)}</div>`
-    : error
-    ? `<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6 text-red-700 dark:text-red-400">⚠️ ${escapeHtml(error)}</div>`
-    : "";
+  const alert = renderAlert(success, error);
 
   const sections: {
     title: string;
@@ -215,11 +212,3 @@ function renderSection(
   `;
 }
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}

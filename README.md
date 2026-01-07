@@ -1,16 +1,16 @@
 # ITEM
 
-A server-side rendered application for auditing IT equipment, built with Bun, Tailwind CSS, MySQL, and Docker.
+A server-side rendered application for IT Equipment Management, built with Bun, Tailwind CSS, MySQL, and Docker.
 
 ## Features
 
 - 🔍 **Search Equipment** - Search by serial number/service tag
-- 📝 **Audit Equipment** - Update equipment details during audits
+- 📝 **Manage Equipment** - Update equipment details
 - 📍 **Location Management** - Hierarchical location selection (Region → Country → Plant → Department → Area → Sub Area)
 - 🏷️ **Equipment Types** - Cascading type selection (Type → Product Line → Model)
 - 👤 **Assignment Tracking** - Assign equipment to employees
 - 🖥️ **TeamViewer Integration** - Track TeamViewer IDs
-- 📊 **Read-only Info** - View warranty dates, device age, and audit history
+- 📊 **Read-only Info** - View warranty dates, device age, and equipment history
 
 ## Quick Start
 

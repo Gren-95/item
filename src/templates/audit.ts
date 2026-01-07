@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { renderAlert, escapeHtml } from "./components";
 import { getModalHtml, getScriptsHtml } from "./components";
 
 interface Equipment {
@@ -78,27 +79,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
         <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-mono text-sm">${escapeHtml(eq.service_tag)}</span>
       </div>
 
-      ${success ? `
-        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
-          <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
-            <span>Equipment saved successfully!</span>
-          </div>
-        </div>
-      ` : ""}
-
-      ${error ? `
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
-          <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <span>${escapeHtml(error)}</span>
-          </div>
-        </div>
-      ` : ""}
+      ${renderAlert(success, error)}
 
       <form action="/edit/${eq.id}" method="POST">
         <!-- Equipment Information -->
@@ -372,12 +353,12 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
               >
             </div>
             <div class="md:col-span-2">
-              <label for="comment" class="label">Audit Comment</label>
+              <label for="comment" class="label">Comment</label>
               <textarea 
                 id="comment" 
                 name="comment"
                 rows="3"
-                placeholder="Add notes about this audit..."
+                placeholder="Add notes about this equipment..."
                 class="input-field"
               >${eq.comment || ""}</textarea>
             </div>
@@ -828,7 +809,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
               </svg>
-              Save Audit
+              Save Changes
             </span>
           </button>
         </div>
@@ -994,7 +975,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
     ${getScriptsHtml()}
   `;
 
-  return layout(`Audit - ${eq.service_tag}`, content, isAdmin);
+  return layout(`ITEM - ${eq.service_tag}`, content, isAdmin);
 }
 
 function escapeHtml(str: string): string {

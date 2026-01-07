@@ -12,9 +12,43 @@ import { repairsPage } from "./templates/repairs";
 import { loginPage } from "./templates/login";
 import { changePasswordPage } from "./templates/changePassword";
 import { permissionsPage } from "./templates/permissions";
+import { approvalsPage } from "./templates/approvals";
 import { logger } from "./utils/logger";
 import { getSessionFromRequest, createSession, deleteSession, createSessionCookie, deleteSessionCookie } from "./utils/session";
-import { verifyCredentials, changePassword, hasItemLoginPermission, hasAdminPermission } from "./utils/auth";
+import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
+import { 
+  verifyCredentials, 
+  changePassword, 
+  hasItemLoginPermission, 
+  hasAdminPermission,
+  hasSearchPermission,
+  hasAddEquipmentPermission,
+  hasEditEquipmentPermission,
+  getUserPlantId,
+  hasLocationsViewPermission,
+  hasLocationsAddPermission,
+  hasLocationsEditPermission,
+  hasLocationsDeletePermission,
+  hasManageLocationsPermission,
+  hasTypesViewPermission,
+  hasTypesAddPermission,
+  hasTypesEditPermission,
+  hasTypesDeletePermission,
+  hasManageTypesPermission,
+  hasVendorsViewPermission,
+  hasVendorsAddPermission,
+  hasVendorsEditPermission,
+  hasVendorsDeletePermission,
+  hasManageVendorsPermission,
+  hasWriteOffReasonsViewPermission,
+  hasWriteOffReasonsAddPermission,
+  hasWriteOffReasonsEditPermission,
+  hasWriteOffReasonsDeletePermission,
+  hasManageWriteOffReasonsPermission,
+  hasRepairsPermission,
+  hasRepairsSendPermission,
+  seedFullPermissionsForUser
+} from "./utils/auth";
 import {
   equipmentAddSchema,
   equipmentEditSchema,
@@ -72,6 +106,207 @@ async function getTlsOptions() {
   } catch {
     console.warn("[HTTPS] Failed to load TLS cert/key");
     return null;
+  }
+}
+
+/**
+ * Execute an approved action from an approval request
+ */
+async function executeApprovedAction(
+  actionType: string,
+  actionData: Record<string, unknown>,
+  pool: import("mysql2/promise").Pool
+): Promise<void> {
+  try {
+    if (actionType === "add_location") {
+      const type = actionData.type as string;
+      const name = actionData.name as string;
+      const parent_id = actionData.parent_id as number | null;
+
+      const map: Record<string, { table: string; parent?: string }> = {
+        region: { table: "it_equipment_region" },
+        country: { table: "it_equipment_country", parent: "region_id" },
+        plant: { table: "it_equipment_plant", parent: "country_id" },
+        department: { table: "it_equipment_department", parent: "plant_id" },
+        area: { table: "it_equipment_area", parent: "department_id" },
+        sub_area: { table: "it_equipment_sub_area", parent: "area_id" },
+      };
+
+      const { table, parent } = map[type] || {};
+      if (!table) throw new Error("Unknown location type");
+
+      const cols = ["name", "status"];
+      const vals: (string | number)[] = [name, 1];
+      if (parent && parent_id !== null) {
+        cols.push(parent);
+        vals.push(parent_id);
+      }
+      const placeholders = cols.map(() => "?").join(", ");
+      await pool.query(
+        `INSERT INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`,
+        vals
+      );
+    } else if (actionType === "edit_location") {
+      const type = actionData.type as string;
+      const id = actionData.id as number;
+      const name = actionData.name as string;
+
+      const map: Record<string, string> = {
+        region: "it_equipment_region",
+        country: "it_equipment_country",
+        plant: "it_equipment_plant",
+        department: "it_equipment_department",
+        area: "it_equipment_area",
+        sub_area: "it_equipment_sub_area",
+      };
+
+      const table = map[type];
+      if (!table) throw new Error("Unknown location type");
+
+      await pool.query(`UPDATE ${table} SET name = ? WHERE id = ?`, [name, id]);
+    } else if (actionType === "activate_location" || actionType === "deactivate_location") {
+      const type = actionData.type as string;
+      const id = actionData.id as number;
+      const status = actionType === "activate_location" ? 1 : 0;
+
+      const map: Record<string, string> = {
+        region: "it_equipment_region",
+        country: "it_equipment_country",
+        plant: "it_equipment_plant",
+        department: "it_equipment_department",
+        area: "it_equipment_area",
+        sub_area: "it_equipment_sub_area",
+      };
+
+      const table = map[type];
+      if (!table) throw new Error("Unknown location type");
+
+      await pool.query(`UPDATE ${table} SET status = ? WHERE id = ?`, [status, id]);
+    } else if (actionType === "add_equipment") {
+      // Handle equipment add - extract from actionData
+      const service_tag = actionData.service_tag as string;
+      const vendor_id = actionData.vendor_id as number | null;
+      const supplier_id = actionData.supplier_id as number | null;
+      const model_id = actionData.model_id as number | null;
+      const purchase_date = actionData.purchase_date as string;
+      const warranty_expiry_date = actionData.warranty_expiry_date as string;
+      const equipment_sub_area_id = actionData.equipment_sub_area_id as number | null;
+      const assigned_to = actionData.assigned_to as string | null;
+      const teamviewer = actionData.teamviewer as number | null;
+      const cerf = actionData.cerf as number || 0;
+      const ip = actionData.ip as string | null;
+      const mac_addresses = actionData.mac_addresses as string | null;
+      const comment = actionData.comment as string | null;
+      const inventory_period_id = actionData.inventory_period_id as number | null;
+
+      const [result] = await pool.query<import("mysql2").ResultSetHeader>(
+        `INSERT INTO it_equipment (
+          service_tag, vendor_id, supplier_id, model_id,
+          purchase_date, warranty_expiry_date, teamviewer, cerf, ip, mac_addresses
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [service_tag, vendor_id, supplier_id, model_id, purchase_date, warranty_expiry_date, teamviewer, cerf, ip, mac_addresses]
+      );
+
+      const equipmentId = result.insertId;
+      await pool.query(
+        `INSERT INTO it_equipment_log (
+          equipment_id, service_tag, assigned_to, equipment_sub_area_id, inventory_period_id, comment
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [equipmentId, service_tag, assigned_to, equipment_sub_area_id, inventory_period_id, comment]
+      );
+    } else if (actionType === "edit_equipment") {
+      // Handle equipment edit - extract from actionData
+      const id = actionData.id as number;
+      const model_id = actionData.model_id as number | null;
+      const equipment_sub_area_id = actionData.equipment_sub_area_id as number | null;
+      const assigned_to = actionData.assigned_to as string | null;
+      const teamviewer = actionData.teamviewer as number | null;
+      const comment = actionData.comment as string | null;
+      const inventory_period_id = actionData.inventory_period_id as number | null;
+      const vendor_id = actionData.vendor_id as number | null;
+      const supplier_id = actionData.supplier_id as number | null;
+      const purchase_date = actionData.purchase_date as string | null;
+      const warranty_expiry_date = actionData.warranty_expiry_date as string | null;
+      const cerf = actionData.cerf as number || 0;
+      const ip = actionData.ip as string | null;
+      const mac_addresses = actionData.mac_addresses as string | null;
+
+      const [equipment] = await pool.query<RowDataPacket[]>(
+        "SELECT service_tag FROM it_equipment WHERE id = ?",
+        [id]
+      );
+
+      if (equipment.length === 0) {
+        throw new Error("Equipment not found");
+      }
+
+      const service_tag = equipment[0].service_tag;
+
+      await pool.query(
+        `UPDATE it_equipment SET
+          model_id = ?, vendor_id = ?, supplier_id = ?, purchase_date = ?,
+          warranty_expiry_date = ?, cerf = ?, ip = ?, mac_addresses = ?,
+          teamviewer = ?, updated = CURRENT_TIMESTAMP
+        WHERE id = ?`,
+        [model_id, vendor_id, supplier_id, purchase_date, warranty_expiry_date, cerf, ip, mac_addresses, teamviewer, id]
+      );
+
+      await pool.query(
+        `INSERT INTO it_equipment_log (
+          equipment_id, service_tag, assigned_to, equipment_sub_area_id, inventory_period_id, comment
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [id, service_tag, assigned_to, equipment_sub_area_id, inventory_period_id, comment]
+      );
+    } else if (actionType === "add_write_off_reason") {
+      const reason = actionData.reason as string;
+      await pool.query(
+        "INSERT INTO it_equipment_write_off_reason (reason) VALUES (?)",
+        [reason]
+      );
+    } else if (actionType === "add_supplier") {
+      const name = actionData.name as string;
+      const email = actionData.email as string | null;
+      const phone_number = actionData.phone_number as string | null;
+      const address = actionData.address as string | null;
+      const representative_name = actionData.representative_name as string | null;
+      const sap_vendor_no = actionData.sap_vendor_no as string | null;
+      const website = actionData.website as string | null;
+      await pool.query(
+        `INSERT INTO it_equipment_supplier (name, email, phone_number, address, representative_name, sap_vendor_no, website)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [name, email, phone_number, address, representative_name, sap_vendor_no, website]
+      );
+    } else if (actionType === "add_vendor") {
+      const name = actionData.name as string;
+      await pool.query(
+        "INSERT INTO it_equipment_vendor (name) VALUES (?)",
+        [name]
+      );
+    } else if (actionType === "add_type") {
+      const name = actionData.name as string;
+      await pool.query(
+        "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)",
+        [name]
+      );
+    } else if (actionType === "add_product_line") {
+      const name = actionData.name as string;
+      const parent_id = actionData.parent_id as number;
+      await pool.query(
+        "INSERT INTO it_equipment_product_line (name, type_id, status) VALUES (?, ?, 1)",
+        [name, parent_id]
+      );
+    } else if (actionType === "add_model") {
+      const name = actionData.name as string;
+      const parent_id = actionData.parent_id as number;
+      await pool.query(
+        "INSERT INTO it_equipment_model (name, product_line_id, status) VALUES (?, ?, 1)",
+        [name, parent_id]
+      );
+    }
+    // Add more action types as needed
+  } catch (error) {
+    console.error("Error executing approved action:", error);
+    throw error;
   }
 }
 
@@ -208,6 +443,14 @@ async function handleRequest(req: Request): Promise<Response> {
         // Check if user has item_login permission
         const hasPermission = await hasItemLoginPermission(username, pool);
         
+        // On first login with no existing permissions, seed full permissions for this user
+        const [legacyCount] = await pool.query<RowDataPacket[]>(
+          "SELECT COUNT(*) as count FROM it_user_permissions"
+        );
+        if (legacyCount[0].count === 0) {
+          await seedFullPermissionsForUser(username, pool);
+        }
+        
         if (!hasPermission) {
           logger.info("Login denied - missing item_login permission", { traceId, username });
           return new Response(loginPage("You do not have permission to access this system. Please contact your administrator.", redirect || null, false), {
@@ -331,26 +574,40 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       try {
-        // Get all users
+        // Get all users from IT employees list (active only)
         const [users] = await pool.query<RowDataPacket[]>(
-          "SELECT id, user, name, mail, active, employee_no FROM `core`.`users` ORDER BY name"
+          "SELECT id, user_id AS user, name, email as mail, status as active, employee_no FROM `it_employees_list` WHERE status = 1 ORDER BY name"
         );
 
-        // Get all permissions
+        // Get all permissions (plant-based) from it_user_permissions
         const [permissions] = await pool.query<RowDataPacket[]>(
-          `SELECT id, user_id, access_key, value, comment, 
-                  DATE_FORMAT(start_date, '%Y-%m-%d') as start_date,
-                  DATE_FORMAT(end_date, '%Y-%m-%d') as end_date
-           FROM \`core\`.\`user_permissions\`
-           WHERE access_key = 'item'
-           ORDER BY user_id, value`
+          `SELECT id, user_id, plant_id, permission, role, comment, 
+                  DATE_FORMAT(created, '%Y-%m-%d') as start_date,
+                  DATE_FORMAT(updated, '%Y-%m-%d') as end_date
+           FROM it_user_permissions
+           ORDER BY user_id, permission, role`
         );
+
+        // Get all plants for mapping plant_id to plant name
+        const [plants] = await pool.query<RowDataPacket[]>(
+          "SELECT id, name FROM it_equipment_plant WHERE status = 1 ORDER BY name"
+        );
+
+        // Create plant mapping as plain object for serialization
+        const plantMap: Record<number, string> = {};
+        const plantsList: Array<{ id: number; name: string }> = [];
+        plants.forEach((plant: any) => {
+          plantMap[plant.id] = plant.name;
+          plantsList.push({ id: plant.id, name: plant.name });
+        });
 
         return new Response(
           permissionsPage(
             {
               users: users as any[],
               permissions: permissions as any[],
+              plantMap: plantMap,
+              plants: plantsList,
             },
             isAdmin,
             success,
@@ -387,20 +644,34 @@ async function handleRequest(req: Request): Promise<Response> {
 
       try {
         if (action === "add") {
-          const user_id = parseInt(formData.get("user_id")?.toString() || "0");
+          const user_id = formData.get("user_id")?.toString() || "";
+          const plant_id_raw = formData.get("plant_id")?.toString() ?? "";
           const access_key = formData.get("access_key")?.toString() || "";
           const value = formData.get("value")?.toString() || "";
           const comment = formData.get("comment")?.toString() || "";
 
-          if (!user_id || !access_key || !value || !comment) {
-            return Response.redirect("/permissions?error=" + encodeURIComponent("All fields are required"), 303);
+          const plant_id = plant_id_raw === "" ? NaN : Number(plant_id_raw);
+          const permission = access_key.trim().toLowerCase();
+
+          if (!user_id || !access_key || !value || !comment || Number.isNaN(plant_id)) {
+            return Response.redirect("/permissions?error=" + encodeURIComponent("All fields are required (including plant; use 0 for global)"), 303);
+          }
+
+          // Validate: login permission must be global (plant_id = 0)
+          if (permission === "login" && plant_id !== 0) {
+            return Response.redirect("/permissions?error=" + encodeURIComponent("Login permission must be global (plant_id=0)"), 303);
+          }
+
+          // Validate: global_admin permission must be global (plant_id = 0)
+          if (permission === "global_admin" && plant_id !== 0) {
+            return Response.redirect("/permissions?error=" + encodeURIComponent("global_admin permission must be global (plant_id=0)"), 303);
           }
 
           await pool.query(
-            `INSERT INTO \`core\`.\`user_permissions\` 
-             (user_id, access_key, value, comment, start_date, end_date)
-             VALUES (?, ?, ?, ?, '1970-01-01', '2099-12-31')`,
-            [user_id, access_key, value, comment]
+            `INSERT INTO it_user_permissions 
+             (user_id, plant_id, permission, role, comment)
+             VALUES (?, ?, ?, ?, ?)`,
+            [user_id, plant_id, access_key, value, comment]
           );
 
           logger.info("Permission added", { traceId, user_id, access_key, value });
@@ -412,7 +683,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return Response.redirect("/permissions?error=" + encodeURIComponent("Invalid permission ID"), 303);
           }
 
-          await pool.query("DELETE FROM `core`.`user_permissions` WHERE id = ?", [permission_id]);
+          await pool.query("DELETE FROM it_user_permissions WHERE id = ?", [permission_id]);
 
           logger.info("Permission deleted", { traceId, permission_id });
           return Response.redirect("/permissions?success=" + encodeURIComponent("Permission deleted successfully"), 303);
@@ -426,8 +697,195 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
+    // Approvals page - GET
+    if (path === "/approvals" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/approvals", 302);
+      }
+
+      if (!isAdmin) {
+        return new Response(
+          approvalsPage(
+            { pendingRequests: [], processedRequests: [], totalProcessed: 0, currentPage: 1, totalPages: 1 },
+            false,
+            "",
+            ""
+          ),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
+      const success = url.searchParams.get("success") || "";
+      const error = url.searchParams.get("error") || "";
+      const page = parseInt(url.searchParams.get("page") || "1", 10);
+      const pageSize = 20;
+
+      try {
+        // Get pending requests (always at top, no pagination)
+        const [pendingRequests] = await pool.query<RowDataPacket[]>(
+          `SELECT r.*, 
+                  CONCAT(emp1.first_name, ' ', emp1.last_name) as created_by_name,
+                  CONCAT(emp2.first_name, ' ', emp2.last_name) as reviewed_by_name
+           FROM it_request r
+           LEFT JOIN it_employees_list emp1 ON r.created_by = emp1.employee_no
+           LEFT JOIN it_employees_list emp2 ON r.reviewed_by = emp2.employee_no
+           WHERE r.status = 'pending'
+           ORDER BY r.created DESC`
+        );
+
+        // Get processed requests (approved/rejected) with pagination
+        const [processedCount] = await pool.query<RowDataPacket[]>(
+          `SELECT COUNT(*) as total FROM it_request WHERE status IN ('approved', 'rejected')`
+        );
+        const totalProcessed = processedCount[0]?.total || 0;
+        const totalPages = Math.ceil(totalProcessed / pageSize);
+        const offset = (page - 1) * pageSize;
+
+        const [processedRequests] = await pool.query<RowDataPacket[]>(
+          `SELECT r.*, 
+                  CONCAT(emp1.first_name, ' ', emp1.last_name) as created_by_name,
+                  CONCAT(emp2.first_name, ' ', emp2.last_name) as reviewed_by_name,
+                  DATE_FORMAT(r.reviewed_at, '%Y-%m-%d %H:%i:%s') as reviewed_at
+           FROM it_request r
+           LEFT JOIN it_employees_list emp1 ON r.created_by = emp1.employee_no
+           LEFT JOIN it_employees_list emp2 ON r.reviewed_by = emp2.employee_no
+           WHERE r.status IN ('approved', 'rejected')
+           ORDER BY r.reviewed_at DESC, r.created DESC
+           LIMIT ? OFFSET ?`,
+          [pageSize, offset]
+        );
+
+        return new Response(
+          approvalsPage(
+            {
+              pendingRequests: pendingRequests as any[],
+              processedRequests: processedRequests as any[],
+              totalProcessed: Number(totalProcessed),
+              currentPage: page,
+              totalPages: totalPages,
+            },
+            isAdmin,
+            success,
+            error
+          ),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      } catch (err) {
+        logger.error("Error loading approvals page", err, { traceId });
+        return new Response(
+          approvalsPage(
+            { pendingRequests: [], processedRequests: [], totalProcessed: 0, currentPage: 1, totalPages: 1 },
+            false,
+            "",
+            "Error loading approval requests"
+          ),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+    }
+
+    // Approvals page - POST (approve/reject)
+    if (path === "/approvals" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/approvals", 302);
+      }
+
+      if (!isAdmin) {
+        return Response.redirect("/approvals?error=" + encodeURIComponent("You do not have admin permission"), 303);
+      }
+
+      const formData = await req.formData();
+      const action = formData.get("action")?.toString();
+      const requestId = parseInt(formData.get("request_id")?.toString() || "0");
+      const rejectionReason = formData.get("rejection_reason")?.toString() || "";
+
+      if (!requestId) {
+        return Response.redirect("/approvals?error=" + encodeURIComponent("Invalid request ID"), 303);
+      }
+
+      const employeeNo = await getEmployeeNo(session.username, pool);
+      if (!employeeNo) {
+        return Response.redirect("/approvals?error=" + encodeURIComponent("Unable to identify reviewer"), 303);
+      }
+
+      try {
+        if (action === "approve") {
+          // Get the request to execute the action
+          const [requests] = await pool.query<RowDataPacket[]>(
+            "SELECT * FROM it_request WHERE id = ? AND status = 'pending'",
+            [requestId]
+          );
+
+          if (requests.length === 0) {
+            return Response.redirect("/approvals?error=" + encodeURIComponent("Request not found or already processed"), 303);
+          }
+
+          const request = requests[0];
+          const actionData = JSON.parse(request.action_data);
+
+          // Execute the approved action based on action_type
+          await executeApprovedAction(request.action_type, actionData, pool);
+
+          // Update request status
+          await pool.query(
+            `UPDATE it_request 
+             SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP 
+             WHERE id = ?`,
+            [employeeNo, requestId]
+          );
+
+          logger.info("Request approved", { traceId, requestId, reviewer: employeeNo });
+          return Response.redirect("/approvals?success=" + encodeURIComponent("Request approved and action executed"), 303);
+        } else if (action === "reject") {
+          if (!rejectionReason) {
+            return Response.redirect("/approvals?error=" + encodeURIComponent("Rejection reason is required"), 303);
+          }
+
+          await pool.query(
+            `UPDATE it_request 
+             SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, rejection_reason = ? 
+             WHERE id = ?`,
+            [employeeNo, rejectionReason, requestId]
+          );
+
+          logger.info("Request rejected", { traceId, requestId, reviewer: employeeNo });
+          return Response.redirect("/approvals?success=" + encodeURIComponent("Request rejected"), 303);
+        } else {
+          return Response.redirect("/approvals?error=" + encodeURIComponent("Invalid action"), 303);
+        }
+      } catch (err) {
+        logger.error("Error processing approval action", err, { traceId, action, requestId });
+        const errorMessage = err instanceof Error ? err.message : "An error occurred";
+        return Response.redirect("/approvals?error=" + encodeURIComponent(errorMessage), 303);
+      }
+    }
+
     // Home / Search page
     if (path === "/" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/", 302);
+      }
+
+      // Check search permission
+      const hasSearch = await hasSearchPermission(session.username, pool);
+      if (!hasSearch) {
+        return new Response(
+          searchPage("", null, "You do not have permission to access the search page. Please contact your administrator.", isAdmin),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
       const query = url.searchParams.get("q") || url.searchParams.get("serial") || "";
       
       if (query && query.trim()) {
@@ -522,6 +980,12 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Add equipment page - GET
     if (path === "/add" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/add", 302);
+      }
+
+      // Allow viewing the add page even without permission - submission will require approval
       const serial = url.searchParams.get("serial") || "";
       const addData = await getAddData(serial);
       
@@ -532,9 +996,14 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Add equipment page - POST
     if (path === "/add" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/add", 302);
+      }
+
       const formData = await req.formData();
       
-      // Validate input
+      // Extract form data first
       const rawData = {
         service_tag: formData.get("service_tag") as string,
         vendor_id: formData.get("vendor_id") || null,
@@ -551,6 +1020,52 @@ async function handleRequest(req: Request): Promise<Response> {
         comment: formData.get("comment") || null,
         inventory_period_id: formData.get("inventory_period_id") || null,
       };
+
+      // Check add equipment permission
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const hasAdd = await hasAddEquipmentPermission(session.username, pool, userPlantId);
+      if (!hasAdd) {
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const clientIp = getClientIp(req);
+        
+        if (!employeeNo) {
+          const addData = await getAddData(rawData.service_tag || "");
+          return new Response(
+            addPage(addData, false, "Unable to create approval request. Please contact your administrator.", isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        }
+
+        // Create approval request
+        const requestId = await createApprovalRequest(
+          employeeNo,
+          userPlantId ? `${userPlantId}_add` : "add",
+          "add_equipment",
+          rawData,
+          clientIp,
+          pool
+        );
+
+        if (requestId) {
+          const addData = await getAddData(rawData.service_tag || "");
+          return new Response(
+            addPage(addData, false, `Approval request created (ID: ${requestId})`, isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        } else {
+          const addData = await getAddData(rawData.service_tag || "");
+          return new Response(
+            addPage(addData, false, "Failed to create approval request. Please contact your administrator.", isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        }
+      }
 
       try {
         const validated = equipmentAddSchema.parse(rawData);
@@ -618,6 +1133,28 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Edit page - GET
     if (path.match(/^\/edit\/\d+$/) && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        const id = parseInt(path.split("/")[2]);
+        return Response.redirect(`/login?redirect=/edit/${id}`, 302);
+      }
+
+      // Check edit equipment permission
+      const hasEditPermission = await hasEditEquipmentPermission(session.username, pool);
+      if (!hasEditPermission) {
+        const id = parseInt(path.split("/")[2]);
+        const auditData = await getAuditData(id);
+        if (!auditData) {
+          return new Response("Equipment not found", { status: 404 });
+        }
+        return new Response(
+          auditPage(auditData, false, "You do not have permission to edit equipment. Please contact your administrator.", isAdmin),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
       const id = parseInt(path.split("/")[2]);
       const success = url.searchParams.get("success") === "1";
       
@@ -633,8 +1170,86 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Edit page - POST (save)
     if (path.match(/^\/edit\/\d+$/) && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        const id = parseInt(path.split("/")[2]);
+        return Response.redirect(`/login?redirect=/edit/${id}`, 302);
+      }
+
       const id = parseInt(path.split("/")[2]);
       const formData = await req.formData();
+      
+      // Check edit equipment permission
+      const hasEditPermissionPost = await hasEditEquipmentPermission(session.username, pool);
+      if (!hasEditPermissionPost) {
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const clientIp = getClientIp(req);
+        
+        if (!employeeNo) {
+          const auditData = await getAuditData(id);
+          if (!auditData) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(
+            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        }
+
+        // Extract form data for approval request
+        const rawData = {
+          id,
+          model_id: formData.get("model_id") || null,
+          equipment_sub_area_id: formData.get("equipment_sub_area_id") || null,
+          assigned_to: formData.get("assigned_to") || null,
+          teamviewer: formData.get("teamviewer") || null,
+          comment: formData.get("comment") || null,
+          inventory_period_id: formData.get("inventory_period_id") || null,
+          vendor_id: formData.get("vendor_id") || null,
+          supplier_id: formData.get("supplier_id") || null,
+          purchase_date: formData.get("purchase_date") || null,
+          warranty_expiry_date: formData.get("warranty_expiry_date") || null,
+          cerf: formData.get("cerf") || "0",
+          ip: formData.get("ip") || null,
+          mac_addresses: formData.get("mac_addresses") || null,
+        };
+
+        // Create approval request
+        const requestId = await createApprovalRequest(
+          employeeNo,
+          "edit",
+          "edit_equipment",
+          rawData,
+          clientIp,
+          pool
+        );
+
+        if (requestId) {
+          const auditData = await getAuditData(id);
+          if (!auditData) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(
+            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        } else {
+          const auditData = await getAuditData(id);
+          if (!auditData) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(
+            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        }
+      }
       
       // Extract and validate form values
       const action = formData.get("action")?.toString();
@@ -658,6 +1273,60 @@ async function handleRequest(req: Request): Promise<Response> {
         repair_note: formData.get("repair_note") || null,
         repair_physical_location: formData.get("repair_physical_location") || null,
       };
+
+      // Check edit equipment permission
+      const hasEditPermission = await hasEditEquipmentPermission(session.username, pool);
+      if (!hasEditPermission) {
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const clientIp = getClientIp(req);
+        
+        if (!employeeNo) {
+          const auditData = await getAuditData(id);
+          if (!auditData) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(
+            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        }
+
+        // Create approval request with all form data
+        const requestId = await createApprovalRequest(
+          employeeNo,
+          "edit",
+          "edit_equipment",
+          { id, ...rawData },
+          clientIp,
+          pool
+        );
+
+        if (requestId) {
+          const auditData = await getAuditData(id);
+          if (!auditData) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(
+            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        } else {
+          const auditData = await getAuditData(id);
+          if (!auditData) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(
+            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        }
+      }
 
       try {
         const validated = equipmentEditSchema.parse(rawData);
@@ -815,8 +1484,62 @@ async function handleRequest(req: Request): Promise<Response> {
           is_written_off || null
         ]);
 
-        // If "send_to_repair" action, redirect to repairs page
+        // If "send_to_repair" action, check permission and redirect to repairs page
         if (action === "send_to_repair") {
+          // Check if user has permission to send equipment to repair
+          const userPlantId = await getUserPlantId(session.username, pool);
+          const hasSendRepair = await hasRepairsSendPermission(session.username, pool, userPlantId);
+          if (!hasSendRepair) {
+            const employeeNo = await getEmployeeNo(session.username, pool);
+            const clientIp = getClientIp(req);
+            
+            if (!employeeNo) {
+              const auditData = await getAuditData(id);
+              if (!auditData) {
+                return new Response("Equipment not found", { status: 404 });
+              }
+              return new Response(
+                auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin),
+                {
+                  headers: { "Content-Type": "text/html" },
+                }
+              );
+            }
+
+            // Create approval request
+            const requestId = await createApprovalRequest(
+              employeeNo,
+              userPlantId ? `${userPlantId}_repairs_send` : "repairs_send",
+              "send_to_repair",
+              { id, ...rawData },
+              clientIp,
+              pool
+            );
+
+            if (requestId) {
+              const auditData = await getAuditData(id);
+              if (!auditData) {
+                return new Response("Equipment not found", { status: 404 });
+              }
+              return new Response(
+                auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin),
+                {
+                  headers: { "Content-Type": "text/html" },
+                }
+              );
+            } else {
+              const auditData = await getAuditData(id);
+              if (!auditData) {
+                return new Response("Equipment not found", { status: 404 });
+              }
+              return new Response(
+                auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin),
+                {
+                  headers: { "Content-Type": "text/html" },
+                }
+              );
+            }
+          }
           return Response.redirect(`${url.origin}/repairs?success=${encodeURIComponent("Equipment sent to repair")}`, 303);
         }
 
@@ -836,8 +1559,27 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Locations management - GET
     if (path === "/locations" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/locations", 302);
+      }
+
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
+
+      // Check view locations permission
+      const hasView = await hasLocationsViewPermission(session.username, pool);
+      if (!hasView) {
+        // Show success feedback even for users without view permission; keep gentle reminder
+        const fallbackError = success ? "" : "Actions require approval.";
+        return new Response(
+          locationsPage(await getLocationsData(), success, error || fallbackError, isAdmin),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
       const data = await getLocationsData();
       return new Response(locationsPage(data, success, error, isAdmin), {
         headers: { "Content-Type": "text/html" },
@@ -846,6 +1588,12 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Locations management - POST (add/edit/activate/deactivate)
     if (path === "/locations" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/locations", 302);
+      }
+
+      // Extract form data first
       const form = await req.formData();
       const rawData = {
         type: (form.get("type") || "").toString(),
@@ -881,7 +1629,36 @@ async function handleRequest(req: Request): Promise<Response> {
 
         const { table, parent } = map[type];
 
+        // Check granular permissions based on action and create approval request if needed
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const clientIp = getClientIp(req);
+        const userPlantId = await getUserPlantId(session.username, pool);
+
         if (action === "add") {
+          const hasAdd = await hasLocationsAddPermission(session.username, pool, userPlantId);
+          if (!hasAdd) {
+            if (!employeeNo) {
+              return Response.redirect("/locations?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+            }
+            // Create approval request - only include parent_id if it's not null
+            const actionData: Record<string, unknown> = { type, name };
+            if (parent_id !== null) {
+              actionData.parent_id = parent_id;
+            }
+            const requestId = await createApprovalRequest(
+              employeeNo,
+              userPlantId ? `${userPlantId}_locations_add` : "locations_add",
+              "add_location",
+              actionData,
+              clientIp,
+              pool
+            );
+            if (requestId) {
+              return Response.redirect("/locations?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+            } else {
+              return Response.redirect("/locations?error=" + encodeURIComponent("Failed to create approval request"), 303);
+            }
+          }
           if (!name) throw new Error("Name is required");
           if (parent && !parent_id) throw new Error("Parent is required");
           const cols = ["name", "status"];
@@ -896,10 +1673,50 @@ async function handleRequest(req: Request): Promise<Response> {
             vals
           );
         } else if (action === "edit") {
+          const hasEdit = await hasLocationsEditPermission(session.username, pool, userPlantId);
+          if (!hasEdit) {
+            if (!employeeNo) {
+              return Response.redirect("/locations?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+            }
+            // Create approval request
+            const requestId = await createApprovalRequest(
+              employeeNo,
+              userPlantId ? `${userPlantId}_locations_edit` : "locations_edit",
+              "edit_location",
+              { type, id, name },
+              clientIp,
+              pool
+            );
+            if (requestId) {
+              return Response.redirect("/locations?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+            } else {
+              return Response.redirect("/locations?error=" + encodeURIComponent("Failed to create approval request"), 303);
+            }
+          }
           if (!id) throw new Error("ID is required");
           if (!name) throw new Error("Name is required");
           await pool.query(`UPDATE ${table} SET name = ? WHERE id = ?`, [name, id]);
         } else if (action === "deactivate" || action === "activate") {
+          const hasDelete = await hasLocationsDeletePermission(session.username, pool, userPlantId);
+          if (!hasDelete) {
+            if (!employeeNo) {
+              return Response.redirect("/locations?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+            }
+            // Create approval request
+            const requestId = await createApprovalRequest(
+              employeeNo,
+              userPlantId ? `${userPlantId}_locations_delete` : "locations_delete",
+              action === "activate" ? "activate_location" : "deactivate_location",
+              { type, id, action },
+              clientIp,
+              pool
+            );
+            if (requestId) {
+              return Response.redirect("/locations?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+            } else {
+              return Response.redirect("/locations?error=" + encodeURIComponent("Failed to create approval request"), 303);
+            }
+          }
           if (!id) throw new Error("ID is required");
           const status = action === "activate" ? 1 : 0;
           await pool.query(`UPDATE ${table} SET status = ? WHERE id = ?`, [status, id]);
@@ -916,6 +1733,22 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Vendors & Suppliers management - GET
     if (path === "/vendors" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/vendors", 302);
+      }
+
+      // Check view vendors permission
+      const hasView = await hasVendorsViewPermission(session.username, pool);
+      if (!hasView) {
+        return new Response(
+          vendorsPage(await getVendorsAndSuppliersData(), "", "Actions require approval.", isAdmin),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getVendorsAndSuppliersData();
@@ -926,6 +1759,17 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Vendors & Suppliers management - POST (add/edit/delete)
     if (path === "/vendors" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/vendors", 302);
+      }
+
+      // Check manage vendors permission
+      const hasManageVendors = await hasManageVendorsPermission(session.username, pool);
+      if (!hasManageVendors) {
+        return Response.redirect("/vendors?error=" + encodeURIComponent("You do not have permission to manage vendors/suppliers"), 303);
+      }
+
       const form = await req.formData();
       const entity = (form.get("entity") || "vendor").toString();
       const rawCommon = {
@@ -957,13 +1801,55 @@ async function handleRequest(req: Request): Promise<Response> {
           const sap_vendor_no = validated.sap_vendor_no ? Number(validated.sap_vendor_no) : null;
           const website = validated.website || null;
 
+          const employeeNo = await getEmployeeNo(session.username, pool);
+          const clientIp = getClientIp(req);
+
           if (action === "add") {
+            const userPlantId = await getUserPlantId(session.username, pool);
+            const hasAdd = await hasVendorsAddPermission(session.username, pool, userPlantId);
+            if (!hasAdd) {
+              if (!employeeNo) {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                userPlantId ? `${userPlantId}_vendors_add` : "vendors_add",
+                "add_supplier",
+                { entity: "supplier", name, email, phone_number, address, representative_name, sap_vendor_no, website },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query(
               `INSERT INTO it_equipment_supplier (name, email, phone_number, address, representative_name, sap_vendor_no, website)
                VALUES (?, ?, ?, ?, ?, ?, ?)`,
               [name!, email, phone_number, address, representative_name, sap_vendor_no, website]
             );
           } else if (action === "edit") {
+            const hasEdit = await hasVendorsEditPermission(session.username, pool);
+            if (!hasEdit) {
+              if (!employeeNo) {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "vendors_edit",
+                "edit_supplier",
+                { entity: "supplier", id, name, email, phone_number, address, representative_name, sap_vendor_no, website },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query(
               `UPDATE it_equipment_supplier 
                  SET name = ?, email = ?, phone_number = ?, address = ?, representative_name = ?, sap_vendor_no = ?, website = ?
@@ -971,6 +1857,25 @@ async function handleRequest(req: Request): Promise<Response> {
               [name!, email, phone_number, address, representative_name, sap_vendor_no, website, id!]
             );
           } else if (action === "delete") {
+            const hasDelete = await hasVendorsDeletePermission(session.username, pool);
+            if (!hasDelete) {
+              if (!employeeNo) {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "vendors_delete",
+                "delete_supplier",
+                { entity: "supplier", id },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             // Check if supplier is in use
             const [equipment] = await pool.query<RowDataPacket[]>(
               "SELECT COUNT(*) as count FROM it_equipment WHERE supplier_id = ?",
@@ -989,14 +1894,75 @@ async function handleRequest(req: Request): Promise<Response> {
           const id = validated.id ? Number(validated.id) : null;
           const name = validated.name;
 
+          const employeeNo = await getEmployeeNo(session.username, pool);
+          const clientIp = getClientIp(req);
+
           if (action === "add") {
+            const userPlantId = await getUserPlantId(session.username, pool);
+            const hasAdd = await hasVendorsAddPermission(session.username, pool, userPlantId);
+            if (!hasAdd) {
+              if (!employeeNo) {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                userPlantId ? `${userPlantId}_vendors_add` : "vendors_add",
+                "add_vendor",
+                { entity: "vendor", name },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query(
               "INSERT INTO it_equipment_vendor (name) VALUES (?)",
               [name!]
             );
           } else if (action === "edit") {
+            const hasEdit = await hasVendorsEditPermission(session.username, pool);
+            if (!hasEdit) {
+              if (!employeeNo) {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "vendors_edit",
+                "edit_vendor",
+                { entity: "vendor", id, name },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query("UPDATE it_equipment_vendor SET name = ? WHERE id = ?", [name!, id!]);
           } else if (action === "delete") {
+            const hasDelete = await hasVendorsDeletePermission(session.username, pool);
+            if (!hasDelete) {
+              if (!employeeNo) {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "vendors_delete",
+                "delete_vendor",
+                { entity: "vendor", id },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             // Check if vendor is in use
             const [equipment] = await pool.query<RowDataPacket[]>(
               "SELECT COUNT(*) as count FROM it_equipment WHERE vendor_id = ?",
@@ -1023,6 +1989,22 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Types management - GET
     if (path === "/types" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/types", 302);
+      }
+
+      // Check view types permission
+      const hasView = await hasTypesViewPermission(session.username, pool);
+      if (!hasView) {
+        return new Response(
+          typesPage(await getTypesData(), "", "You do not have permission to view types/configurations. Please contact your administrator.", isAdmin),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getTypesData();
@@ -1033,6 +2015,17 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Types management - POST (add/edit/activate/deactivate)
     if (path === "/types" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/types", 302);
+      }
+
+      // Check manage types permission
+      const hasManageTypes = await hasManageTypesPermission(session.username, pool);
+      if (!hasManageTypes) {
+        return Response.redirect("/types?error=" + encodeURIComponent("You do not have permission to manage types/configurations"), 303);
+      }
+
       const form = await req.formData();
       const rawData = {
         type: (form.get("type") || "").toString(),
@@ -1049,15 +2042,76 @@ async function handleRequest(req: Request): Promise<Response> {
         const name = validated.name;
         const parent_id = validated.parent_id ? Number(validated.parent_id) : null;
 
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const clientIp = getClientIp(req);
+
         if (validated.type === "type") {
           if (action === "add") {
+            const userPlantId = await getUserPlantId(session.username, pool);
+            const hasAdd = await hasTypesAddPermission(session.username, pool, userPlantId);
+            if (!hasAdd) {
+              if (!employeeNo) {
+                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                userPlantId ? `${userPlantId}_types_add` : "types_add",
+                "add_type",
+                { type: "type", name },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query(
               "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)",
               [name!]
             );
           } else if (action === "edit") {
+            const hasEdit = await hasTypesEditPermission(session.username, pool);
+            if (!hasEdit) {
+              if (!employeeNo) {
+                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "types_edit",
+                "edit_type",
+                { type: "type", id, name },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query("UPDATE it_equipment_type SET type_name = ? WHERE id = ?", [name!, id!]);
           } else if (action === "deactivate" || action === "activate") {
+            const hasDelete = await hasTypesDeletePermission(session.username, pool);
+            if (!hasDelete) {
+              if (!employeeNo) {
+                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "types_delete",
+                action === "activate" ? "activate_type" : "deactivate_type",
+                { type: "type", id, action },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             const status = action === "activate" ? 1 : 0;
             await pool.query("UPDATE it_equipment_type SET status = ? WHERE id = ?", [status, id!]);
           } else {
@@ -1065,13 +2119,71 @@ async function handleRequest(req: Request): Promise<Response> {
           }
         } else if (validated.type === "product-line") {
           if (action === "add") {
+            const userPlantId = await getUserPlantId(session.username, pool);
+            const hasAdd = await hasTypesAddPermission(session.username, pool, userPlantId);
+            if (!hasAdd) {
+              if (!employeeNo) {
+                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                userPlantId ? `${userPlantId}_types_add` : "types_add",
+                "add_product_line",
+                { type: "product-line", name, parent_id },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query(
               "INSERT INTO it_equipment_product_line (name, type_id, status) VALUES (?, ?, 1)",
               [name!, parent_id!]
             );
           } else if (action === "edit") {
+            const hasEdit = await hasTypesEditPermission(session.username, pool);
+            if (!hasEdit) {
+              if (!employeeNo) {
+                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "types_edit",
+                "edit_product_line",
+                { type: "product-line", id, name },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query("UPDATE it_equipment_product_line SET name = ? WHERE id = ?", [name!, id!]);
           } else if (action === "deactivate" || action === "activate") {
+            const hasDelete = await hasTypesDeletePermission(session.username, pool);
+            if (!hasDelete) {
+              if (!employeeNo) {
+                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "types_delete",
+                action === "activate" ? "activate_product_line" : "deactivate_product_line",
+                { type: "product-line", id, action },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             const status = action === "activate" ? 1 : 0;
             await pool.query("UPDATE it_equipment_product_line SET status = ? WHERE id = ?", [status, id!]);
           } else {
@@ -1079,13 +2191,70 @@ async function handleRequest(req: Request): Promise<Response> {
           }
         } else if (validated.type === "model") {
           if (action === "add") {
+            const hasAdd = await hasTypesAddPermission(session.username, pool);
+            if (!hasAdd) {
+              if (!employeeNo) {
+                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "types_add",
+                "add_model",
+                { type: "model", name, parent_id },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query(
               "INSERT INTO it_equipment_model (name, product_line_id, status) VALUES (?, ?, 1)",
               [name!, parent_id!]
             );
           } else if (action === "edit") {
+            const hasEdit = await hasTypesEditPermission(session.username, pool);
+            if (!hasEdit) {
+              if (!employeeNo) {
+                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "types_edit",
+                "edit_model",
+                { type: "model", id, name },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             await pool.query("UPDATE it_equipment_model SET name = ? WHERE id = ?", [name!, id!]);
           } else if (action === "deactivate" || action === "activate") {
+            const hasDelete = await hasTypesDeletePermission(session.username, pool);
+            if (!hasDelete) {
+              if (!employeeNo) {
+                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+              }
+              const requestId = await createApprovalRequest(
+                employeeNo,
+                "types_delete",
+                action === "activate" ? "activate_model" : "deactivate_model",
+                { type: "model", id, action },
+                clientIp,
+                pool
+              );
+              if (requestId) {
+                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+              } else {
+                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+              }
+            }
             const status = action === "activate" ? 1 : 0;
             await pool.query("UPDATE it_equipment_model SET status = ? WHERE id = ?", [status, id!]);
           } else {
@@ -1105,6 +2274,22 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Write-Off Reasons management - GET
     if (path === "/write-off-reasons" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/write-off-reasons", 302);
+      }
+
+      // Check view write-off reasons permission
+      const hasView = await hasWriteOffReasonsViewPermission(session.username, pool);
+      if (!hasView) {
+        return new Response(
+          writeOffReasonsPage(await getWriteOffReasonsData(), "", "Actions require approval.", isAdmin),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getWriteOffReasonsData();
@@ -1115,6 +2300,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Write-Off Reasons management - POST (add/edit/delete)
     if (path === "/write-off-reasons" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/write-off-reasons", 302);
+      }
+
       const form = await req.formData();
       const rawData = {
         action: (form.get("action") || "").toString(),
@@ -1129,16 +2319,98 @@ async function handleRequest(req: Request): Promise<Response> {
         const reason = validated.reason;
 
         if (action === "add") {
+          const userPlantId = await getUserPlantId(session.username, pool);
+          const hasAdd = await hasWriteOffReasonsAddPermission(session.username, pool, userPlantId);
+          if (!hasAdd) {
+            const employeeNo = await getEmployeeNo(session.username, pool);
+            const clientIp = getClientIp(req);
+            
+            if (!employeeNo) {
+              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+            }
+            
+            const requestId = await createApprovalRequest(
+              employeeNo,
+              userPlantId ? `${userPlantId}_write_off_reasons_add` : "write_off_reasons_add",
+              "add_write_off_reason",
+              { reason },
+              clientIp,
+              pool
+            );
+            
+            if (requestId) {
+              return Response.redirect("/write-off-reasons?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+            } else {
+              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Failed to create approval request"), 303);
+            }
+          }
           if (!reason) throw new Error("Reason is required");
           await pool.query(
             "INSERT INTO it_equipment_write_off_reason (reason) VALUES (?)",
             [reason]
           );
         } else if (action === "edit") {
+          const hasEdit = await hasWriteOffReasonsEditPermission(session.username, pool);
+          if (!hasEdit) {
+            const employeeNo = await getEmployeeNo(session.username, pool);
+            const clientIp = getClientIp(req);
+
+            if (!employeeNo) {
+              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+            }
+
+            const requestId = await createApprovalRequest(
+              employeeNo,
+              "write_off_reasons_edit",
+              "edit_write_off_reason",
+              { id, reason },
+              clientIp,
+              pool
+            );
+
+            if (requestId) {
+              return Response.redirect("/write-off-reasons?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+            } else {
+              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+            }
+          }
           if (!id) throw new Error("ID is required");
           if (!reason) throw new Error("Reason is required");
           await pool.query("UPDATE it_equipment_write_off_reason SET reason = ? WHERE id = ?", [reason, id]);
         } else if (action === "delete") {
+          const hasDelete = await hasWriteOffReasonsDeletePermission(session.username, pool);
+          if (!hasDelete) {
+            const employeeNo = await getEmployeeNo(session.username, pool);
+            const clientIp = getClientIp(req);
+
+            if (!employeeNo) {
+              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+            }
+
+            // Check if reason is in use first
+            const [inUse] = await pool.query<RowDataPacket[]>(
+              "SELECT COUNT(*) as count FROM it_equipment WHERE is_written_off = ?",
+              [id]
+            );
+            if (inUse[0].count > 0) {
+              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Cannot delete write-off reason that is in use"), 303);
+            }
+
+            const requestId = await createApprovalRequest(
+              employeeNo,
+              "write_off_reasons_delete",
+              "delete_write_off_reason",
+              { id },
+              clientIp,
+              pool
+            );
+
+            if (requestId) {
+              return Response.redirect("/write-off-reasons?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+            } else {
+              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+            }
+          }
           if (!id) throw new Error("ID is required");
           // Check if reason is in use
           const [inUse] = await pool.query<RowDataPacket[]>(
@@ -1163,6 +2435,21 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Repair Tracking - GET
     if (path === "/repairs" && req.method === "GET") {
+      // Repairs page is public (no login required), but check permission if logged in
+      const session = getSessionFromRequest(req);
+      if (session) {
+        // Check repairs permission for logged-in users
+        const hasRepairs = await hasRepairsPermission(session.username, pool);
+        if (!hasRepairs) {
+          return new Response(
+            repairsPage(await getRepairsData(), "", "You do not have permission to view repairs. Please contact your administrator.", isAdmin),
+            {
+              headers: { "Content-Type": "text/html" },
+            }
+          );
+        }
+      }
+
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getRepairsData();
@@ -1173,6 +2460,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Repair Tracking - POST (status changes)
     if (path === "/repairs" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/repairs", 302);
+      }
+
       const form = await req.formData();
       const rawData = {
         action: (form.get("action") || "").toString(),
@@ -1187,17 +2479,58 @@ async function handleRequest(req: Request): Promise<Response> {
           throw new Error("Equipment ID is required");
         }
 
+        // Determine required permission based on action
+        let permissionRequired = "repairs";
+        let actionType = "";
+        let hasPermission = false;
+
+        if (action === "mark_sent") {
+          hasPermission = await hasRepairsSendPermission(session.username, pool);
+          permissionRequired = "repairs_send";
+          actionType = "send_to_repair";
+        } else {
+          // mark_returned and mark_backup use general repairs permission
+          hasPermission = await hasRepairsPermission(session.username, pool);
+          actionType = action === "mark_returned" ? "return_from_repair" : "mark_backup";
+        }
+
+        // If no permission, create approval request
+        if (!hasPermission) {
+          const employeeNo = await getEmployeeNo(session.username, pool);
+          const clientIp = getClientIp(req);
+
+          if (!employeeNo) {
+            return Response.redirect("/repairs?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
+          }
+
+          const requestId = await createApprovalRequest(
+            employeeNo,
+            permissionRequired,
+            actionType,
+            { equipment_id: equipmentId },
+            clientIp,
+            pool
+          );
+
+          if (requestId) {
+            return Response.redirect("/repairs?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
+          } else {
+            return Response.redirect("/repairs?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
+          }
+        }
+
+        // User has permission, proceed with direct update
         if (action === "mark_sent") {
           await pool.query(
-            `UPDATE it_equipment 
-             SET repair_status = 'at_supplier', repair_sent_date = CURRENT_DATE 
+            `UPDATE it_equipment
+             SET repair_status = 'at_supplier', repair_sent_date = CURRENT_DATE
              WHERE id = ?`,
             [equipmentId]
           );
         } else if (action === "mark_returned") {
           await pool.query(
-            `UPDATE it_equipment 
-             SET repair_status = 'returned', repair_returned_date = CURRENT_DATE 
+            `UPDATE it_equipment
+             SET repair_status = 'returned', repair_returned_date = CURRENT_DATE
              WHERE id = ?`,
             [equipmentId]
           );
@@ -1207,23 +2540,23 @@ async function handleRequest(req: Request): Promise<Response> {
             `SELECT service_tag FROM it_equipment WHERE id = ?`,
             [equipmentId]
           );
-          
+
           if (equipment.length === 0) {
             throw new Error("Equipment not found");
           }
-          
+
           const service_tag = equipment[0].service_tag;
-          
+
           // Update equipment status and clear repair comment
           await pool.query(
-            `UPDATE it_equipment 
-             SET repair_status = 'in_backup', 
+            `UPDATE it_equipment
+             SET repair_status = 'in_backup',
                  repair_marked_backup_date = CURRENT_DATE,
                  repair_note = NULL
              WHERE id = ?`,
             [equipmentId]
           );
-          
+
           // Insert log entry with empty location and user
           await pool.query(
             `INSERT INTO it_equipment_log (
@@ -1402,6 +2735,14 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // API Routes for adding new items
     if (path.startsWith("/api/") && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Authentication required" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
       const body = await req.json();
       const apiType = path.replace("/api/", "");
 
@@ -1409,7 +2750,87 @@ async function handleRequest(req: Request): Promise<Response> {
         const validated = apiAddItemSchema.parse(body);
         const name = validated.name;
         const parent_id = validated.parent_id;
-        
+
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const clientIp = getClientIp(req);
+
+        let hasPermission = false;
+        let permissionRequired = "";
+        let actionType = "";
+        let actionData: Record<string, unknown> = { name };
+
+        if (parent_id !== undefined) {
+          actionData.parent_id = parent_id;
+        }
+
+        // Determine permission and action type based on API endpoint
+        switch (apiType) {
+          case "regions":
+          case "countries":
+          case "plants":
+          case "departments":
+          case "areas":
+          case "sub-areas":
+            permissionRequired = "locations_add";
+            actionType = `add_${apiType.slice(0, -1)}`; // remove 's' from plural
+            hasPermission = await hasLocationsAddPermission(session.username, pool);
+            break;
+          case "types":
+          case "product-lines":
+          case "models":
+            permissionRequired = "types_add";
+            actionType = `add_${apiType.replace("-", "_")}`;
+            hasPermission = await hasTypesAddPermission(session.username, pool);
+            break;
+          case "vendors":
+          case "suppliers":
+            permissionRequired = "vendors_add";
+            actionType = `add_${apiType.slice(0, -1)}`; // remove 's' from plural
+            hasPermission = await hasVendorsAddPermission(session.username, pool);
+            break;
+          default:
+            return new Response(JSON.stringify({ error: "Unknown API endpoint" }), {
+              status: 404,
+              headers: { "Content-Type": "application/json" },
+            });
+        }
+
+        // If no permission, create approval request
+        if (!hasPermission) {
+          if (!employeeNo) {
+            return new Response(JSON.stringify({ error: "Unable to create approval request. Please contact your administrator." }), {
+              status: 403,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          const requestId = await createApprovalRequest(
+            employeeNo,
+            permissionRequired,
+            actionType,
+            actionData,
+            clientIp,
+            pool
+          );
+
+          if (requestId) {
+            return new Response(JSON.stringify({
+              message: "Approval request created",
+              requestId,
+              status: "pending_approval"
+            }), {
+              status: 202,
+              headers: { "Content-Type": "application/json" },
+            });
+          } else {
+            return new Response(JSON.stringify({ error: "Failed to create approval request. Please contact your administrator." }), {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+        }
+
+        // User has permission, proceed with direct insert
         let result: ResultSetHeader;
 
         switch (apiType) {

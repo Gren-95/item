@@ -1,3 +1,77 @@
+/**
+ * Shared UI components for templates
+ */
+
+export function escapeHtml(str: string | null | undefined): string {
+  if (!str) return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/**
+ * Enhanced alert component that detects approval requests and styles them prominently
+ */
+export function renderAlert(success: string | boolean = "", error: string | null = ""): string {
+  // Handle boolean success (for add/audit pages)
+  const successMessage = typeof success === "boolean" ? (success ? "Operation completed successfully!" : "") : success;
+  
+  const isApprovalRequest = successMessage.toLowerCase().includes("approval") || 
+                           successMessage.toLowerCase().includes("request id");
+  
+  if (successMessage) {
+    return `<div class="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-700 rounded-lg p-4 mb-6 ${isApprovalRequest ? 'shadow-lg' : ''}">
+      <div class="flex items-start gap-3">
+        <div class="flex-shrink-0">
+          ${isApprovalRequest 
+            ? `<svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+               </svg>`
+            : `<svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+               </svg>`
+          }
+        </div>
+        <div class="flex-1">
+          <h3 class="font-semibold ${isApprovalRequest ? 'text-blue-900 dark:text-blue-200' : 'text-green-900 dark:text-green-200'} mb-1">
+            ${isApprovalRequest ? '📋 Approval Request Created' : '✅ Success'}
+          </h3>
+          <p class="${isApprovalRequest ? 'text-blue-800 dark:text-blue-300' : 'text-green-800 dark:text-green-300'}">
+            ${escapeHtml(successMessage)}
+          </p>
+          ${isApprovalRequest 
+            ? `<p class="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                 ⏳ Pending admin approval
+               </p>`
+            : ''
+          }
+        </div>
+      </div>
+    </div>`;
+  }
+  
+  if (error) {
+    return `<div class="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-lg p-4 mb-6">
+      <div class="flex items-start gap-3">
+        <div class="flex-shrink-0">
+          <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <h3 class="font-semibold text-red-900 dark:text-red-200 mb-1">⚠️ Error</h3>
+          <p class="text-red-800 dark:text-red-300">${escapeHtml(error)}</p>
+        </div>
+      </div>
+    </div>`;
+  }
+  
+  return "";
+}
+
 // Shared modal and script components
 
 export function getModalHtml(): string {

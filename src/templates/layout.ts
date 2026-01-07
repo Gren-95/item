@@ -26,36 +26,32 @@ export function layout(title: string, content: string, isAdmin: boolean = false)
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
   <nav class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors duration-200">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="w-full px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between h-16 items-center">
-        <div class="flex items-center space-x-3 relative">
-          <div class="flex items-center">
-            <button id="menu-toggle" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Toggle navigation">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-              </svg>
-            </button>
-            <div id="nav-links" class="hidden flex-col absolute left-0 top-12 bg-white dark:bg-gray-800 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2 min-w-[160px] z-50 transition-colors">
-              <a href="/" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Search</a>
-              <a href="/locations" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Locations</a>
-              <a href="/types" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Configurations</a>
-              <a href="/vendors" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Providers</a>
-              <a href="/write-off-reasons" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Write-Off Reasons</a>
-              <a href="/repairs" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Repair Tracking</a>
-              <div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
-              <a href="/change-password" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Change Password</a>
-              ${isAdmin 
-                ? '<a href="/permissions" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">User Permissions</a>'
-                : '<span class="block text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50 font-medium">User Permissions</span>'
-              }
-            </div>
-          </div>
-          <div class="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
-            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+        <div class="flex items-center space-x-4 relative">
+          <button id="menu-toggle" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Toggle navigation">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
+          </button>
+          <div id="nav-links" class="hidden flex-col absolute left-0 top-12 bg-white dark:bg-gray-800 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2 min-w-[160px] z-50 transition-colors">
+            <a href="/" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Search</a>
+            <a href="/locations" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Locations</a>
+            <a href="/types" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Configurations</a>
+            <a href="/vendors" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Providers</a>
+            <a href="/write-off-reasons" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Edit Write-Off Reasons</a>
+            <a href="/repairs" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Repair Tracking</a>
+            <div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+            <a href="/change-password" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">Change Password</a>
+            ${isAdmin 
+              ? '<a href="/permissions" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">User Permissions</a>'
+              : '<span class="block text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50 font-medium">User Permissions</span>'
+            }
           </div>
-          <a href="/" class="text-xl font-bold text-gray-900 dark:text-white transition-colors">IT Equipment Management</a>
+          <div class="h-8 w-px bg-gray-300 dark:bg-gray-600"></div>
+          <a href="/" class="text-xl font-semibold text-gray-900 dark:text-white transition-colors hover:text-blue-600 dark:hover:text-blue-400">
+            ITEM
+          </a>
         </div>
         <div class="flex items-center gap-2">
           <a href="/logout" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Logout" title="Logout">
@@ -103,7 +99,7 @@ export function layout(title: string, content: string, isAdmin: boolean = false)
 
   <footer class="border-t border-gray-200 dark:border-gray-700 mt-auto transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-      <p class="text-center text-gray-500 dark:text-gray-400 text-sm transition-colors">Equipment Audit System</p>
+      <p class="text-center text-gray-500 dark:text-gray-400 text-sm transition-colors">ITEM - IT Equipment Management</p>
     </div>
   </footer>
 
