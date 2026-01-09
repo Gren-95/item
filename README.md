@@ -69,6 +69,32 @@ docker compose down
 docker compose exec app bun test
 ```
 
+6. Import Mock Data (Optional)
+
+For testing and development, you can import realistic mock data:
+
+```bash
+# Import mock data
+docker compose exec app bun run import-mock-data
+
+# Preview what would be imported (dry run)
+docker compose exec app bun run import-mock-data --dry-run
+
+# Clear existing data before importing
+docker compose exec app bun run import-mock-data --clear
+```
+
+The mock data includes:
+- Location hierarchy (regions, countries, plants, departments, areas, sub-areas)
+- Equipment types, product lines, and models
+- Vendors and suppliers
+- Write-off reasons
+- Inventory periods
+- Sample equipment items with logs
+- Employee assignments
+
+**Note:** The script uses `ON DUPLICATE KEY UPDATE` to handle existing data gracefully. Use `--clear` to remove existing data before importing.
+
 ## HTTPS (mkcert or self-signed)
 
 1. Generate local certificates (uses mkcert when available, otherwise OpenSSL self-signed):

@@ -13,6 +13,7 @@
     "reset-db": "bun run scripts/reset-db.ts",
     "export-db": "bun run scripts/export-db.ts",
     "import-db": "bun run scripts/import-db.ts",
+    "import-mock-data": "bun run scripts/import-mock-data.ts",
     "migrate": "bun run src/migrations/migrate.ts",
     "migrate:force": "bun run src/migrations/migrate.ts --force",
     "migrate:reset": "bun run src/migrations/migrate.ts --reset"
