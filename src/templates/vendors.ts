@@ -1,5 +1,6 @@
 import { layout } from "./layout";
 import { renderAlert, escapeHtml } from "./components";
+import { button, editButton, deleteButton, saveButton } from "./buttons";
 
 interface VendorItem {
   id: number;
@@ -24,7 +25,7 @@ interface VendorsData {
   suppliers: SupplierItem[];
 }
 
-export function vendorsPage(data: VendorsData, success = "", error = "", isAdmin: boolean = false): string {
+export function vendorsPage(data: VendorsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false): string {
   const alert = renderAlert(success, error);
 
   const content = `
@@ -83,7 +84,7 @@ export function vendorsPage(data: VendorsData, success = "", error = "", isAdmin
     </script>
   `;
 
-  return layout("Vendor Management", content, isAdmin);
+  return layout("Vendor Management", content, isAdmin, hasPcPwView);
 }
 
 function renderVendorsSection(vendors: VendorItem[]): string {
@@ -98,7 +99,7 @@ function renderVendorsSection(vendors: VendorItem[]): string {
             <input name="name" class="input-field" placeholder="New vendor name" required maxlength="255">
           </div>
           <div>
-            <button type="submit" class="btn btn-primary w-full md:w-auto">Add Vendor</button>
+            ${button("Add Vendor", { type: "submit", variant: "primary", fullWidth: true, className: "md:w-auto" })}
           </div>
         </form>
       </div>
@@ -109,13 +110,14 @@ function renderVendorsSection(vendors: VendorItem[]): string {
             <tr class="border-b border-gray-200 dark:border-gray-700 text-left text-gray-600 dark:text-gray-400">
               <th class="py-3 px-2">Name</th>
               <th class="py-3 px-2">Equipment</th>
+              <th class="py-3 px-2">Status</th>
               <th class="py-3 px-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             ${
               vendors.length === 0
-                ? `<tr><td colspan="3" class="py-4 px-2 text-gray-500 dark:text-gray-400">No vendors yet.</td></tr>`
+                ? `<tr><td colspan="4" class="py-4 px-2 text-gray-500 dark:text-gray-400">No vendors yet.</td></tr>`
                 : vendors
                     .map(
                       (item) => `
@@ -126,41 +128,36 @@ function renderVendorsSection(vendors: VendorItem[]): string {
                   <input type="hidden" name="action" value="edit">
                   <input type="hidden" name="id" value="${item.id}">
                   <input name="name" value="${escapeHtml(item.name)}" class="input-field w-full" maxlength="255" required>
-                  <button type="submit" class="btn btn-secondary text-xs whitespace-nowrap inline-flex items-center justify-center" title="Rename">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                  </button>
+                  ${editButton({ type: "submit", className: "whitespace-nowrap" })}
                 </form>
               </td>
               <td class="py-2 px-2">
                 <span class="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">${item.equipment_count}</span>
               </td>
               <td class="py-2 px-2">
-                <div class="flex flex-col gap-2 items-center">
-                  <form method="POST" action="/vendors" class="inline w-full">
+                ${
+                  item.equipment_count === 0
+                    ? `<span class="text-xs text-gray-500 dark:text-gray-400">Available</span>`
+                    : `<span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded bg-gray-100 dark:bg-gray-800">In use</span>`
+                }
+              </td>
+              <td class="py-2 px-2">
+                <div class="flex gap-2 items-center justify-start">
+                  <form method="POST" action="/vendors" class="inline">
                     <input type="hidden" name="entity" value="vendor">
                     <input type="hidden" name="action" value="edit">
                     <input type="hidden" name="id" value="${item.id}">
-                    <button type="submit" class="inline-flex items-center justify-center w-full p-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors" title="Rename">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                      </svg>
-                    </button>
+                    ${editButton({ type: "submit" })}
                   </form>
                   ${
                     item.equipment_count === 0
-                      ? `<form method="POST" action="/vendors" class="inline w-full" onsubmit="return confirm('Are you sure you want to delete this vendor?');">
+                      ? `<form method="POST" action="/vendors" class="inline" onsubmit="return confirm('Are you sure you want to delete this vendor?');">
                           <input type="hidden" name="entity" value="vendor">
                           <input type="hidden" name="action" value="delete">
                           <input type="hidden" name="id" value="${item.id}">
-                          <button type="submit" class="inline-flex items-center justify-center w-full p-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2" title="Delete">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                            </svg>
-                          </button>
+                          ${deleteButton({ type: "submit" })}
                         </form>`
-                      : `<span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-center block w-full">In use</span>`
+                      : ""
                   }
                 </div>
               </td>
@@ -184,7 +181,7 @@ function renderSuppliersSection(suppliers: SupplierItem[]): string {
           <input type="hidden" name="action" value="add">
           ${renderSupplierInputs()}
           <div class="sm:col-span-2 lg:col-span-3 flex gap-3">
-            <button type="submit" class="btn btn-primary">Add Supplier</button>
+            ${button("Add Supplier", { type: "submit", variant: "primary" })}
           </div>
         </form>
       </div>
@@ -252,7 +249,7 @@ function renderSuppliersSection(suppliers: SupplierItem[]): string {
               </div>
               
               <div class="flex items-center gap-2">
-                <button type="submit" class="inline-flex items-center justify-center p-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors" title="Save">
+                ${saveButton({ type: "submit" })}
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                   </svg>
@@ -263,11 +260,7 @@ function renderSuppliersSection(suppliers: SupplierItem[]): string {
                         <input type="hidden" name="entity" value="supplier">
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="id" value="${item.id}">
-                        <button type="submit" class="inline-flex items-center justify-center p-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2" title="Delete">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                          </svg>
-                        </button>
+                        ${deleteButton({ type: "submit" })}
                       </form>`
                     : `<span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded bg-gray-100 dark:bg-gray-800">In use</span>`
                 }
@@ -291,13 +284,14 @@ function renderSuppliersSection(suppliers: SupplierItem[]): string {
               <th class="py-3 px-3">Location</th>
               <th class="py-3 px-3">Website</th>
               <th class="py-3 px-3 text-center">Equipment</th>
-              <th class="py-3 px-3 text-center">Actions</th>
+              <th class="py-3 px-3">Status</th>
+              <th class="py-3 px-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             ${
               suppliers.length === 0
-                ? `<tr><td colspan="7" class="py-4 px-3 text-center text-gray-500 dark:text-gray-400">No suppliers yet.</td></tr>`
+                ? `<tr><td colspan="8" class="py-4 px-3 text-center text-gray-500 dark:text-gray-400">No suppliers yet.</td></tr>`
                 : suppliers
                     .map(
                       (item) => `
@@ -334,30 +328,29 @@ function renderSuppliersSection(suppliers: SupplierItem[]): string {
                 <span class="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">${item.equipment_count}</span>
               </td>
               <td class="py-3 px-3">
-                <div class="flex flex-col gap-2 items-center min-w-[60px]">
-                  <form id="sup-${item.id}" method="POST" action="/vendors" class="inline w-full">
+                ${
+                  item.equipment_count === 0
+                    ? `<span class="text-xs text-gray-500 dark:text-gray-400">Available</span>`
+                    : `<span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded bg-gray-100 dark:bg-gray-800">In use</span>`
+                }
+              </td>
+              <td class="py-3 px-3">
+                <div class="flex gap-2 items-center justify-start min-w-[120px]">
+                  <form id="sup-${item.id}" method="POST" action="/vendors" class="inline">
                     <input type="hidden" name="entity" value="supplier">
                     <input type="hidden" name="action" value="edit">
                     <input type="hidden" name="id" value="${item.id}">
-                    <button type="submit" class="inline-flex items-center justify-center w-full p-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors" title="Save">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                      </svg>
-                    </button>
+                    ${saveButton({ type: "submit" })}
                   </form>
                   ${
                     item.equipment_count === 0
-                      ? `<form method="POST" action="/vendors" class="inline w-full" onsubmit="return confirm('Are you sure you want to delete this supplier?');">
+                      ? `<form method="POST" action="/vendors" class="inline" onsubmit="return confirm('Are you sure you want to delete this supplier?');">
                           <input type="hidden" name="entity" value="supplier">
                           <input type="hidden" name="action" value="delete">
                           <input type="hidden" name="id" value="${item.id}">
-                          <button type="submit" class="inline-flex items-center justify-center w-full p-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2" title="Delete">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                            </svg>
-                          </button>
+                          ${deleteButton({ type: "submit" })}
                         </form>`
-                      : `<span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-center block w-full">In use</span>`
+                      : ""
                   }
                 </div>
               </td>

@@ -1,5 +1,6 @@
 import { layout } from "./layout";
 import { renderAlert, escapeHtml } from "./components";
+import { button, editButton, deleteButton } from "./buttons";
 
 interface WriteOffReasonItem {
   id: number;
@@ -11,7 +12,7 @@ interface WriteOffReasonsData {
   writeOffReasons: WriteOffReasonItem[];
 }
 
-export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", error = "", isAdmin: boolean = false): string {
+export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false): string {
   const alert = renderAlert(success, error);
 
   const content = `
@@ -32,7 +33,7 @@ export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", err
               <input name="reason" class="input-field" placeholder="e.g., Damaged beyond repair" required maxlength="255">
             </div>
             <div>
-              <button type="submit" class="btn btn-primary w-full md:w-auto">Add Reason</button>
+              ${button("Add Reason", { type: "submit", variant: "primary", fullWidth: true, className: "md:w-auto" })}
             </div>
           </form>
         </div>
@@ -59,11 +60,7 @@ export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", err
                     <input type="hidden" name="action" value="edit">
                     <input type="hidden" name="id" value="${item.id}">
                     <input name="reason" value="${escapeHtml(item.reason)}" class="input-field w-full" maxlength="255" required>
-                    <button type="submit" class="btn btn-secondary text-xs whitespace-nowrap inline-flex items-center justify-center" title="Save">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                      </svg>
-                    </button>
+                    ${editButton({ type: "submit", className: "whitespace-nowrap" })}
                   </form>
                 </td>
                 <td class="py-2 px-2">
@@ -75,11 +72,7 @@ export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", err
                       ? `<form method="POST" action="/write-off-reasons" class="inline" onsubmit="return confirm('Are you sure you want to delete this write-off reason?');">
                           <input type="hidden" name="action" value="delete">
                           <input type="hidden" name="id" value="${item.id}">
-                          <button type="submit" class="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2" title="Delete">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                            </svg>
-                          </button>
+                          ${deleteButton({ type: "submit" })}
                         </form>`
                       : `<span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded bg-gray-100 dark:bg-gray-800">Cannot delete (in use)</span>`
                   }
@@ -95,7 +88,7 @@ export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", err
     </div>
   `;
 
-  return layout("Write-Off Reasons", content, isAdmin);
+  return layout("Write-Off Reasons", content, isAdmin, hasPcPwView);
 }
 
 function escapeHtml(str: string): string {

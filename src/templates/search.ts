@@ -16,7 +16,8 @@ export function searchPage(
   query: string = "",
   results: SearchResult[] | null = null,
   error: string | null = null,
-  isAdmin: boolean = false
+  isAdmin: boolean = false,
+  hasPcPwView: boolean = false
 ): string {
   const content = `
       <div class="max-w-6xl mx-auto">
@@ -411,7 +412,7 @@ export function searchPage(
     </script>
   `;
 
-  return layout("Search", content, isAdmin);
+  return layout("Search", content, isAdmin, hasPcPwView);
 }
 
 function escapeHtml(str: string): string {

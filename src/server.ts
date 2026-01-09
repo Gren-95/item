@@ -13,6 +13,7 @@ import { loginPage } from "./templates/login";
 import { changePasswordPage } from "./templates/changePassword";
 import { permissionsPage } from "./templates/permissions";
 import { approvalsPage } from "./templates/approvals";
+import { pcPwPage } from "./templates/pc-pw";
 import { logger } from "./utils/logger";
 import { getSessionFromRequest, createSession, deleteSession, createSessionCookie, deleteSessionCookie } from "./utils/session";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
@@ -47,6 +48,8 @@ import {
   hasManageWriteOffReasonsPermission,
   hasRepairsPermission,
   hasRepairsSendPermission,
+  hasPcPwViewPermission,
+  hasPcPwEditPermission,
   seedFullPermissionsForUser
 } from "./utils/auth";
 import {
@@ -75,6 +78,14 @@ interface SearchResult {
   assigned_to_name: string | null;
   location: string | null;
   latest_audit_date: string | null;
+}
+
+interface PcPassword {
+  id: number;
+  user: string;
+  evocon: string | null;
+  pw: string;
+  status: number;
 }
 
 const PORT = process.env.PORT || 3000;
@@ -388,6 +399,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // Check authentication for protected routes and get admin status
   let isAdmin = false;
+  let hasPcPwView = false;
   if (!isPublicRoute) {
     const session = getSessionFromRequest(req);
     if (!session) {
@@ -399,6 +411,10 @@ async function handleRequest(req: Request): Promise<Response> {
     logger.info("Checking admin permission", { traceId, username: session.username });
     isAdmin = await hasAdminPermission(session.username, pool);
     logger.info("Admin permission result", { traceId, username: session.username, isAdmin });
+    
+    // Check PC passwords view permission for navigation menu
+    hasPcPwView = await hasPcPwViewPermission(session.username, pool);
+    logger.info("PC Passwords view permission", { traceId, username: session.username, hasPcPwView });
   }
 
   // Routes
@@ -414,7 +430,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
       const error = url.searchParams.get("error") || null;
       const redirect = url.searchParams.get("redirect") || null;
-      return new Response(loginPage(error, redirect, false), {
+      return new Response(loginPage(error, redirect, false, false), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -427,7 +443,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const redirect = (formData.get("redirect") || "").toString() || "/";
 
       if (!username || !password) {
-        return new Response(loginPage("Username and password are required", redirect || null, false), {
+        return new Response(loginPage("Username and password are required", redirect || null, false, false), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -437,7 +453,7 @@ async function handleRequest(req: Request): Promise<Response> {
         
         if (!isValid) {
           logger.info("Failed login attempt", { traceId, username });
-          return new Response(loginPage("Invalid username or password", redirect || null, false), {
+          return new Response(loginPage("Invalid username or password", redirect || null, false, false), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -455,7 +471,7 @@ async function handleRequest(req: Request): Promise<Response> {
         
         if (!hasPermission) {
           logger.info("Login denied - missing item_login permission", { traceId, username });
-          return new Response(loginPage("You do not have permission to access this system. Please contact your administrator.", redirect || null, false), {
+          return new Response(loginPage("You do not have permission to access this system. Please contact your administrator.", redirect || null, false, false), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -474,7 +490,7 @@ async function handleRequest(req: Request): Promise<Response> {
         });
       } catch (err) {
         logger.error("Login error", err, { traceId, username });
-        return new Response(loginPage("An error occurred during login. Please try again.", redirect || null, false), {
+        return new Response(loginPage("An error occurred during login. Please try again.", redirect || null, false, false), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -506,7 +522,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
       const success = url.searchParams.get("success") || null;
       const error = url.searchParams.get("error") || null;
-      return new Response(changePasswordPage(success, error, isAdmin), {
+      return new Response(changePasswordPage(success, error, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -566,6 +582,7 @@ async function handleRequest(req: Request): Promise<Response> {
           permissionsPage(
             { users: [], permissions: [] },
             false,
+            hasPcPwView,
             "",
             ""
           ),
@@ -614,6 +631,7 @@ async function handleRequest(req: Request): Promise<Response> {
               plants: plantsList,
             },
             isAdmin,
+            hasPcPwView,
             success,
             error
           ),
@@ -624,7 +642,7 @@ async function handleRequest(req: Request): Promise<Response> {
       } catch (err) {
         logger.error("Error loading permissions page", err, { traceId });
         return new Response(
-          permissionsPage({ users: [], permissions: [] }, false, "", "Error loading permissions"),
+          permissionsPage({ users: [], permissions: [] }, false, hasPcPwView, "", "Error loading permissions"),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -717,7 +735,8 @@ async function handleRequest(req: Request): Promise<Response> {
             { pendingRequests: [], processedRequests: [], totalProcessed: 0, currentPage: 1, totalPages: 1 },
             false,
             "",
-            ""
+            "",
+            hasPcPwView
           ),
           {
             headers: { "Content-Type": "text/html" },
@@ -776,7 +795,8 @@ async function handleRequest(req: Request): Promise<Response> {
             },
             isAdmin,
             success,
-            error
+            error,
+            hasPcPwView
           ),
           {
             headers: { "Content-Type": "text/html" },
@@ -795,6 +815,196 @@ async function handleRequest(req: Request): Promise<Response> {
             headers: { "Content-Type": "text/html" },
           }
         );
+      }
+    }
+
+    // PC Passwords page - GET
+    if (path === "/pc-pw" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/pc-pw", 302);
+      }
+
+      const success = url.searchParams.get("success") || "";
+      const error = url.searchParams.get("error") || "";
+
+      logger.info("PC Passwords page access attempt", { traceId, username: session.username });
+      const hasView = await hasPcPwViewPermission(session.username, pool);
+      const hasEdit = await hasPcPwEditPermission(session.username, pool);
+      logger.info("PC Passwords permission check result", { traceId, username: session.username, hasView, hasEdit });
+
+      if (!hasView) {
+        return new Response(
+          pcPwPage(
+            { passwords: [] },
+            false,
+            false,
+            isAdmin,
+            hasPcPwView,
+            "",
+            ""
+          ),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
+      try {
+        const [passwords] = await pool.query<RowDataPacket[]>(
+          "SELECT id, user, evocon, pw, status FROM it_pc_pw ORDER BY user"
+        );
+
+        return new Response(
+          pcPwPage(
+            { passwords: passwords as PcPassword[] },
+            hasView,
+            hasEdit,
+            isAdmin,
+            hasPcPwView,
+            success,
+            error
+          ),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      } catch (err) {
+        logger.error("Error loading PC passwords page", err, { traceId });
+        return new Response(
+          pcPwPage({ passwords: [] }, hasView, hasEdit, isAdmin, hasPcPwView, "", "Error loading passwords"),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+    }
+
+    // PC Passwords page - POST (add/delete)
+    if (path === "/pc-pw" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/pc-pw", 302);
+      }
+
+      const hasView = await hasPcPwViewPermission(session.username, pool);
+      const hasEdit = await hasPcPwEditPermission(session.username, pool);
+
+      if (!hasView) {
+        return Response.redirect("/pc-pw?error=" + encodeURIComponent("You do not have permission to view PC passwords"), 303);
+      }
+
+      if (!hasEdit) {
+        return Response.redirect("/pc-pw?error=" + encodeURIComponent("You do not have permission to edit PC passwords"), 303);
+      }
+
+      const formData = await req.formData();
+      const action = formData.get("action")?.toString();
+
+      try {
+        if (action === "add") {
+          const user = formData.get("user")?.toString() || "";
+          const evocon = formData.get("evocon")?.toString() || null;
+          const pw = formData.get("pw")?.toString() || "";
+          const status = parseInt(formData.get("status")?.toString() || "1");
+
+          if (!user || !pw) {
+            return Response.redirect("/pc-pw?error=" + encodeURIComponent("User and password are required"), 303);
+          }
+
+          await pool.query(
+            "INSERT INTO it_pc_pw (user, evocon, pw, status) VALUES (?, ?, ?, ?)",
+            [user, evocon, pw, status]
+          );
+
+          logger.info("PC password added", { traceId, user });
+          return Response.redirect("/pc-pw?success=" + encodeURIComponent("Password added successfully"), 303);
+        } else if (action === "delete") {
+          const id = parseInt(formData.get("id")?.toString() || "0");
+
+          if (!id) {
+            return Response.redirect("/pc-pw?error=" + encodeURIComponent("Invalid password ID"), 303);
+          }
+
+          await pool.query("DELETE FROM it_pc_pw WHERE id = ?", [id]);
+
+          logger.info("PC password deleted", { traceId, id });
+          return Response.redirect("/pc-pw?success=" + encodeURIComponent("Password deleted successfully"), 303);
+        } else {
+          return Response.redirect("/pc-pw?error=" + encodeURIComponent("Invalid action"), 303);
+        }
+      } catch (err) {
+        logger.error("Error processing PC password action", err, { traceId, action });
+        const errorMessage = err instanceof Error ? err.message : "An error occurred";
+        return Response.redirect("/pc-pw?error=" + encodeURIComponent(errorMessage), 303);
+      }
+    }
+
+    // PC Passwords barcode printing endpoint - POST
+    if (path === "/api/pc-pw/print" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const hasView = await hasPcPwViewPermission(session.username, pool);
+      if (!hasView) {
+        return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const body = await req.json();
+        const { user, evocon, password, printer } = body;
+
+        if (!user || !password || !printer) {
+          return new Response(JSON.stringify({ error: "Missing required fields: user, password, printer" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        // Forward request to external printing service
+        const printResponse = await fetch("http://eeprt01/Integration/PcPwSticker/Execute", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user,
+            evocon: evocon || "",
+            password,
+            printer,
+          }),
+        });
+
+        const printResult = await printResponse.text();
+
+        if (printResponse.ok) {
+          logger.info("PC password print job sent", { traceId, user, printer });
+          return new Response(JSON.stringify({ success: true, message: "Print job sent successfully", result: printResult }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } else {
+          logger.error("PC password print job failed", { traceId, user, printer, status: printResponse.status });
+          return new Response(JSON.stringify({ error: "Print job failed", result: printResult }), {
+            status: printResponse.status,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      } catch (err) {
+        logger.error("Error sending PC password print job", err, { traceId });
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        return new Response(JSON.stringify({ error: errorMessage }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
       }
     }
 
@@ -886,7 +1096,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const hasSearch = await hasSearchPermission(session.username, pool);
       if (!hasSearch) {
         return new Response(
-          searchPage("", null, "You do not have permission to access the search page. Please contact your administrator.", isAdmin),
+          searchPage("", null, "You do not have permission to access the search page. Please contact your administrator.", isAdmin, hasPcPwView),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -975,12 +1185,12 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         logger.info("Search results", { traceId, query: trimmed, count: rows.length });
-        return new Response(searchPage(trimmed, rows.length > 0 ? (rows as SearchResult[]) : [], null, isAdmin), {
+        return new Response(searchPage(trimmed, rows.length > 0 ? (rows as SearchResult[]) : [], null, isAdmin, hasPcPwView), {
           headers: { "Content-Type": "text/html" },
         });
       }
 
-      return new Response(searchPage("", null, null, isAdmin), {
+      return new Response(searchPage("", null, null, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -996,7 +1206,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const serial = url.searchParams.get("serial") || "";
       const addData = await getAddData(serial);
       
-      return new Response(addPage(addData, false, null, isAdmin), {
+      return new Response(addPage(addData, false, null, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -1038,7 +1248,7 @@ async function handleRequest(req: Request): Promise<Response> {
         if (!employeeNo) {
           const addData = await getAddData(rawData.service_tag || "");
           return new Response(
-            addPage(addData, false, "Unable to create approval request. Please contact your administrator.", isAdmin),
+            addPage(addData, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1058,7 +1268,7 @@ async function handleRequest(req: Request): Promise<Response> {
         if (requestId) {
           const addData = await getAddData(rawData.service_tag || "");
           return new Response(
-            addPage(addData, false, `Approval request created (ID: ${requestId})`, isAdmin),
+            addPage(addData, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1066,7 +1276,7 @@ async function handleRequest(req: Request): Promise<Response> {
         } else {
           const addData = await getAddData(rawData.service_tag || "");
           return new Response(
-            addPage(addData, false, "Failed to create approval request. Please contact your administrator.", isAdmin),
+            addPage(addData, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1132,7 +1342,7 @@ async function handleRequest(req: Request): Promise<Response> {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         logger.error("Failed to add equipment", err, { traceId, serviceTag: rawData.service_tag });
         const addData = await getAddData(rawData.service_tag || "");
-        return new Response(addPage(addData, false, errorMessage, isAdmin), {
+        return new Response(addPage(addData, false, errorMessage, isAdmin, hasPcPwView), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -1155,7 +1365,7 @@ async function handleRequest(req: Request): Promise<Response> {
           return new Response("Equipment not found", { status: 404 });
         }
         return new Response(
-          auditPage(auditData, false, "You do not have permission to edit equipment. Please contact your administrator.", isAdmin),
+          auditPage(auditData, false, "You do not have permission to edit equipment. Please contact your administrator.", isAdmin, hasPcPwView),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1170,7 +1380,7 @@ async function handleRequest(req: Request): Promise<Response> {
         return new Response("Equipment not found", { status: 404 });
       }
 
-      return new Response(auditPage(auditData, success, null, isAdmin), {
+      return new Response(auditPage(auditData, success, null, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -1198,7 +1408,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin),
+            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1239,7 +1449,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin),
+            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1250,7 +1460,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin),
+            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1293,7 +1503,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin),
+            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1316,7 +1526,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin),
+            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1327,7 +1537,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin),
+            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1363,7 +1573,7 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditData, false, "Write-off comment is required when writing off equipment.", isAdmin), {
+          return new Response(auditPage(auditData, false, "Write-off comment is required when writing off equipment.", isAdmin, hasPcPwView), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -1374,7 +1584,7 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditData, false, "Repair note is required when registering equipment for repair.", isAdmin), {
+          return new Response(auditPage(auditData, false, "Repair note is required when registering equipment for repair.", isAdmin, hasPcPwView), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -1506,7 +1716,7 @@ async function handleRequest(req: Request): Promise<Response> {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin),
+                auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -1529,7 +1739,7 @@ async function handleRequest(req: Request): Promise<Response> {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin),
+                auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -1540,7 +1750,7 @@ async function handleRequest(req: Request): Promise<Response> {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin),
+                auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -1558,7 +1768,7 @@ async function handleRequest(req: Request): Promise<Response> {
         if (!auditData) {
           return new Response("Equipment not found", { status: 404 });
         }
-        return new Response(auditPage(auditData, false, errorMessage, isAdmin), {
+        return new Response(auditPage(auditData, false, errorMessage, isAdmin, hasPcPwView), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -1580,7 +1790,7 @@ async function handleRequest(req: Request): Promise<Response> {
         // Show success feedback even for users without view permission; keep gentle reminder
         const fallbackError = success ? "" : "Actions require approval.";
         return new Response(
-          locationsPage(await getLocationsData(), success, error || fallbackError, isAdmin),
+          locationsPage(await getLocationsData(), success, error || fallbackError, isAdmin, hasPcPwView),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1588,7 +1798,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       const data = await getLocationsData();
-      return new Response(locationsPage(data, success, error, isAdmin), {
+      return new Response(locationsPage(data, success, error, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -1749,7 +1959,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const hasView = await hasVendorsViewPermission(session.username, pool);
       if (!hasView) {
         return new Response(
-          vendorsPage(await getVendorsAndSuppliersData(), "", "Actions require approval.", isAdmin),
+          vendorsPage(await getVendorsAndSuppliersData(), "", "Actions require approval.", isAdmin, hasPcPwView),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1759,7 +1969,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getVendorsAndSuppliersData();
-      return new Response(vendorsPage(data, success, error, isAdmin), {
+      return new Response(vendorsPage(data, success, error, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2005,7 +2215,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const hasView = await hasTypesViewPermission(session.username, pool);
       if (!hasView) {
         return new Response(
-          typesPage(await getTypesData(), "", "You do not have permission to view types/configurations. Please contact your administrator.", isAdmin),
+          typesPage(await getTypesData(), "", "You do not have permission to view types/configurations. Please contact your administrator.", isAdmin, hasPcPwView),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -2015,7 +2225,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getTypesData();
-      return new Response(typesPage(data, success, error, isAdmin), {
+      return new Response(typesPage(data, success, error, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2290,7 +2500,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const hasView = await hasWriteOffReasonsViewPermission(session.username, pool);
       if (!hasView) {
         return new Response(
-          writeOffReasonsPage(await getWriteOffReasonsData(), "", "Actions require approval.", isAdmin),
+          writeOffReasonsPage(await getWriteOffReasonsData(), "", "Actions require approval.", isAdmin, hasPcPwView),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -2300,7 +2510,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getWriteOffReasonsData();
-      return new Response(writeOffReasonsPage(data, success, error, isAdmin), {
+      return new Response(writeOffReasonsPage(data, success, error, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2449,7 +2659,7 @@ async function handleRequest(req: Request): Promise<Response> {
         const hasRepairs = await hasRepairsPermission(session.username, pool);
         if (!hasRepairs) {
           return new Response(
-            repairsPage(await getRepairsData(), "", "You do not have permission to view repairs. Please contact your administrator.", isAdmin),
+            repairsPage(await getRepairsData(), "", "You do not have permission to view repairs. Please contact your administrator.", isAdmin, hasPcPwView),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -2460,7 +2670,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getRepairsData();
-      return new Response(repairsPage(data, success, error, isAdmin), {
+      return new Response(repairsPage(data, success, error, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2938,7 +3148,7 @@ async function handleRequest(req: Request): Promise<Response> {
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
     logger.error("Request handler error", err, { traceId, path });
-    return new Response(searchPage("", null, errorMessage, false), {
+    return new Response(searchPage("", null, errorMessage, false, false), {
       status: 500,
       headers: { "Content-Type": "text/html" },
     });

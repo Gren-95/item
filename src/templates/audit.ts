@@ -64,7 +64,7 @@ interface AuditData {
   writeOffReasons: SelectOption[];
 }
 
-export function auditPage(data: AuditData, success: boolean = false, error: string | null = null, isAdmin: boolean = false): string {
+export function auditPage(data: AuditData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false): string {
   const eq = data.equipment;
   
   const content = `
@@ -975,7 +975,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
     ${getScriptsHtml()}
   `;
 
-  return layout(`ITEM - ${eq.service_tag}`, content, isAdmin);
+  return layout(`ITEM - ${eq.service_tag}`, content, isAdmin, hasPcPwView);
 }
 
 function escapeHtml(str: string): string {
