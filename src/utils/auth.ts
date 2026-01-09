@@ -735,6 +735,120 @@ export async function hasRepairsSendPermission(
   return hasPermission(username, pool, "repairs_send", plantId);
 }
 
+/**
+ * Check if a user has permission to view PC passwords
+ * @param username - The username to check
+ * @param pool - The database connection pool
+ * @returns true if user has permission, false otherwise
+ */
+export async function hasPcPwViewPermission(
+  username: string,
+  pool: import("mysql2/promise").Pool
+): Promise<boolean> {
+  try {
+    // Ensure user exists
+    const [users] = await pool.query<import("mysql2").RowDataPacket[]>(
+      "SELECT user_id FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
+      [username]
+    );
+
+    if (users.length === 0) {
+      console.log(`[hasPcPwViewPermission] User not found: ${username}`);
+      return false;
+    }
+
+    // Check for global admin first
+    const [globalAdmin] = await pool.query<import("mysql2").RowDataPacket[]>(
+      `SELECT id FROM it_user_permissions
+       WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'global_admin'
+         AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+       LIMIT 1`,
+      [username]
+    );
+    if (globalAdmin.length > 0) {
+      console.log(`[hasPcPwViewPermission] User has global_admin: ${username}`);
+      return true;
+    }
+
+    // Check for pc_pw_view permission with plant_id = 0 (global)
+    const [permissions] = await pool.query<import("mysql2").RowDataPacket[]>(
+      `SELECT id FROM it_user_permissions
+       WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'pc_pw_view'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+       LIMIT 1`,
+      [username]
+    );
+
+    console.log(`[hasPcPwViewPermission] Query result for ${username}:`, permissions.length, permissions);
+    return permissions.length > 0;
+  } catch (error) {
+    console.error(`[hasPcPwViewPermission] Error for ${username}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Check if a user has permission to edit PC passwords
+ * @param username - The username to check
+ * @param pool - The database connection pool
+ * @returns true if user has permission, false otherwise
+ */
+export async function hasPcPwEditPermission(
+  username: string,
+  pool: import("mysql2/promise").Pool
+): Promise<boolean> {
+  try {
+    // Ensure user exists
+    const [users] = await pool.query<import("mysql2").RowDataPacket[]>(
+      "SELECT user_id FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
+      [username]
+    );
+
+    if (users.length === 0) {
+      console.log(`[hasPcPwEditPermission] User not found: ${username}`);
+      return false;
+    }
+
+    // Check for global admin first
+    const [globalAdmin] = await pool.query<import("mysql2").RowDataPacket[]>(
+      `SELECT id FROM it_user_permissions
+       WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'global_admin'
+         AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+       LIMIT 1`,
+      [username]
+    );
+    if (globalAdmin.length > 0) {
+      console.log(`[hasPcPwEditPermission] User has global_admin: ${username}`);
+      return true;
+    }
+
+    // Check for pc_pw_edit permission with plant_id = 0 (global)
+    const [permissions] = await pool.query<import("mysql2").RowDataPacket[]>(
+      `SELECT id FROM it_user_permissions
+       WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'pc_pw_edit'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+       LIMIT 1`,
+      [username]
+    );
+
+    console.log(`[hasPcPwEditPermission] Query result for ${username}:`, permissions.length, permissions);
+    return permissions.length > 0;
+  } catch (error) {
+    console.error(`[hasPcPwEditPermission] Error for ${username}:`, error);
+    return false;
+  }
+}
+
 export async function changePassword(
   username: string,
   oldPassword: string,

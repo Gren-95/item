@@ -1,6 +1,7 @@
 import { layout } from "./layout";
 import { renderAlert, escapeHtml } from "./components";
 import { getModalHtml, getScriptsHtml } from "./components";
+import { button, buttonLink } from "./buttons";
 
 interface SelectOption {
   id: number;
@@ -32,7 +33,7 @@ interface AddData {
   inventoryPeriods: InventoryPeriod[];
 }
 
-export function addPage(data: AddData, success: boolean = false, error: string | null = null, isAdmin: boolean = false): string {
+export function addPage(data: AddData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false): string {
   const content = `
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-4 mb-6">
@@ -380,8 +381,8 @@ export function addPage(data: AddData, success: boolean = false, error: string |
             <div id="printers-error" class="hidden text-red-600 dark:text-red-400 text-sm mb-4"></div>
           </div>
           <div class="flex justify-end gap-3">
-            <button onclick="closePrintModal()" class="btn btn-secondary">Cancel</button>
-            <button id="confirm-print" onclick="confirmPrint()" class="btn btn-primary hidden">Print</button>
+            ${button("Cancel", { variant: "secondary", onClick: "closePrintModal()" })}
+            ${button("Print", { variant: "primary", id: "confirm-print", className: "hidden", onClick: "confirmPrint()" })}
           </div>
         </div>
       </div>
@@ -534,7 +535,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
     ${getScriptsHtml()}
   `;
 
-  return layout("Add Equipment", content, isAdmin);
+  return layout("Add Equipment", content, isAdmin, hasPcPwView);
 }
 
 function escapeHtml(str: string): string {

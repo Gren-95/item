@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { button, deleteButton } from "./buttons";
 
 interface User {
   user_id: string;
@@ -49,6 +50,7 @@ function escapeHtml(str: string | null | undefined | number | Date): string {
 export function permissionsPage(
   data: PermissionsData,
   isAdmin: boolean,
+  hasPcPwView: boolean = false,
   success = "",
   error = ""
 ): string {
@@ -70,7 +72,7 @@ export function permissionsPage(
         </div>
       </div>
     `;
-    return layout("User Permissions", content, isAdmin);
+    return layout("User Permissions", content, isAdmin, hasPcPwView);
   }
 
   const alert = success
@@ -157,6 +159,8 @@ export function permissionsPage(
                 <option value="write_off_reasons_delete">write_off_reasons_delete - Delete write-off reasons</option>
                 <option value="repairs">repairs - View and manage repairs</option>
                 <option value="repairs_send">repairs_send - Send equipment to repair</option>
+                <option value="pc_pw_view">pc_pw_view - View PC passwords</option>
+                <option value="pc_pw_edit">pc_pw_edit - Edit PC passwords</option>
               </datalist>
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Note: "login" permission is always global (plant_id=0). Other permissions can be plant-specific.
@@ -193,9 +197,7 @@ export function permissionsPage(
               </p>
             </div>
             <div class="flex items-end">
-              <button type="submit" class="btn btn-primary w-full">
-                Add Permission
-              </button>
+              ${button("Add Permission", { type: "submit", variant: "primary", fullWidth: true })}
             </div>
           </form>
           <script>
@@ -311,9 +313,7 @@ export function permissionsPage(
                             <form method="POST" action="/permissions" class="inline" onsubmit="return confirm('Are you sure you want to delete this permission?');">
                               <input type="hidden" name="action" value="delete">
                               <input type="hidden" name="permission_id" value="${perm.id}">
-                              <button type="submit" class="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300">
-                                Delete
-                              </button>
+                              ${deleteButton({ type: "submit" })}
                             </form>
                           </td>
                         </tr>
@@ -327,6 +327,6 @@ export function permissionsPage(
     </div>
   `;
 
-  return layout("User Permissions", content, isAdmin);
+  return layout("User Permissions", content, isAdmin, hasPcPwView);
 }
 

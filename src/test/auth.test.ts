@@ -31,6 +31,7 @@ describe("Authentication and Permissions", () => {
          AND permission = 'login'
          AND plant_id = 0
          AND role IN ('user','admin')
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [{ id: 1 }] as any }]
       );
@@ -64,6 +65,7 @@ describe("Authentication and Permissions", () => {
          AND permission = 'login'
          AND plant_id = 0
          AND role IN ('user','admin')
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
       );
@@ -87,6 +89,7 @@ describe("Authentication and Permissions", () => {
          AND permission = 'login'
          AND plant_id = 0
          AND role IN ('user','admin')
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
       );
@@ -109,6 +112,7 @@ describe("Authentication and Permissions", () => {
          AND permission = 'login'
          AND plant_id = 0
          AND role IN ('user','admin')
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
       );
@@ -138,13 +142,16 @@ describe("Authentication and Permissions", () => {
         [{ rows: [{ user_id: "testuser" }] as any }]
       );
 
-      // Mock: user has admin role
+      // Mock: user has global_admin permission
       mockPool.mockQuery(
-        `SELECT id FROM it_user_permissions
+        `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
        WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
-        [{ rows: [{ id: 1 }] as any }]
+        [{ rows: [{ id: 1, user_id: "testuser", plant_id: 0, permission: "global_admin", role: "admin", expiry_date: null }] as any }]
       );
 
       const result = await hasAdminPermission("testuser", mockPool as any);
@@ -169,11 +176,24 @@ describe("Authentication and Permissions", () => {
         [{ rows: [{ user_id: "testuser" }] as any }]
       );
 
-      // Mock: user has no admin role
+      // Mock: user has no global_admin permission
       mockPool.mockQuery(
-        `SELECT id FROM it_user_permissions
+        `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
+       WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'global_admin'
+         AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+       LIMIT 1`,
+        [{ rows: [] as any }]
+      );
+
+      // Mock: fallback check for admin role (should also return empty)
+      mockPool.mockQuery(
+        `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
        WHERE user_id = ?
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
       );
@@ -230,6 +250,7 @@ describe("Authentication and Permissions", () => {
          AND plant_id = 0
          AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
       );
@@ -240,7 +261,8 @@ describe("Authentication and Permissions", () => {
        WHERE user_id = ?
          AND plant_id = ?
          AND permission = ?
-         AND role IN (?, ?)`,
+         AND role IN (?, ?)
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())`,
         [{ rows: [{ id: 1, role: "user" }] as any }]
       );
 
@@ -282,6 +304,7 @@ describe("Authentication and Permissions", () => {
          AND plant_id = 0
          AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
       );
@@ -292,7 +315,8 @@ describe("Authentication and Permissions", () => {
        WHERE user_id = ?
          AND plant_id = ?
          AND permission = ?
-         AND role IN (?, ?)`,
+         AND role IN (?, ?)
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())`,
         [{ rows: [{ id: 1, role: "admin" }] as any }]
       );
 
@@ -334,6 +358,7 @@ describe("Authentication and Permissions", () => {
          AND plant_id = 0
          AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
       );
@@ -344,7 +369,8 @@ describe("Authentication and Permissions", () => {
        WHERE user_id = ?
          AND plant_id = ?
          AND permission = ?
-         AND role IN (?, ?)`,
+         AND role IN (?, ?)
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())`,
         [{ rows: [] as any }]
       );
 
@@ -386,6 +412,7 @@ describe("Authentication and Permissions", () => {
          AND plant_id = 0
          AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
       );
@@ -397,7 +424,7 @@ describe("Authentication and Permissions", () => {
          AND plant_id = ?
          AND permission = ?
          AND role IN (?, ?)
-       LIMIT 1`,
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())`,
         [{ rows: [{ id: 1, role: "admin" }] as any }]
       );
 
@@ -450,18 +477,22 @@ describe("Authentication and Permissions", () => {
 
   describe("hasSearchPermission", () => {
     test("should return true when user is admin", async () => {
-      // Mock: user is admin
+      // Mock: user exists
       mockPool.mockQuery(
         "SELECT user_id FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
         [{ rows: [{ user_id: "testuser" }] as any }]
       );
 
+      // Mock: user has global_admin permission
       mockPool.mockQuery(
-        `SELECT id FROM it_user_permissions
+        `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
        WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
-        [{ rows: [{ id: 1 }] as any }]
+        [{ rows: [{ id: 1, user_id: "testuser", plant_id: 0, permission: "global_admin", role: "admin", expiry_date: null }] as any }]
       );
 
       const result = await hasSearchPermission("testuser", mockPool as any);
@@ -502,13 +533,26 @@ describe("Authentication and Permissions", () => {
         [{ rows: [{ plant_id: 1 }] as any }]
       );
 
-      // Mock: check for global_admin (should return empty)
+      // Mock: check for global_admin (should return empty - hasAdminPermission check)
+      mockPool.mockQuery(
+        `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
+       WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'global_admin'
+         AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+       LIMIT 1`,
+        [{ rows: [] as any }]
+      );
+
+      // Mock: check for global_admin (should return empty - hasPermission check)
       mockPool.mockQuery(
         `SELECT id FROM it_user_permissions
        WHERE user_id = ?
          AND plant_id = 0
          AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
       );
@@ -519,7 +563,8 @@ describe("Authentication and Permissions", () => {
        WHERE user_id = ?
          AND plant_id = ?
          AND permission = ?
-         AND role IN (?, ?)`,
+         AND role IN (?, ?)
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())`,
         [{ rows: [{ id: 1, role: "user" }] as any }]
       );
 
@@ -530,18 +575,22 @@ describe("Authentication and Permissions", () => {
 
   describe("hasAddEquipmentPermission", () => {
     test("should return true when user is admin", async () => {
-      // Mock: user is admin
+      // Mock: user exists
       mockPool.mockQuery(
         "SELECT user_id FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
         [{ rows: [{ user_id: "testuser" }] as any }]
       );
 
+      // Mock: user has global_admin permission
       mockPool.mockQuery(
-        `SELECT id FROM it_user_permissions
+        `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
        WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
-        [{ rows: [{ id: 1 }] as any }]
+        [{ rows: [{ id: 1, user_id: "testuser", plant_id: 0, permission: "global_admin", role: "admin", expiry_date: null }] as any }]
       );
 
       const result = await hasAddEquipmentPermission("testuser", mockPool as any);
@@ -551,18 +600,22 @@ describe("Authentication and Permissions", () => {
 
   describe("hasEditEquipmentPermission", () => {
     test("should return true when user is admin", async () => {
-      // Mock: user is admin
+      // Mock: user exists
       mockPool.mockQuery(
         "SELECT user_id FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
         [{ rows: [{ user_id: "testuser" }] as any }]
       );
 
+      // Mock: user has global_admin permission
       mockPool.mockQuery(
-        `SELECT id FROM it_user_permissions
+        `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
        WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
-        [{ rows: [{ id: 1 }] as any }]
+        [{ rows: [{ id: 1, user_id: "testuser", plant_id: 0, permission: "global_admin", role: "admin", expiry_date: null }] as any }]
       );
 
       const result = await hasEditEquipmentPermission("testuser", mockPool as any);

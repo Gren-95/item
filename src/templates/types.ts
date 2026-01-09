@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { button, editButton, activateButton, deactivateButton } from "./buttons";
 import { renderAlert, escapeHtml } from "./components";
 
 interface TypeItem {
@@ -30,7 +31,7 @@ interface TypesData {
   productLines: ProductLineItem[];
 }
 
-export function typesPage(data: TypesData, success = "", error = "", isAdmin: boolean = false): string {
+export function typesPage(data: TypesData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false): string {
   const alert = renderAlert(success, error);
 
   const sections = [
@@ -60,8 +61,8 @@ export function typesPage(data: TypesData, success = "", error = "", isAdmin: bo
             .join("")}
         </div>
         <div class="flex items-center gap-2">
-          <button id="tab-prev" class="btn btn-secondary text-sm px-3" aria-label="Previous section">←</button>
-          <button id="tab-next" class="btn btn-secondary text-sm px-3" aria-label="Next section">→</button>
+          ${button("←", { variant: "secondary", size: "sm", className: "px-3", ariaLabel: "Previous section", onClick: "document.getElementById('tab-prev')?.click()" })}
+          ${button("→", { variant: "secondary", size: "sm", className: "px-3", ariaLabel: "Next section", onClick: "document.getElementById('tab-next')?.click()" })}
         </div>
       </div>
 
@@ -112,7 +113,7 @@ export function typesPage(data: TypesData, success = "", error = "", isAdmin: bo
     </div>
   `;
 
-  return layout("Equipment Types", content, isAdmin);
+  return layout("Equipment Types", content, isAdmin, hasPcPwView);
 }
 
 function renderSection(
@@ -159,7 +160,7 @@ function renderSection(
               : ""
           }
           <div>
-            <button type="submit" class="btn btn-primary w-full md:w-auto">Add ${title.slice(0, -1)}</button>
+            ${button(`Add ${title.slice(0, -1)}`, { type: "submit", variant: "primary", fullWidth: true, className: "md:w-auto" })}
           </div>
         </form>
       </div>
@@ -192,7 +193,7 @@ function renderSection(
                       <input type="hidden" name="type" value="model">
                       <input type="hidden" name="id" value="${item.id}">
                       <input name="name" value="${escapeHtml(item.name)}" class="input-field w-full" required>
-                      <button type="submit" class="btn btn-secondary text-xs whitespace-nowrap">Rename</button>
+                      ${editButton({ type: "submit", className: "whitespace-nowrap" })}
                     </form>
                   </td>
                   <td class="py-2 px-2">
@@ -211,9 +212,7 @@ function renderSection(
                       <input type="hidden" name="action" value="${item.status ? "deactivate" : "activate"}">
                       <input type="hidden" name="type" value="model">
                       <input type="hidden" name="id" value="${item.id}">
-                      <button type="submit" class="btn ${item.status ? "btn-secondary" : "btn-success"} text-xs">
-                        ${item.status ? "Deactivate" : "Activate"}
-                      </button>
+                      ${item.status ? deactivateButton({ type: "submit" }) : activateButton({ type: "submit" })}
                     </form>
                   </td>
                 </tr>`;
@@ -233,7 +232,7 @@ function renderSection(
                       <input type="hidden" name="type" value="product-line">
                       <input type="hidden" name="id" value="${item.id}">
                       <input name="name" value="${escapeHtml(item.name)}" class="input-field w-full" required>
-                      <button type="submit" class="btn btn-secondary text-xs whitespace-nowrap">Rename</button>
+                      ${editButton({ type: "submit", className: "whitespace-nowrap" })}
                     </form>
                   </td>
                   <td class="py-2 px-2">
@@ -252,9 +251,7 @@ function renderSection(
                       <input type="hidden" name="action" value="${item.status ? "deactivate" : "activate"}">
                       <input type="hidden" name="type" value="product-line">
                       <input type="hidden" name="id" value="${item.id}">
-                      <button type="submit" class="btn ${item.status ? "btn-secondary" : "btn-success"} text-xs">
-                        ${item.status ? "Deactivate" : "Activate"}
-                      </button>
+                      ${item.status ? deactivateButton({ type: "submit" }) : activateButton({ type: "submit" })}
                     </form>
                   </td>
                 </tr>`;
@@ -271,7 +268,7 @@ function renderSection(
                       <input type="hidden" name="type" value="type">
                       <input type="hidden" name="id" value="${item.id}">
                       <input name="name" value="${escapeHtml(item.name)}" class="input-field w-full" maxlength="25" required>
-                      <button type="submit" class="btn btn-secondary text-xs whitespace-nowrap">Rename</button>
+                      ${editButton({ type: "submit", className: "whitespace-nowrap" })}
                     </form>
                   </td>
                   <td class="py-2 px-2">
@@ -287,9 +284,7 @@ function renderSection(
                       <input type="hidden" name="action" value="${item.status ? "deactivate" : "activate"}">
                       <input type="hidden" name="type" value="type">
                       <input type="hidden" name="id" value="${item.id}">
-                      <button type="submit" class="btn ${item.status ? "btn-secondary" : "btn-success"} text-xs">
-                        ${item.status ? "Deactivate" : "Activate"}
-                      </button>
+                      ${item.status ? deactivateButton({ type: "submit" }) : activateButton({ type: "submit" })}
                     </form>
                   </td>
                 </tr>`
@@ -303,12 +298,4 @@ function renderSection(
   `;
 }
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
 

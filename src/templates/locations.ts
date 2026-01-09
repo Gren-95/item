@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { button, editButton, deleteButton, activateButton, deactivateButton } from "./buttons";
 import { renderAlert, escapeHtml } from "./components";
 
 interface LocationItem {
@@ -18,7 +19,7 @@ interface LocationsData {
   subAreas: LocationItem[];
 }
 
-export function locationsPage(data: LocationsData, success = "", error = "", isAdmin: boolean = false): string {
+export function locationsPage(data: LocationsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false): string {
   const alert = renderAlert(success, error);
 
   const sections: {
@@ -109,7 +110,7 @@ export function locationsPage(data: LocationsData, success = "", error = "", isA
     </div>
   `;
 
-  return layout("Locations", content, isAdmin);
+  return layout("Locations", content, isAdmin, hasPcPwView);
 }
 
 function renderSection(
@@ -151,7 +152,7 @@ function renderSection(
               : ""
           }
           <div>
-            <button type="submit" class="btn btn-primary w-full md:w-auto">Add ${title.slice(0, -1)}</button>
+            ${button(`Add ${title.slice(0, -1)}`, { type: "submit", variant: "primary", fullWidth: true, className: "md:w-auto" })}
           </div>
         </form>
       </div>
@@ -180,7 +181,7 @@ function renderSection(
                       <input type="hidden" name="type" value="${type}">
                       <input type="hidden" name="id" value="${item.id}">
                       <input name="name" value="${escapeHtml(item.name)}" class="input-field w-full">
-                      <button type="submit" class="btn btn-secondary text-xs whitespace-nowrap">Rename</button>
+                      ${editButton({ type: "submit", className: "whitespace-nowrap" })}
                     </form>
                   </td>
                   <td class="py-2 px-2">
@@ -196,9 +197,7 @@ function renderSection(
                       <input type="hidden" name="action" value="${item.status ? "deactivate" : "activate"}">
                       <input type="hidden" name="type" value="${type}">
                       <input type="hidden" name="id" value="${item.id}">
-                      <button type="submit" class="btn ${item.status ? "btn-secondary" : "btn-success"} text-xs">
-                        ${item.status ? "Deactivate" : "Activate"}
-                      </button>
+                      ${item.status ? deactivateButton({ type: "submit" }) : activateButton({ type: "submit" })}
                     </form>
                   </td>
                 </tr>`

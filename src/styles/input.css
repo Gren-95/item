@@ -4,7 +4,7 @@
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800;
+    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 flex items-center justify-center;
   }
   
   .btn-primary {
@@ -17,6 +17,48 @@
   
   .btn-success {
     @apply bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600;
+  }
+  
+  .btn.btn-danger {
+    background-color: rgb(220 38 38) !important;
+  }
+  
+  .btn.btn-danger:hover {
+    background-color: rgb(185 28 28) !important;
+  }
+  
+  .btn-danger svg,
+  .btn-danger [class*="svg"] {
+    @apply text-white;
+  }
+  
+  .btn-warning {
+    @apply bg-yellow-700 text-white hover:bg-yellow-800 focus:ring-yellow-600 dark:bg-yellow-600 dark:hover:bg-yellow-700;
+  }
+  
+  .btn.btn-warning {
+    background-color: rgb(161 98 7) !important;
+  }
+  
+  .btn.btn-warning:hover {
+    background-color: rgb(133 77 14) !important;
+  }
+  
+  .btn-warning svg,
+  .btn-warning [class*="svg"] {
+    @apply text-white;
+  }
+  
+  .btn-sm {
+    @apply px-2 py-1 text-xs;
+  }
+  
+  .btn-lg {
+    @apply px-6 py-3 text-base;
   }
   
   .input-field {

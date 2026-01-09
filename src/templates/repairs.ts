@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { button } from "./buttons";
 
 interface RepairItem {
   id: number;
@@ -42,7 +43,7 @@ function formatDate(dateStr: string | null | undefined): string {
   }
 }
 
-export function repairsPage(data: RepairsData, success = "", error = "", isAdmin: boolean = false): string {
+export function repairsPage(data: RepairsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false): string {
   const alert = success
     ? `<div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6 text-green-700 dark:text-green-400">✅ ${escapeHtml(success)}</div>`
     : error
@@ -263,7 +264,7 @@ export function repairsPage(data: RepairsData, success = "", error = "", isAdmin
     </div>
   `;
 
-  return layout("Repair Tracking", content, isAdmin);
+  return layout("Repair Tracking", content, isAdmin, hasPcPwView);
 }
 
 function renderRepairSection(
@@ -355,11 +356,15 @@ function getActionButtons(item: RepairItem, currentType: string): string {
       <form method="POST" action="/repairs" class="inline" onsubmit="return confirm('Mark this equipment as sent to supplier?');">
         <input type="hidden" name="action" value="mark_sent">
         <input type="hidden" name="equipment_id" value="${item.id}">
-        <button type="submit" class="btn btn-primary text-xs" title="Mark as sent to supplier">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        ${button("", {
+          type: "submit",
+          variant: "primary",
+          size: "sm",
+          icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-        </button>
+          </svg>`,
+          title: "Mark as sent to supplier",
+        })}
       </form>
     `);
   } else if (currentType === "at_supplier") {
@@ -368,11 +373,15 @@ function getActionButtons(item: RepairItem, currentType: string): string {
       <form method="POST" action="/repairs" class="inline" onsubmit="return confirm('Mark this equipment as returned from supplier?');">
         <input type="hidden" name="action" value="mark_returned">
         <input type="hidden" name="equipment_id" value="${item.id}">
-        <button type="submit" class="btn btn-success text-xs" title="Mark as returned">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        ${button("", {
+          type: "submit",
+          variant: "success",
+          size: "sm",
+          icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-          </svg>
-        </button>
+          </svg>`,
+          title: "Mark as returned",
+        })}
       </form>
     `);
   } else if (currentType === "returned") {
@@ -381,11 +390,15 @@ function getActionButtons(item: RepairItem, currentType: string): string {
       <form method="POST" action="/repairs" class="inline" onsubmit="return confirm('Mark this equipment as in use?');">
         <input type="hidden" name="action" value="mark_backup">
         <input type="hidden" name="equipment_id" value="${item.id}">
-        <button type="submit" class="btn btn-secondary text-xs" title="Mark as in use">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        ${button("", {
+          type: "submit",
+          variant: "secondary",
+          size: "sm",
+          icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-          </svg>
-        </button>
+          </svg>`,
+          title: "Mark as in use",
+        })}
       </form>
     `);
   }
