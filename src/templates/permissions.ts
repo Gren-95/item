@@ -1,7 +1,7 @@
 import { layout } from "./layout";
 
 interface User {
-  id: number;
+  user_id: string;
   user: string;
   name: string;
   mail: string;
@@ -11,13 +11,15 @@ interface User {
 
 interface Permission {
   id: number;
-  user_id: number;
+  user_id: string;
   permission: string;
   role: string;
   comment: string;
   start_date: string;
   end_date: string;
   plant_id?: number;
+  expiry_date?: string | null;
+  added_by_user_id?: string | null;
 }
 
 interface Plant {
@@ -32,9 +34,11 @@ interface PermissionsData {
   plants?: Plant[];
 }
 
-function escapeHtml(str: string | null | undefined): string {
-  if (!str) return "";
-  return str
+function escapeHtml(str: string | null | undefined | number | Date): string {
+  if (str === null || str === undefined) return "";
+  // Convert to string if not already
+  const strValue = String(str);
+  return strValue
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -87,7 +91,7 @@ export function permissionsPage(
       <div class="card">
         <div class="mb-6">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Add Permission</h2>
-          <form method="POST" action="/permissions" class="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <form method="POST" action="/permissions" class="grid grid-cols-1 md:grid-cols-6 gap-3">
             <input type="hidden" name="action" value="add">
             <div>
               <label class="label">User</label>
@@ -97,7 +101,7 @@ export function permissionsPage(
                   .filter((u) => u.active)
                   .map(
                     (u) =>
-                      `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.user)})</option>`
+                      `<option value="${escapeHtml(u.user_id)}">${escapeHtml(u.name)} (${escapeHtml(u.user)})</option>`
                   )
                   .join("")}
               </select>
@@ -176,6 +180,18 @@ export function permissionsPage(
                 required
               />
             </div>
+            <div>
+              <label class="label">Expiry Date (optional)</label>
+              <input
+                type="date"
+                name="expiry_date"
+                class="input-field"
+                placeholder="Leave empty for no expiry"
+              />
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Optional: Set when this permission should expire. Leave empty for permanent permission.
+              </p>
+            </div>
             <div class="flex items-end">
               <button type="submit" class="btn btn-primary w-full">
                 Add Permission
@@ -217,8 +233,8 @@ export function permissionsPage(
                 <th class="py-3 px-2">Access Key</th>
                 <th class="py-3 px-2">Value</th>
                 <th class="py-3 px-2">Comment</th>
-                <th class="py-3 px-2">Start Date</th>
-                <th class="py-3 px-2">End Date</th>
+                <th class="py-3 px-2">Expiry Date</th>
+                <th class="py-3 px-2">Added By</th>
                 <th class="py-3 px-2">Actions</th>
               </tr>
             </thead>
@@ -231,22 +247,51 @@ export function permissionsPage(
                   </tr>`
                 : data.permissions
                     .map((perm) => {
-                      const user = data.users.find((u) => u.id === perm.user_id);
+                      const user = data.users.find((u) => u.user_id === perm.user_id);
                       const plantName = perm.plant_id === 0 
                         ? "All (global)" 
                         : (perm.plant_id && data.plantMap?.[perm.plant_id] ? data.plantMap[perm.plant_id] : "Unknown");
+                      
+                      // Check if permission is expired
+                      // Compare dates at midnight to avoid timezone issues
+                      const isExpired = perm.expiry_date 
+                        ? (() => {
+                            const expiryDate = new Date(perm.expiry_date + 'T00:00:00');
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            return expiryDate < today;
+                          })()
+                        : false;
+                      
+                      // Style row based on expiry status
+                      const rowClass = isExpired
+                        ? "border-b border-gray-200 dark:border-gray-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors bg-red-50 dark:bg-red-900/10"
+                        : "border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors";
+                      
+                      const textClass = isExpired
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-white dark:text-white";
+                      
+                      const expiryDateDisplay = perm.expiry_date 
+                        ? escapeHtml(perm.expiry_date)
+                        : '<span class="text-gray-400 dark:text-gray-500 italic">Never</span>';
+                      
+                      const addedByDisplay = perm.added_by_user_id
+                        ? escapeHtml(perm.added_by_user_id)
+                        : '<span class="text-gray-400 dark:text-gray-500 italic">Unknown</span>';
+                      
                       return `
-                        <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <tr class="${rowClass}">
                           <td class="py-3 px-2">
-                            <div class="font-medium text-gray-900 dark:text-white">
+                            <div class="font-medium ${textClass}">
                               ${escapeHtml(user?.name || "Unknown")}
                             </div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">
                               ${escapeHtml(user?.user || "")}
                             </div>
                           </td>
-                          <td class="py-3 px-2 text-white dark:text-white">${escapeHtml(plantName)}</td>
-                          <td class="py-3 px-2 font-mono text-xs text-white dark:text-white">${escapeHtml(perm.permission)}</td>
+                          <td class="py-3 px-2 ${textClass}">${escapeHtml(plantName)}</td>
+                          <td class="py-3 px-2 font-mono text-xs ${textClass}">${escapeHtml(perm.permission)}</td>
                           <td class="py-3 px-2">
                             <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                               perm.role === "admin"
@@ -256,9 +301,12 @@ export function permissionsPage(
                               ${escapeHtml(perm.role)}
                             </span>
                           </td>
-                          <td class="py-3 px-2 text-white dark:text-white">${escapeHtml(perm.comment)}</td>
-                          <td class="py-3 px-2 text-white dark:text-white">${escapeHtml(perm.start_date)}</td>
-                          <td class="py-3 px-2 text-white dark:text-white">${escapeHtml(perm.end_date)}</td>
+                          <td class="py-3 px-2 ${textClass}">${escapeHtml(perm.comment)}</td>
+                          <td class="py-3 px-2 ${isExpired ? 'text-red-600 dark:text-red-400 font-semibold' : textClass}">
+                            ${expiryDateDisplay}
+                            ${isExpired ? '<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">EXPIRED</span>' : ''}
+                          </td>
+                          <td class="py-3 px-2 ${textClass}">${addedByDisplay}</td>
                           <td class="py-3 px-2">
                             <form method="POST" action="/permissions" class="inline" onsubmit="return confirm('Are you sure you want to delete this permission?');">
                               <input type="hidden" name="action" value="delete">
