@@ -70,12 +70,14 @@ export async function hasItemLoginPermission(
     }
 
     // Must have "login" permission with plant_id = 0 (global)
+    // Exclude expired permissions
     const [perms] = await pool.query<import("mysql2").RowDataPacket[]>(
       `SELECT id FROM it_user_permissions
        WHERE user_id = ?
          AND permission = 'login'
          AND plant_id = 0
          AND role IN ('user','admin')
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
       [username]
     );
@@ -165,12 +167,14 @@ export async function hasPermission(
     }
 
     // Global admin check (plant_id = 0, access_key = 'global_admin')
+    // Exclude expired permissions
     const [globalAdmin] = await pool.query<import("mysql2").RowDataPacket[]>(
       `SELECT id FROM it_user_permissions
        WHERE user_id = ?
          AND plant_id = 0
          AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
       [username]
     );
@@ -190,13 +194,15 @@ export async function hasPermission(
  }
 
     // Check plant-scoped permission with separate plant_id and simple permission name
+    // Exclude expired permissions
     const permission = permissionName;
     const [permissions] = await pool.query<import("mysql2").RowDataPacket[]>(
       `SELECT id, role FROM it_user_permissions
        WHERE user_id = ?
          AND plant_id = ?
          AND permission = ?
-         AND role IN (?, ?)`,
+         AND role IN (?, ?)
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())`,
       [username, targetPlantId, permission, requireAdmin ? 'admin' : 'user', 'admin']
     );
 
@@ -239,19 +245,46 @@ export async function hasAdminPermission(
     );
 
     if (users.length === 0) {
+      console.error(`[hasAdminPermission] User not found in employees list: ${username}`);
       return false;
     }
 
-   // Check if user has admin role on any plant-scoped permission or global admin
-    const [pagePermissions] = await pool.query<import("mysql2").RowDataPacket[]>(
-      `SELECT id FROM it_user_permissions
+    // First check for global_admin permission (plant_id = 0, permission = 'global_admin', role = 'admin')
+    // Exclude expired permissions
+    const [globalAdmin] = await pool.query<import("mysql2").RowDataPacket[]>(
+      `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
        WHERE user_id = ?
+         AND plant_id = 0
+         AND permission = 'global_admin'
          AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
       [username]
     );
+    console.log(`[hasAdminPermission] global_admin query for ${username}: found ${globalAdmin.length} records`);
+    if (globalAdmin.length > 0) {
+      console.log(`[hasAdminPermission] Found global_admin permission for user: ${username}`, globalAdmin[0]);
+      return true;
+    }
 
-    return pagePermissions.length > 0;
+    // Check if user has admin role on any permission
+    // Exclude expired permissions
+    const [pagePermissions] = await pool.query<import("mysql2").RowDataPacket[]>(
+      `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
+       WHERE user_id = ?
+         AND role = 'admin'
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+       LIMIT 1`,
+      [username]
+    );
+    console.log(`[hasAdminPermission] admin role query for ${username}: found ${pagePermissions.length} records`);
+    if (pagePermissions.length > 0) {
+      console.log(`[hasAdminPermission] Found admin role permission for user: ${username}`, pagePermissions[0]);
+      return true;
+    }
+
+    console.error(`[hasAdminPermission] No admin permissions found for user: ${username}`);
+    return false;
   } catch (error) {
     console.error("Admin permission check error:", error);
     return false;

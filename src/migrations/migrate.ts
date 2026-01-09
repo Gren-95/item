@@ -116,6 +116,52 @@ async function ensureMigrationsTable(): Promise<void> {
 
   // Backfill existing rows without plant_id to global (0)
   await pool.query(`UPDATE it_user_permissions SET plant_id = 0 WHERE plant_id IS NULL`);
+
+  // Ensure expiry_date column exists
+  try {
+    await pool.query(`
+      ALTER TABLE it_user_permissions
+      ADD COLUMN expiry_date DATE NULL AFTER comment
+    `);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    const code = err?.code;
+    if (code !== "ER_DUP_FIELDNAME" && !msg.includes("Duplicate column name")) {
+      throw err;
+    }
+  }
+
+  // Ensure added_by_user_id column exists
+  try {
+    await pool.query(`
+      ALTER TABLE it_user_permissions
+      ADD COLUMN added_by_user_id VARCHAR(50) NULL AFTER expiry_date
+    `);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    const code = err?.code;
+    if (code !== "ER_DUP_FIELDNAME" && !msg.includes("Duplicate column name")) {
+      throw err;
+    }
+  }
+
+  // Ensure indexes exist
+  try {
+    await pool.query(`ALTER TABLE it_user_permissions ADD INDEX idx_expiry_date (expiry_date)`);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    if (!msg.includes("Duplicate key name") && !msg.includes("already exists")) {
+      // ignore missing
+    }
+  }
+  try {
+    await pool.query(`ALTER TABLE it_user_permissions ADD INDEX idx_added_by_user (added_by_user_id)`);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    if (!msg.includes("Duplicate key name") && !msg.includes("already exists")) {
+      // ignore missing
+    }
+  }
 }
 
 async function getAppliedMigrations(): Promise<Set<number>> {

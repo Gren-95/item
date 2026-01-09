@@ -396,7 +396,9 @@ async function handleRequest(req: Request): Promise<Response> {
       return Response.redirect(loginUrl, 302);
     }
     // Check admin permission for authenticated users
+    logger.info("Checking admin permission", { traceId, username: session.username });
     isAdmin = await hasAdminPermission(session.username, pool);
+    logger.info("Admin permission result", { traceId, username: session.username, isAdmin });
   }
 
   // Routes
@@ -576,14 +578,16 @@ async function handleRequest(req: Request): Promise<Response> {
       try {
         // Get all users from IT employees list (active only)
         const [users] = await pool.query<RowDataPacket[]>(
-          "SELECT id, user_id AS user, name, email as mail, status as active, employee_no FROM `it_employees_list` WHERE status = 1 ORDER BY name"
+          "SELECT user_id, user_id AS user, name, email as mail, status as active, employee_no FROM `it_employees_list` WHERE status = 1 ORDER BY name"
         );
 
         // Get all permissions (plant-based) from it_user_permissions
         const [permissions] = await pool.query<RowDataPacket[]>(
           `SELECT id, user_id, plant_id, permission, role, comment, 
                   DATE_FORMAT(created, '%Y-%m-%d') as start_date,
-                  DATE_FORMAT(updated, '%Y-%m-%d') as end_date
+                  DATE_FORMAT(updated, '%Y-%m-%d') as end_date,
+                  DATE_FORMAT(expiry_date, '%Y-%m-%d') as expiry_date,
+                  added_by_user_id
            FROM it_user_permissions
            ORDER BY user_id, permission, role`
         );
@@ -649,9 +653,12 @@ async function handleRequest(req: Request): Promise<Response> {
           const access_key = formData.get("access_key")?.toString() || "";
           const value = formData.get("value")?.toString() || "";
           const comment = formData.get("comment")?.toString() || "";
+          const expiry_date_raw = formData.get("expiry_date")?.toString() || "";
 
           const plant_id = plant_id_raw === "" ? NaN : Number(plant_id_raw);
           const permission = access_key.trim().toLowerCase();
+          const expiry_date = expiry_date_raw ? expiry_date_raw : null;
+          const added_by_user_id = session.username;
 
           if (!user_id || !access_key || !value || !comment || Number.isNaN(plant_id)) {
             return Response.redirect("/permissions?error=" + encodeURIComponent("All fields are required (including plant; use 0 for global)"), 303);
@@ -669,12 +676,12 @@ async function handleRequest(req: Request): Promise<Response> {
 
           await pool.query(
             `INSERT INTO it_user_permissions 
-             (user_id, plant_id, permission, role, comment)
-             VALUES (?, ?, ?, ?, ?)`,
-            [user_id, plant_id, access_key, value, comment]
+             (user_id, plant_id, permission, role, comment, expiry_date, added_by_user_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [user_id, plant_id, access_key, value, comment, expiry_date, added_by_user_id]
           );
 
-          logger.info("Permission added", { traceId, user_id, access_key, value });
+          logger.info("Permission added", { traceId, user_id, access_key, value, expiry_date, added_by_user_id });
           return Response.redirect("/permissions?success=" + encodeURIComponent("Permission added successfully"), 303);
         } else if (action === "delete") {
           const permission_id = parseInt(formData.get("permission_id")?.toString() || "0");
