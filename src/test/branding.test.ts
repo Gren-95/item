@@ -44,16 +44,16 @@ describe("Branding and Icons (#31)", () => {
 
     test("layout should include PNG favicon links with sizes", () => {
       const html = layout("Test", "<p>Test</p>");
-      expect(html).toContain('href="/icons/favicon-32x32.png"');
-      expect(html).toContain('sizes="32x32"');
-      expect(html).toContain('href="/icons/favicon-16x16.png"');
-      expect(html).toContain('sizes="16x16"');
+      expect(html).toContain('href="/icons/favicon.svg"');
+      expect(html).toContain('type="image/svg+xml"');
+      expect(html).toContain('href="/icons/favicon-96x96.png"');
+      expect(html).toContain('sizes="96x96"');
     });
 
     test("layout should include apple-touch-icon", () => {
       const html = layout("Test", "<p>Test</p>");
       expect(html).toContain('rel="apple-touch-icon"');
-      expect(html).toContain('href="/icons/icon-192x192.png"');
+      expect(html).toContain('href="/icons/apple-touch-icon.png"');
     });
   });
 
@@ -128,7 +128,7 @@ describe("Branding and Icons (#31)", () => {
         const sizeMatch = icon.sizes.match(/(\d+)x(\d+)/);
         if (sizeMatch) {
           const size = sizeMatch[1];
-          expect(icon.src).toContain(`-${size}x${size}.png`);
+          expect(icon.src).toContain(`web-app-manifest-${size}x${size}.png`);
         }
       });
     });
@@ -138,9 +138,9 @@ describe("Branding and Icons (#31)", () => {
       
       // All icon paths should be under /icons/
       expect(html).toContain('/icons/favicon.ico');
-      expect(html).toContain('/icons/favicon-32x32.png');
-      expect(html).toContain('/icons/favicon-16x16.png');
-      expect(html).toContain('/icons/icon-192x192.png');
+      expect(html).toContain('/icons/favicon.svg');
+      expect(html).toContain('/icons/favicon-96x96.png');
+      expect(html).toContain('/icons/apple-touch-icon.png');
     });
   });
 });

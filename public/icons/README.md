@@ -5,13 +5,16 @@ This directory contains the application icons and favicons.
 ## Required Files
 
 ### Favicon Files
-- `favicon.ico` - Multi-resolution ICO file (16x16, 32x32, 48x48)
-- `favicon-16x16.png` - 16x16 PNG favicon
-- `favicon-32x32.png` - 32x32 PNG favicon
+- `favicon.ico` - Multi-resolution ICO file
+- `favicon.svg` - SVG favicon (modern browsers)
+- `favicon-96x96.png` - 96x96 PNG favicon
+
+### Apple Touch Icon
+- `apple-touch-icon.png` - Apple touch icon for iOS devices
 
 ### PWA Icons
-- `icon-192x192.png` - 192x192 PNG icon (for PWA and Apple touch icon)
-- `icon-512x512.png` - 512x512 PNG icon (for PWA)
+- `web-app-manifest-192x192.png` - 192x192 PNG icon (for PWA)
+- `web-app-manifest-512x512.png` - 512x512 PNG icon (for PWA)
 
 ## Icon Design Guidelines
 
@@ -34,7 +37,5 @@ Icons can be generated using:
 
 ## Current Status
 
-⚠️ **Note**: Icon files need to be created. The application is configured to use these icons, but the actual image files must be generated separately.
-
-Once icons are created, they should be placed in this directory and the application will automatically use them.
+✅ **Icons are configured**: All required icon files are present and the application is configured to use them.
 
