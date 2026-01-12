@@ -43,8 +43,10 @@ export async function verifyCredentials(username: string, password: string): Pro
     // Otherwise check the trimmed response directly
     return trimmed === "TRUE";
   } catch (error) {
-    // Log error but don't expose it
-    console.error("Authentication error:", error);
+    // Log error but don't expose it (only in non-test environments)
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.error("Authentication error:", error);
+    }
     return false;
   }
 }
@@ -84,7 +86,10 @@ export async function hasItemLoginPermission(
 
     return perms.length > 0;
   } catch (error) {
-    console.error("Permission check error:", error);
+    // Only log in non-test environments
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.error("Permission check error:", error);
+    }
     return false;
   }
 }
@@ -133,7 +138,10 @@ export async function getUserPlantId(
 
     return null;
   } catch (error) {
-    console.error("Error getting user plant_id:", error);
+    // Only log in non-test environments
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.error("Error getting user plant_id:", error);
+    }
     return null;
   }
 }
@@ -218,7 +226,10 @@ export async function hasPermission(
     // Otherwise, having either 'user' or 'admin' is sufficient
     return true;
   } catch (error) {
-    console.error(`Permission check error for ${permissionName}:`, error);
+    // Only log in non-test environments
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.error(`Permission check error for ${permissionName}:`, error);
+    }
     // On error, deny access for security
     return false;
   }
@@ -245,7 +256,6 @@ export async function hasAdminPermission(
     );
 
     if (users.length === 0) {
-      console.error(`[hasAdminPermission] User not found in employees list: ${username}`);
       return false;
     }
 
@@ -261,9 +271,7 @@ export async function hasAdminPermission(
        LIMIT 1`,
       [username]
     );
-    console.log(`[hasAdminPermission] global_admin query for ${username}: found ${globalAdmin.length} records`);
     if (globalAdmin.length > 0) {
-      console.log(`[hasAdminPermission] Found global_admin permission for user: ${username}`, globalAdmin[0]);
       return true;
     }
 
@@ -277,16 +285,15 @@ export async function hasAdminPermission(
        LIMIT 1`,
       [username]
     );
-    console.log(`[hasAdminPermission] admin role query for ${username}: found ${pagePermissions.length} records`);
     if (pagePermissions.length > 0) {
-      console.log(`[hasAdminPermission] Found admin role permission for user: ${username}`, pagePermissions[0]);
       return true;
     }
-
-    console.error(`[hasAdminPermission] No admin permissions found for user: ${username}`);
     return false;
   } catch (error) {
-    console.error("Admin permission check error:", error);
+    // Only log in non-test environments
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.error("Admin permission check error:", error);
+    }
     return false;
   }
 }
@@ -753,7 +760,6 @@ export async function hasPcPwViewPermission(
     );
 
     if (users.length === 0) {
-      console.log(`[hasPcPwViewPermission] User not found: ${username}`);
       return false;
     }
 
@@ -769,7 +775,6 @@ export async function hasPcPwViewPermission(
       [username]
     );
     if (globalAdmin.length > 0) {
-      console.log(`[hasPcPwViewPermission] User has global_admin: ${username}`);
       return true;
     }
 
@@ -784,10 +789,12 @@ export async function hasPcPwViewPermission(
       [username]
     );
 
-    console.log(`[hasPcPwViewPermission] Query result for ${username}:`, permissions.length, permissions);
     return permissions.length > 0;
   } catch (error) {
-    console.error(`[hasPcPwViewPermission] Error for ${username}:`, error);
+    // Only log in non-test environments
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.error(`[hasPcPwViewPermission] Error for ${username}:`, error);
+    }
     return false;
   }
 }
@@ -810,7 +817,6 @@ export async function hasPcPwEditPermission(
     );
 
     if (users.length === 0) {
-      console.log(`[hasPcPwEditPermission] User not found: ${username}`);
       return false;
     }
 
@@ -826,7 +832,6 @@ export async function hasPcPwEditPermission(
       [username]
     );
     if (globalAdmin.length > 0) {
-      console.log(`[hasPcPwEditPermission] User has global_admin: ${username}`);
       return true;
     }
 
@@ -841,10 +846,12 @@ export async function hasPcPwEditPermission(
       [username]
     );
 
-    console.log(`[hasPcPwEditPermission] Query result for ${username}:`, permissions.length, permissions);
     return permissions.length > 0;
   } catch (error) {
-    console.error(`[hasPcPwEditPermission] Error for ${username}:`, error);
+    // Only log in non-test environments
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.error(`[hasPcPwEditPermission] Error for ${username}:`, error);
+    }
     return false;
   }
 }
@@ -936,7 +943,10 @@ export async function changePassword(
       };
     }
   } catch (error) {
-    console.error("Password change error:", error);
+    // Only log in non-test environments
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.error("Password change error:", error);
+    }
     return {
       success: false,
       error: "An error occurred during password change. Please try again.",

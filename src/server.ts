@@ -330,9 +330,9 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // Static files
   if (path === "/favicon.ico") {
-    const ico = file("./public/icons/icon.png");
+    const ico = file("./public/icons/favicon.ico");
     if (await ico.exists()) {
-      return new Response(ico, { headers: { "Content-Type": "image/png" } });
+      return new Response(ico, { headers: { "Content-Type": "image/x-icon" } });
     }
   }
 
@@ -1093,7 +1093,8 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       // Check search permission
-      const hasSearch = await hasSearchPermission(session.username, pool);
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const hasSearch = await hasSearchPermission(session.username, pool, userPlantId);
       if (!hasSearch) {
         return new Response(
           searchPage("", null, "You do not have permission to access the search page. Please contact your administrator.", isAdmin, hasPcPwView),
@@ -1357,7 +1358,8 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       // Check edit equipment permission
-      const hasEditPermission = await hasEditEquipmentPermission(session.username, pool);
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const hasEditPermission = await hasEditEquipmentPermission(session.username, pool, userPlantId);
       if (!hasEditPermission) {
         const id = parseInt(path.split("/")[2]);
         const auditData = await getAuditData(id);
@@ -1397,7 +1399,8 @@ async function handleRequest(req: Request): Promise<Response> {
       const formData = await req.formData();
       
       // Check edit equipment permission
-      const hasEditPermissionPost = await hasEditEquipmentPermission(session.username, pool);
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const hasEditPermissionPost = await hasEditEquipmentPermission(session.username, pool, userPlantId);
       if (!hasEditPermissionPost) {
         const employeeNo = await getEmployeeNo(session.username, pool);
         const clientIp = getClientIp(req);
@@ -1491,9 +1494,8 @@ async function handleRequest(req: Request): Promise<Response> {
         repair_physical_location: formData.get("repair_physical_location") || null,
       };
 
-      // Check edit equipment permission
-      const hasEditPermission = await hasEditEquipmentPermission(session.username, pool);
-      if (!hasEditPermission) {
+      // Permission already checked above, continue with update
+      if (false) {
         const employeeNo = await getEmployeeNo(session.username, pool);
         const clientIp = getClientIp(req);
         
@@ -1704,7 +1706,6 @@ async function handleRequest(req: Request): Promise<Response> {
         // If "send_to_repair" action, check permission and redirect to repairs page
         if (action === "send_to_repair") {
           // Check if user has permission to send equipment to repair
-          const userPlantId = await getUserPlantId(session.username, pool);
           const hasSendRepair = await hasRepairsSendPermission(session.username, pool, userPlantId);
           if (!hasSendRepair) {
             const employeeNo = await getEmployeeNo(session.username, pool);
@@ -1785,7 +1786,8 @@ async function handleRequest(req: Request): Promise<Response> {
       const error = url.searchParams.get("error") || "";
 
       // Check view locations permission
-      const hasView = await hasLocationsViewPermission(session.username, pool);
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const hasView = await hasLocationsViewPermission(session.username, pool, userPlantId);
       if (!hasView) {
         // Show success feedback even for users without view permission; keep gentle reminder
         const fallbackError = success ? "" : "Actions require approval.";
@@ -1956,7 +1958,8 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       // Check view vendors permission
-      const hasView = await hasVendorsViewPermission(session.username, pool);
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const hasView = await hasVendorsViewPermission(session.username, pool, userPlantId);
       if (!hasView) {
         return new Response(
           vendorsPage(await getVendorsAndSuppliersData(), "", "Actions require approval.", isAdmin, hasPcPwView),
@@ -2020,9 +2023,9 @@ async function handleRequest(req: Request): Promise<Response> {
 
           const employeeNo = await getEmployeeNo(session.username, pool);
           const clientIp = getClientIp(req);
+          const userPlantId = await getUserPlantId(session.username, pool);
 
           if (action === "add") {
-            const userPlantId = await getUserPlantId(session.username, pool);
             const hasAdd = await hasVendorsAddPermission(session.username, pool, userPlantId);
             if (!hasAdd) {
               if (!employeeNo) {
@@ -2048,14 +2051,14 @@ async function handleRequest(req: Request): Promise<Response> {
               [name!, email, phone_number, address, representative_name, sap_vendor_no, website]
             );
           } else if (action === "edit") {
-            const hasEdit = await hasVendorsEditPermission(session.username, pool);
+            const hasEdit = await hasVendorsEditPermission(session.username, pool, userPlantId);
             if (!hasEdit) {
               if (!employeeNo) {
                 return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "vendors_edit",
+                userPlantId ? `${userPlantId}_vendors_edit` : "vendors_edit",
                 "edit_supplier",
                 { entity: "supplier", id, name, email, phone_number, address, representative_name, sap_vendor_no, website },
                 clientIp,
@@ -2074,14 +2077,14 @@ async function handleRequest(req: Request): Promise<Response> {
               [name!, email, phone_number, address, representative_name, sap_vendor_no, website, id!]
             );
           } else if (action === "delete") {
-            const hasDelete = await hasVendorsDeletePermission(session.username, pool);
+            const hasDelete = await hasVendorsDeletePermission(session.username, pool, userPlantId);
             if (!hasDelete) {
               if (!employeeNo) {
                 return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "vendors_delete",
+                userPlantId ? `${userPlantId}_vendors_delete` : "vendors_delete",
                 "delete_supplier",
                 { entity: "supplier", id },
                 clientIp,
@@ -2113,9 +2116,9 @@ async function handleRequest(req: Request): Promise<Response> {
 
           const employeeNo = await getEmployeeNo(session.username, pool);
           const clientIp = getClientIp(req);
+          const userPlantId = await getUserPlantId(session.username, pool);
 
           if (action === "add") {
-            const userPlantId = await getUserPlantId(session.username, pool);
             const hasAdd = await hasVendorsAddPermission(session.username, pool, userPlantId);
             if (!hasAdd) {
               if (!employeeNo) {
@@ -2140,14 +2143,14 @@ async function handleRequest(req: Request): Promise<Response> {
               [name!]
             );
           } else if (action === "edit") {
-            const hasEdit = await hasVendorsEditPermission(session.username, pool);
+            const hasEdit = await hasVendorsEditPermission(session.username, pool, userPlantId);
             if (!hasEdit) {
               if (!employeeNo) {
                 return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "vendors_edit",
+                userPlantId ? `${userPlantId}_vendors_edit` : "vendors_edit",
                 "edit_vendor",
                 { entity: "vendor", id, name },
                 clientIp,
@@ -2161,14 +2164,14 @@ async function handleRequest(req: Request): Promise<Response> {
             }
             await pool.query("UPDATE it_equipment_vendor SET name = ? WHERE id = ?", [name!, id!]);
           } else if (action === "delete") {
-            const hasDelete = await hasVendorsDeletePermission(session.username, pool);
+            const hasDelete = await hasVendorsDeletePermission(session.username, pool, userPlantId);
             if (!hasDelete) {
               if (!employeeNo) {
                 return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "vendors_delete",
+                userPlantId ? `${userPlantId}_vendors_delete` : "vendors_delete",
                 "delete_vendor",
                 { entity: "vendor", id },
                 clientIp,
@@ -2212,7 +2215,8 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       // Check view types permission
-      const hasView = await hasTypesViewPermission(session.username, pool);
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const hasView = await hasTypesViewPermission(session.username, pool, userPlantId);
       if (!hasView) {
         return new Response(
           typesPage(await getTypesData(), "", "You do not have permission to view types/configurations. Please contact your administrator.", isAdmin, hasPcPwView),
@@ -2261,10 +2265,10 @@ async function handleRequest(req: Request): Promise<Response> {
 
         const employeeNo = await getEmployeeNo(session.username, pool);
         const clientIp = getClientIp(req);
+        const userPlantId = await getUserPlantId(session.username, pool);
 
         if (validated.type === "type") {
           if (action === "add") {
-            const userPlantId = await getUserPlantId(session.username, pool);
             const hasAdd = await hasTypesAddPermission(session.username, pool, userPlantId);
             if (!hasAdd) {
               if (!employeeNo) {
@@ -2289,14 +2293,14 @@ async function handleRequest(req: Request): Promise<Response> {
               [name!]
             );
           } else if (action === "edit") {
-            const hasEdit = await hasTypesEditPermission(session.username, pool);
+            const hasEdit = await hasTypesEditPermission(session.username, pool, userPlantId);
             if (!hasEdit) {
               if (!employeeNo) {
                 return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "types_edit",
+                userPlantId ? `${userPlantId}_types_edit` : "types_edit",
                 "edit_type",
                 { type: "type", id, name },
                 clientIp,
@@ -2310,14 +2314,14 @@ async function handleRequest(req: Request): Promise<Response> {
             }
             await pool.query("UPDATE it_equipment_type SET type_name = ? WHERE id = ?", [name!, id!]);
           } else if (action === "deactivate" || action === "activate") {
-            const hasDelete = await hasTypesDeletePermission(session.username, pool);
+            const hasDelete = await hasTypesDeletePermission(session.username, pool, userPlantId);
             if (!hasDelete) {
               if (!employeeNo) {
                 return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "types_delete",
+                userPlantId ? `${userPlantId}_types_delete` : "types_delete",
                 action === "activate" ? "activate_type" : "deactivate_type",
                 { type: "type", id, action },
                 clientIp,
@@ -2336,7 +2340,6 @@ async function handleRequest(req: Request): Promise<Response> {
           }
         } else if (validated.type === "product-line") {
           if (action === "add") {
-            const userPlantId = await getUserPlantId(session.username, pool);
             const hasAdd = await hasTypesAddPermission(session.username, pool, userPlantId);
             if (!hasAdd) {
               if (!employeeNo) {
@@ -2361,14 +2364,14 @@ async function handleRequest(req: Request): Promise<Response> {
               [name!, parent_id!]
             );
           } else if (action === "edit") {
-            const hasEdit = await hasTypesEditPermission(session.username, pool);
+            const hasEdit = await hasTypesEditPermission(session.username, pool, userPlantId);
             if (!hasEdit) {
               if (!employeeNo) {
                 return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "types_edit",
+                userPlantId ? `${userPlantId}_types_edit` : "types_edit",
                 "edit_product_line",
                 { type: "product-line", id, name },
                 clientIp,
@@ -2382,14 +2385,14 @@ async function handleRequest(req: Request): Promise<Response> {
             }
             await pool.query("UPDATE it_equipment_product_line SET name = ? WHERE id = ?", [name!, id!]);
           } else if (action === "deactivate" || action === "activate") {
-            const hasDelete = await hasTypesDeletePermission(session.username, pool);
+            const hasDelete = await hasTypesDeletePermission(session.username, pool, userPlantId);
             if (!hasDelete) {
               if (!employeeNo) {
                 return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "types_delete",
+                userPlantId ? `${userPlantId}_types_delete` : "types_delete",
                 action === "activate" ? "activate_product_line" : "deactivate_product_line",
                 { type: "product-line", id, action },
                 clientIp,
@@ -2408,7 +2411,7 @@ async function handleRequest(req: Request): Promise<Response> {
           }
         } else if (validated.type === "model") {
           if (action === "add") {
-            const hasAdd = await hasTypesAddPermission(session.username, pool);
+            const hasAdd = await hasTypesAddPermission(session.username, pool, userPlantId);
             if (!hasAdd) {
               if (!employeeNo) {
                 return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
@@ -2432,14 +2435,14 @@ async function handleRequest(req: Request): Promise<Response> {
               [name!, parent_id!]
             );
           } else if (action === "edit") {
-            const hasEdit = await hasTypesEditPermission(session.username, pool);
+            const hasEdit = await hasTypesEditPermission(session.username, pool, userPlantId);
             if (!hasEdit) {
               if (!employeeNo) {
                 return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "types_edit",
+                userPlantId ? `${userPlantId}_types_edit` : "types_edit",
                 "edit_model",
                 { type: "model", id, name },
                 clientIp,
@@ -2453,14 +2456,14 @@ async function handleRequest(req: Request): Promise<Response> {
             }
             await pool.query("UPDATE it_equipment_model SET name = ? WHERE id = ?", [name!, id!]);
           } else if (action === "deactivate" || action === "activate") {
-            const hasDelete = await hasTypesDeletePermission(session.username, pool);
+            const hasDelete = await hasTypesDeletePermission(session.username, pool, userPlantId);
             if (!hasDelete) {
               if (!employeeNo) {
                 return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
               }
               const requestId = await createApprovalRequest(
                 employeeNo,
-                "types_delete",
+                userPlantId ? `${userPlantId}_types_delete` : "types_delete",
                 action === "activate" ? "activate_model" : "deactivate_model",
                 { type: "model", id, action },
                 clientIp,
@@ -2497,7 +2500,8 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       // Check view write-off reasons permission
-      const hasView = await hasWriteOffReasonsViewPermission(session.username, pool);
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const hasView = await hasWriteOffReasonsViewPermission(session.username, pool, userPlantId);
       if (!hasView) {
         return new Response(
           writeOffReasonsPage(await getWriteOffReasonsData(), "", "Actions require approval.", isAdmin, hasPcPwView),
@@ -2534,9 +2538,9 @@ async function handleRequest(req: Request): Promise<Response> {
         const action = validated.action;
         const id = validated.id ? Number(validated.id) : null;
         const reason = validated.reason;
+        const userPlantId = await getUserPlantId(session.username, pool);
 
         if (action === "add") {
-          const userPlantId = await getUserPlantId(session.username, pool);
           const hasAdd = await hasWriteOffReasonsAddPermission(session.username, pool, userPlantId);
           if (!hasAdd) {
             const employeeNo = await getEmployeeNo(session.username, pool);
@@ -2567,18 +2571,17 @@ async function handleRequest(req: Request): Promise<Response> {
             [reason]
           );
         } else if (action === "edit") {
-          const hasEdit = await hasWriteOffReasonsEditPermission(session.username, pool);
+          const employeeNo = await getEmployeeNo(session.username, pool);
+          const clientIp = getClientIp(req);
+          const hasEdit = await hasWriteOffReasonsEditPermission(session.username, pool, userPlantId);
           if (!hasEdit) {
-            const employeeNo = await getEmployeeNo(session.username, pool);
-            const clientIp = getClientIp(req);
-
             if (!employeeNo) {
               return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
             }
 
             const requestId = await createApprovalRequest(
               employeeNo,
-              "write_off_reasons_edit",
+              userPlantId ? `${userPlantId}_write_off_reasons_edit` : "write_off_reasons_edit",
               "edit_write_off_reason",
               { id, reason },
               clientIp,
@@ -2595,11 +2598,10 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!reason) throw new Error("Reason is required");
           await pool.query("UPDATE it_equipment_write_off_reason SET reason = ? WHERE id = ?", [reason, id]);
         } else if (action === "delete") {
-          const hasDelete = await hasWriteOffReasonsDeletePermission(session.username, pool);
+          const employeeNo = await getEmployeeNo(session.username, pool);
+          const clientIp = getClientIp(req);
+          const hasDelete = await hasWriteOffReasonsDeletePermission(session.username, pool, userPlantId);
           if (!hasDelete) {
-            const employeeNo = await getEmployeeNo(session.username, pool);
-            const clientIp = getClientIp(req);
-
             if (!employeeNo) {
               return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
             }
@@ -2615,7 +2617,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
             const requestId = await createApprovalRequest(
               employeeNo,
-              "write_off_reasons_delete",
+              userPlantId ? `${userPlantId}_write_off_reasons_delete` : "write_off_reasons_delete",
               "delete_write_off_reason",
               { id },
               clientIp,
@@ -2656,7 +2658,8 @@ async function handleRequest(req: Request): Promise<Response> {
       const session = getSessionFromRequest(req);
       if (session) {
         // Check repairs permission for logged-in users
-        const hasRepairs = await hasRepairsPermission(session.username, pool);
+        const userPlantId = await getUserPlantId(session.username, pool);
+        const hasRepairs = await hasRepairsPermission(session.username, pool, userPlantId);
         if (!hasRepairs) {
           return new Response(
             repairsPage(await getRepairsData(), "", "You do not have permission to view repairs. Please contact your administrator.", isAdmin, hasPcPwView),
@@ -2700,14 +2703,15 @@ async function handleRequest(req: Request): Promise<Response> {
         let permissionRequired = "repairs";
         let actionType = "";
         let hasPermission = false;
+        const userPlantId = await getUserPlantId(session.username, pool);
 
         if (action === "mark_sent") {
-          hasPermission = await hasRepairsSendPermission(session.username, pool);
+          hasPermission = await hasRepairsSendPermission(session.username, pool, userPlantId);
           permissionRequired = "repairs_send";
           actionType = "send_to_repair";
         } else {
           // mark_returned and mark_backup use general repairs permission
-          hasPermission = await hasRepairsPermission(session.username, pool);
+          hasPermission = await hasRepairsPermission(session.username, pool, userPlantId);
           actionType = action === "mark_returned" ? "return_from_repair" : "mark_backup";
         }
 

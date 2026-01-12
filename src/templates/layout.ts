@@ -9,9 +9,9 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
   <title>${title} - IT Equipment Management</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/icons/favicon.ico" type="image/x-icon">
-  <link rel="icon" href="/icons/favicon-32x32.png" type="image/png" sizes="32x32">
-  <link rel="icon" href="/icons/favicon-16x16.png" type="image/png" sizes="16x16">
-  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+  <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/icons/favicon-96x96.png" type="image/png" sizes="96x96">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1e293b" media="(prefers-color-scheme: dark)">
