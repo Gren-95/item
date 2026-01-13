@@ -19,7 +19,7 @@ interface LocationsData {
   subAreas: LocationItem[];
 }
 
-export function locationsPage(data: LocationsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false): string {
+export function locationsPage(data: LocationsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null): string {
   const alert = renderAlert(success, error);
 
   const sections: {
@@ -110,7 +110,7 @@ export function locationsPage(data: LocationsData, success = "", error = "", isA
     </div>
   `;
 
-  return layout("Locations", content, isAdmin, hasPcPwView);
+  return layout("Locations", content, isAdmin, hasPcPwView, username);
 }
 
 function renderSection(

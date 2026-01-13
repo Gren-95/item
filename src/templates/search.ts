@@ -20,7 +20,8 @@ export function searchPage(
   error: string | null = null,
   isAdmin: boolean = false,
   hasPcPwView: boolean = false,
-  userPlantId: number | null = null
+  userPlantId: number | null = null,
+  username: string | null = null
 ): string {
   const content = `
       <div class="max-w-6xl mx-auto">
@@ -423,7 +424,7 @@ export function searchPage(
     </script>
   `;
 
-  return layout("Search", content, isAdmin, hasPcPwView);
+  return layout("Search", content, isAdmin, hasPcPwView, username);
 }
 
 function escapeHtml(str: string): string {

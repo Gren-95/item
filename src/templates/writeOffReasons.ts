@@ -12,7 +12,7 @@ interface WriteOffReasonsData {
   writeOffReasons: WriteOffReasonItem[];
 }
 
-export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false): string {
+export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null): string {
   const alert = renderAlert(success, error);
 
   const content = `
@@ -88,7 +88,7 @@ export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", err
     </div>
   `;
 
-  return layout("Write-Off Reasons", content, isAdmin, hasPcPwView);
+  return layout("Write-Off Reasons", content, isAdmin, hasPcPwView, username);
 }
 
 function escapeHtml(str: string): string {

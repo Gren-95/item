@@ -42,6 +42,8 @@ cp .env.example .env
 | `HTTPS_CERT_FILE` | Path to TLS certificate (inside container) | `/app/certs/ssl.pem` |
 | `HTTPS_KEY_FILE` | Path to TLS key (inside container) | `/app/certs/ssl-key.pem` |
 | `HTTPS_PORT` | HTTPS port | `443` |
+| `ADMIN_USERNAME` | General admin username (bypasses auth API) | Not set |
+| `ADMIN_PASSWORD` | General admin password (bypasses auth API) | Not set |
 
 
 
@@ -120,4 +122,42 @@ docker compose up --build
 ```
 https://localhost
 ```
+
+## General Admin User
+
+The application supports a general admin user that bypasses the external authentication API. This is useful for:
+- Emergency access when the auth API is unavailable
+- Local development and testing
+- Initial system setup
+- Recovery scenarios
+
+### Configuration
+
+Set the following environment variables in your `.env` file:
+
+```bash
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-me-in-production
+```
+
+**⚠️ Security Warning:**
+- Change the default password in production environments
+- Use a strong password
+- Keep the `.env` file secure and never commit it to version control
+- The admin user has full administrative access to all features
+- Admin user access is logged for security auditing
+
+### Admin User Capabilities
+
+The admin user:
+- Bypasses the external authentication API
+- Has full administrative access to all features
+- Can view and edit equipment from any plant
+- Can access all pages and features
+- Bypasses all permission checks
+- Bypasses all plant-based restrictions
+
+### Usage
+
+Simply log in with the configured `ADMIN_USERNAME` and `ADMIN_PASSWORD` credentials. The system will automatically recognize the admin user and grant full access.
 

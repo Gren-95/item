@@ -1,6 +1,6 @@
 import { navigationMenu } from "./navigation";
 
-export function layout(title: string, content: string, isAdmin: boolean = false, hasPcPwView: boolean = false): string {
+export function layout(title: string, content: string, isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,6 +15,7 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1e293b" media="(prefers-color-scheme: dark)">
+  ${username ? `<meta name="username" content="${username}">` : ''}
   <script>
     (function() {
       const stored = localStorage.getItem('theme');
@@ -43,11 +44,17 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
           </a>
         </div>
         <div class="flex items-center gap-2">
-          <a href="/logout" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Logout" title="Logout">
+          <button 
+            id="logout-btn" 
+            class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" 
+            aria-label="Logout" 
+            title="Logout"
+            ${username ? `data-username="${username}"` : ''}
+          >
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
             </svg>
-          </a>
+          </button>
           <button id="theme-toggle" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Toggle dark mode">
           <svg id="theme-icon-light" class="w-6 h-6 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
@@ -214,6 +221,20 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
 
     // Clean up when the page is unloaded
     window.addEventListener('beforeunload', () => clearInterval(intervalId));
+
+    // Logout confirmation with username
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        // Get username from meta tag or data attribute
+        const usernameMeta = document.querySelector('meta[name="username"]');
+        const username = usernameMeta ? usernameMeta.getAttribute('content') : (this.getAttribute('data-username') || 'user');
+        if (confirm(\`Are you sure you want to log out, \${username}?\`)) {
+          window.location.href = '/logout';
+        }
+      });
+    }
   })();
 </script>
 </body>

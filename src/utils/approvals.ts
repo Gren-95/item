@@ -1,13 +1,20 @@
 import type { Pool } from "mysql2/promise";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
+import { isAdminUser } from "./auth";
 
 /**
  * Get employee_no from username
+ * For admin user, returns "admin" without database lookup
  */
 export async function getEmployeeNo(
   username: string,
   pool: Pool
 ): Promise<string | null> {
+  // Admin user returns "admin" as employee_no (bypasses database)
+  if (isAdminUser(username)) {
+    return "admin";
+  }
+
   try {
     const [users] = await pool.query<RowDataPacket[]>(
       "SELECT employee_no FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
