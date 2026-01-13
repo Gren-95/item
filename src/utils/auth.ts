@@ -379,28 +379,16 @@ export async function seedFullPermissionsForUser(
   pool: import("mysql2/promise").Pool
 ): Promise<void> {
   // Permissions to grant; admin covers all operations for that scope.
+  // Combined permissions:
+  // - edit: covers search, add, and edit operations
+  // - locations_edit, types_edit, vendors_edit, write_off_reasons_edit: cover view/add/edit/delete for each feature
   const permissionNames = [
-    "search",
-    "add",
     "edit",
-    "locations_view",
-    "locations_add",
     "locations_edit",
-    "locations_delete",
-    "types_view",
-    "types_add",
     "types_edit",
-    "types_delete",
-    "vendors_view",
-    "vendors_add",
     "vendors_edit",
-    "vendors_delete",
-    "write_off_reasons_view",
-    "write_off_reasons_add",
     "write_off_reasons_edit",
-    "write_off_reasons_delete",
     "repairs",
-    "repairs_send",
   ];
 
   const [userRows] = await pool.query<import("mysql2").RowDataPacket[]>(
@@ -438,11 +426,7 @@ export async function seedFullPermissionsForUser(
 
 /**
  * Check if a user has permission to search/view equipment
- * Permission format: access_key = '<plant_id>_search', value = 'user' or 'admin'
- * @param username - The username to check
- * @param pool - The database connection pool
- * @param plantId - Optional plant_id to check
- * @returns true if user has permission, false otherwise
+ * Uses the combined edit permission (backward compatible with search)
  */
 export async function hasSearchPermission(
   username: string,
@@ -451,16 +435,13 @@ export async function hasSearchPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "search", plantId);
+  return (await hasPermission(username, pool, "edit", plantId)) ||
+         (await hasPermission(username, pool, "search", plantId));
 }
 
 /**
  * Check if a user has permission to add equipment
- * Permission format: access_key = '<plant_id>_add', value = 'user' or 'admin'
- * @param username - The username to check
- * @param pool - The database connection pool
- * @param plantId - Optional plant_id to check
- * @returns true if user has permission, false otherwise
+ * Uses the combined edit permission (backward compatible with add)
  */
 export async function hasAddEquipmentPermission(
   username: string,
@@ -469,16 +450,14 @@ export async function hasAddEquipmentPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "add", plantId);
+  return (await hasPermission(username, pool, "edit", plantId)) ||
+         (await hasPermission(username, pool, "add", plantId));
 }
 
 /**
  * Check if a user has permission to edit equipment
  * Permission format: access_key = '<plant_id>_edit', value = 'user' or 'admin'
- * @param username - The username to check
- * @param pool - The database connection pool
- * @param plantId - Optional plant_id to check
- * @returns true if user has permission, false otherwise
+ * This now covers search, add, and edit operations
  */
 export async function hasEditEquipmentPermission(
   username: string,
@@ -491,8 +470,9 @@ export async function hasEditEquipmentPermission(
 }
 
 /**
- * Check if a user has permission to view locations
- * Permission format: access_key = '<plant_id>_locations_view', value = 'user' or 'admin'
+ * Check if a user has permission to manage locations (view/add/edit/delete)
+ * Permission format: access_key = '<plant_id>_locations_edit', value = 'user' or 'admin'
+ * This replaces the previous separate view/add/edit/delete permissions
  */
 export async function hasLocationsViewPermission(
   username: string,
@@ -501,13 +481,11 @@ export async function hasLocationsViewPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "locations_view", plantId);
+  // Check for new combined permission OR old individual permissions (for backward compatibility)
+  return (await hasPermission(username, pool, "locations_edit", plantId)) ||
+         (await hasPermission(username, pool, "locations_view", plantId));
 }
 
-/**
- * Check if a user has permission to add locations
- * Permission format: access_key = '<plant_id>_locations_add', value = 'user' or 'admin'
- */
 export async function hasLocationsAddPermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -515,13 +493,10 @@ export async function hasLocationsAddPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "locations_add", plantId);
+  return (await hasPermission(username, pool, "locations_edit", plantId)) ||
+         (await hasPermission(username, pool, "locations_add", plantId));
 }
 
-/**
- * Check if a user has permission to edit locations
- * Permission format: access_key = '<plant_id>_locations_edit', value = 'user' or 'admin'
- */
 export async function hasLocationsEditPermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -532,10 +507,6 @@ export async function hasLocationsEditPermission(
   return hasPermission(username, pool, "locations_edit", plantId);
 }
 
-/**
- * Check if a user has permission to delete locations
- * Permission format: access_key = '<plant_id>_locations_delete', value = 'user' or 'admin'
- */
 export async function hasLocationsDeletePermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -543,12 +514,13 @@ export async function hasLocationsDeletePermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "locations_delete", plantId);
+  return (await hasPermission(username, pool, "locations_edit", plantId)) ||
+         (await hasPermission(username, pool, "locations_delete", plantId));
 }
 
 /**
  * Check if a user has permission to manage locations (any operation)
- * Checks for view, add, edit, or delete permissions
+ * Uses the combined locations_edit permission
  */
 export async function hasManageLocationsPermission(
   username: string,
@@ -557,17 +529,16 @@ export async function hasManageLocationsPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return (
-    await hasLocationsViewPermission(username, pool, plantId) ||
-    await hasLocationsAddPermission(username, pool, plantId) ||
-    await hasLocationsEditPermission(username, pool, plantId) ||
-    await hasLocationsDeletePermission(username, pool, plantId)
-  );
+  return (await hasPermission(username, pool, "locations_edit", plantId)) ||
+         (await hasPermission(username, pool, "locations_view", plantId)) ||
+         (await hasPermission(username, pool, "locations_add", plantId)) ||
+         (await hasPermission(username, pool, "locations_delete", plantId));
 }
 
 /**
- * Check if a user has permission to view types/configurations
- * Permission format: access_key = '<plant_id>_types_view', value = 'user' or 'admin'
+ * Check if a user has permission to manage types/configurations (view/add/edit/delete)
+ * Permission format: access_key = '<plant_id>_types_edit', value = 'user' or 'admin'
+ * This replaces the previous separate view/add/edit/delete permissions
  */
 export async function hasTypesViewPermission(
   username: string,
@@ -576,13 +547,10 @@ export async function hasTypesViewPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "types_view", plantId);
+  return (await hasPermission(username, pool, "types_edit", plantId)) ||
+         (await hasPermission(username, pool, "types_view", plantId));
 }
 
-/**
- * Check if a user has permission to add types/configurations
- * Permission format: access_key = '<plant_id>_types_add', value = 'user' or 'admin'
- */
 export async function hasTypesAddPermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -590,13 +558,10 @@ export async function hasTypesAddPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "types_add", plantId);
+  return (await hasPermission(username, pool, "types_edit", plantId)) ||
+         (await hasPermission(username, pool, "types_add", plantId));
 }
 
-/**
- * Check if a user has permission to edit types/configurations
- * Permission format: access_key = '<plant_id>_types_edit', value = 'user' or 'admin'
- */
 export async function hasTypesEditPermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -607,10 +572,6 @@ export async function hasTypesEditPermission(
   return hasPermission(username, pool, "types_edit", plantId);
 }
 
-/**
- * Check if a user has permission to delete types/configurations
- * Permission format: access_key = '<plant_id>_types_delete', value = 'user' or 'admin'
- */
 export async function hasTypesDeletePermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -618,11 +579,13 @@ export async function hasTypesDeletePermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "types_delete", plantId);
+  return (await hasPermission(username, pool, "types_edit", plantId)) ||
+         (await hasPermission(username, pool, "types_delete", plantId));
 }
 
 /**
  * Check if a user has permission to manage types/configurations (any operation)
+ * Uses the combined types_edit permission
  */
 export async function hasManageTypesPermission(
   username: string,
@@ -631,17 +594,16 @@ export async function hasManageTypesPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return (
-    await hasTypesViewPermission(username, pool, plantId) ||
-    await hasTypesAddPermission(username, pool, plantId) ||
-    await hasTypesEditPermission(username, pool, plantId) ||
-    await hasTypesDeletePermission(username, pool, plantId)
-  );
+  return (await hasPermission(username, pool, "types_edit", plantId)) ||
+         (await hasPermission(username, pool, "types_view", plantId)) ||
+         (await hasPermission(username, pool, "types_add", plantId)) ||
+         (await hasPermission(username, pool, "types_delete", plantId));
 }
 
 /**
- * Check if a user has permission to view vendors/suppliers
- * Permission format: access_key = '<plant_id>_vendors_view', value = 'user' or 'admin'
+ * Check if a user has permission to manage vendors/suppliers (view/add/edit/delete)
+ * Permission format: access_key = '<plant_id>_vendors_edit', value = 'user' or 'admin'
+ * This replaces the previous separate view/add/edit/delete permissions
  */
 export async function hasVendorsViewPermission(
   username: string,
@@ -650,13 +612,10 @@ export async function hasVendorsViewPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "vendors_view", plantId);
+  return (await hasPermission(username, pool, "vendors_edit", plantId)) ||
+         (await hasPermission(username, pool, "vendors_view", plantId));
 }
 
-/**
- * Check if a user has permission to add vendors/suppliers
- * Permission format: access_key = '<plant_id>_vendors_add', value = 'user' or 'admin'
- */
 export async function hasVendorsAddPermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -664,13 +623,10 @@ export async function hasVendorsAddPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "vendors_add", plantId);
+  return (await hasPermission(username, pool, "vendors_edit", plantId)) ||
+         (await hasPermission(username, pool, "vendors_add", plantId));
 }
 
-/**
- * Check if a user has permission to edit vendors/suppliers
- * Permission format: access_key = '<plant_id>_vendors_edit', value = 'user' or 'admin'
- */
 export async function hasVendorsEditPermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -681,10 +637,6 @@ export async function hasVendorsEditPermission(
   return hasPermission(username, pool, "vendors_edit", plantId);
 }
 
-/**
- * Check if a user has permission to delete vendors/suppliers
- * Permission format: access_key = '<plant_id>_vendors_delete', value = 'user' or 'admin'
- */
 export async function hasVendorsDeletePermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -692,11 +644,13 @@ export async function hasVendorsDeletePermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "vendors_delete", plantId);
+  return (await hasPermission(username, pool, "vendors_edit", plantId)) ||
+         (await hasPermission(username, pool, "vendors_delete", plantId));
 }
 
 /**
  * Check if a user has permission to manage vendors/suppliers (any operation)
+ * Uses the combined vendors_edit permission
  */
 export async function hasManageVendorsPermission(
   username: string,
@@ -705,17 +659,16 @@ export async function hasManageVendorsPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return (
-    await hasVendorsViewPermission(username, pool, plantId) ||
-    await hasVendorsAddPermission(username, pool, plantId) ||
-    await hasVendorsEditPermission(username, pool, plantId) ||
-    await hasVendorsDeletePermission(username, pool, plantId)
-  );
+  return (await hasPermission(username, pool, "vendors_edit", plantId)) ||
+         (await hasPermission(username, pool, "vendors_view", plantId)) ||
+         (await hasPermission(username, pool, "vendors_add", plantId)) ||
+         (await hasPermission(username, pool, "vendors_delete", plantId));
 }
 
 /**
- * Check if a user has permission to view write-off reasons
- * Permission format: access_key = '<plant_id>_write_off_reasons_view', value = 'user' or 'admin'
+ * Check if a user has permission to manage write-off reasons (view/add/edit/delete)
+ * Permission format: access_key = '<plant_id>_write_off_reasons_edit', value = 'user' or 'admin'
+ * This replaces the previous separate view/add/edit/delete permissions
  */
 export async function hasWriteOffReasonsViewPermission(
   username: string,
@@ -724,13 +677,10 @@ export async function hasWriteOffReasonsViewPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "write_off_reasons_view", plantId);
+  return (await hasPermission(username, pool, "write_off_reasons_edit", plantId)) ||
+         (await hasPermission(username, pool, "write_off_reasons_view", plantId));
 }
 
-/**
- * Check if a user has permission to add write-off reasons
- * Permission format: access_key = '<plant_id>_write_off_reasons_add', value = 'user' or 'admin'
- */
 export async function hasWriteOffReasonsAddPermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -738,13 +688,10 @@ export async function hasWriteOffReasonsAddPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "write_off_reasons_add", plantId);
+  return (await hasPermission(username, pool, "write_off_reasons_edit", plantId)) ||
+         (await hasPermission(username, pool, "write_off_reasons_add", plantId));
 }
 
-/**
- * Check if a user has permission to edit write-off reasons
- * Permission format: access_key = '<plant_id>_write_off_reasons_edit', value = 'user' or 'admin'
- */
 export async function hasWriteOffReasonsEditPermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -755,10 +702,6 @@ export async function hasWriteOffReasonsEditPermission(
   return hasPermission(username, pool, "write_off_reasons_edit", plantId);
 }
 
-/**
- * Check if a user has permission to delete write-off reasons
- * Permission format: access_key = '<plant_id>_write_off_reasons_delete', value = 'user' or 'admin'
- */
 export async function hasWriteOffReasonsDeletePermission(
   username: string,
   pool: import("mysql2/promise").Pool,
@@ -766,11 +709,13 @@ export async function hasWriteOffReasonsDeletePermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "write_off_reasons_delete", plantId);
+  return (await hasPermission(username, pool, "write_off_reasons_edit", plantId)) ||
+         (await hasPermission(username, pool, "write_off_reasons_delete", plantId));
 }
 
 /**
  * Check if a user has permission to manage write-off reasons (any operation)
+ * Uses the combined write_off_reasons_edit permission
  */
 export async function hasManageWriteOffReasonsPermission(
   username: string,
@@ -779,17 +724,16 @@ export async function hasManageWriteOffReasonsPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return (
-    await hasWriteOffReasonsViewPermission(username, pool, plantId) ||
-    await hasWriteOffReasonsAddPermission(username, pool, plantId) ||
-    await hasWriteOffReasonsEditPermission(username, pool, plantId) ||
-    await hasWriteOffReasonsDeletePermission(username, pool, plantId)
-  );
+  return (await hasPermission(username, pool, "write_off_reasons_edit", plantId)) ||
+         (await hasPermission(username, pool, "write_off_reasons_view", plantId)) ||
+         (await hasPermission(username, pool, "write_off_reasons_add", plantId)) ||
+         (await hasPermission(username, pool, "write_off_reasons_delete", plantId));
 }
 
 /**
- * Check if a user has permission to view/manage repairs
+ * Check if a user has permission to view/manage repairs (including sending to repair)
  * Permission format: access_key = '<plant_id>_repairs', value = 'user' or 'admin'
+ * This replaces the previous separate repairs and repairs_send permissions
  */
 export async function hasRepairsPermission(
   username: string,
@@ -803,7 +747,7 @@ export async function hasRepairsPermission(
 
 /**
  * Check if a user has permission to send equipment to repair
- * Permission format: access_key = '<plant_id>_repairs_send', value = 'user' or 'admin'
+ * Uses the combined repairs permission (backward compatible with repairs_send)
  */
 export async function hasRepairsSendPermission(
   username: string,
@@ -812,7 +756,8 @@ export async function hasRepairsSendPermission(
 ): Promise<boolean> {
   const isAdmin = await hasAdminPermission(username, pool);
   if (isAdmin) return true;
-  return hasPermission(username, pool, "repairs_send", plantId);
+  return (await hasPermission(username, pool, "repairs", plantId)) ||
+         (await hasPermission(username, pool, "repairs_send", plantId));
 }
 
 /**

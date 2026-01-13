@@ -112,60 +112,30 @@ export function permissionsPage(
             <div>
               <label class="label">Plant</label>
               <select name="plant_id" id="plant-select" class="select-field" required>
-                <option value="">Select Plant (use 0 for global)</option>
-                <option value="0">All (global)</option>
+                <option value="">Select Plant</option>
+                <option value="0">All</option>
                 ${data.plants && data.plants.length > 0
                   ? data.plants
                       .map((plant) => `<option value="${plant.id}">${escapeHtml(plant.name)}</option>`)
                       .join("")
                   : ""}
               </select>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="plant-help-text">
-                Use 0 for global permissions (login, global_admin). Other permissions can be plant-specific.
-              </p>
             </div>
             <div>
               <label class="label">Permission</label>
-              <input
-                type="text"
-                name="access_key"
-                id="permission-input"
-                class="input-field"
-                list="permission-access-keys"
-                autocomplete="off"
-                placeholder="Enter permission (e.g., login, search, add, edit)"
-                required
-              />
-              <datalist id="permission-access-keys">
-                <option value="login">login - Access to login to the system (global only, plant_id=0)</option>
-                <option value="global_admin">global_admin - Full access across all plants (plant_id=0)</option>
-                <option value="search">search - Search/view equipment</option>
-                <option value="add">add - Add new equipment</option>
-                <option value="edit">edit - Edit existing equipment</option>
-                <option value="locations_view">locations_view - View locations</option>
-                <option value="locations_add">locations_add - Add locations</option>
-                <option value="locations_edit">locations_edit - Edit locations</option>
-                <option value="locations_delete">locations_delete - Delete locations</option>
-                <option value="types_view">types_view - View types/configurations</option>
-                <option value="types_add">types_add - Add types/configurations</option>
-                <option value="types_edit">types_edit - Edit types/configurations</option>
-                <option value="types_delete">types_delete - Delete types/configurations</option>
-                <option value="vendors_view">vendors_view - View vendors/suppliers</option>
-                <option value="vendors_add">vendors_add - Add vendors/suppliers</option>
-                <option value="vendors_edit">vendors_edit - Edit vendors/suppliers</option>
-                <option value="vendors_delete">vendors_delete - Delete vendors/suppliers</option>
-                <option value="write_off_reasons_view">write_off_reasons_view - View write-off reasons</option>
-                <option value="write_off_reasons_add">write_off_reasons_add - Add write-off reasons</option>
-                <option value="write_off_reasons_edit">write_off_reasons_edit - Edit write-off reasons</option>
-                <option value="write_off_reasons_delete">write_off_reasons_delete - Delete write-off reasons</option>
-                <option value="repairs">repairs - View and manage repairs</option>
-                <option value="repairs_send">repairs_send - Send equipment to repair</option>
+              <select name="access_key" id="permission-select" class="select-field" required>
+                <option value="">Select Permission</option>
+                <option value="login">login - Access to login to the system</option>
+                <option value="global_admin">global_admin - Full access across all plants</option>
+                <option value="edit">edit - Manage equipment (search, add, and edit)</option>
+                <option value="locations_edit">locations_edit - Manage locations (view/add/edit/delete)</option>
+                <option value="types_edit">types_edit - Manage types/configurations (view/add/edit/delete)</option>
+                <option value="vendors_edit">vendors_edit - Manage vendors/suppliers (view/add/edit/delete)</option>
+                <option value="write_off_reasons_edit">write_off_reasons_edit - Manage write-off reasons (view/add/edit/delete)</option>
+                <option value="repairs">repairs - Manage repairs (view, manage, and send equipment to repair)</option>
                 <option value="pc_pw_view">pc_pw_view - View PC passwords</option>
                 <option value="pc_pw_edit">pc_pw_edit - Edit PC passwords</option>
-              </datalist>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Note: "login" permission is always global (plant_id=0). Other permissions can be plant-specific.
-              </p>
+              </select>
             </div>
             <div>
               <label class="label">Role</label>
@@ -184,6 +154,7 @@ export function permissionsPage(
                 class="input-field"
                 placeholder="Permission description"
                 required
+                autocomplete="off"
               />
             </div>
             <div>
@@ -195,9 +166,6 @@ export function permissionsPage(
                 class="input-field"
                 placeholder="Leave empty for no expiry"
               />
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Optional: Set when this permission should expire. Leave empty for permanent permission.
-              </p>
             </div>
             <div class="flex items-end">
               ${button("Add Permission", { type: "submit", variant: "primary", fullWidth: true }).replace('<button', '<button id="submit-permission-btn"')}
@@ -205,23 +173,30 @@ export function permissionsPage(
           </form>
           <script>
             (function() {
-              const permissionInput = document.getElementById('permission-input');
+              // Set default expiry date to 4 months from today
+              const expiryDateInput = document.getElementById('form-expiry-date');
+              if (expiryDateInput) {
+                const today = new Date();
+                const fourMonthsLater = new Date(today);
+                fourMonthsLater.setMonth(today.getMonth() + 4);
+                const year = fourMonthsLater.getFullYear();
+                const month = String(fourMonthsLater.getMonth() + 1).padStart(2, '0');
+                const day = String(fourMonthsLater.getDate()).padStart(2, '0');
+                expiryDateInput.value = \`\${year}-\${month}-\${day}\`;
+              }
+
+              const permissionSelect = document.getElementById('permission-select');
               const plantSelect = document.getElementById('plant-select');
-              const helpText = document.getElementById('plant-help-text');
               
-              if (permissionInput && plantSelect && helpText) {
-                permissionInput.addEventListener('input', function() {
+              if (permissionSelect && plantSelect) {
+                permissionSelect.addEventListener('change', function() {
                   const permission = this.value.trim().toLowerCase();
                   if (permission === 'login' || permission === 'global_admin') {
                     // Force plant_id to 0 for global permissions
                     plantSelect.value = '0';
                     plantSelect.disabled = true;
-                    helpText.textContent = 'This permission is global only (plant_id=0 is required).';
-                    helpText.classList.add('text-blue-600', 'dark:text-blue-400');
                   } else {
                     plantSelect.disabled = false;
-                    helpText.textContent = 'Use 0 for global permissions (login, global_admin). Other permissions can be plant-specific.';
-                    helpText.classList.remove('text-blue-600', 'dark:text-blue-400');
                   }
                 });
               }
@@ -262,7 +237,7 @@ export function permissionsPage(
                         const formValues = {
                           user_id: document.getElementById('form-user-id')?.value || '',
                           plant_id: plantSelect?.value || '',
-                          access_key: permissionInput?.value || '',
+                          access_key: permissionSelect?.value || '',
                           value: document.getElementById('form-value')?.value || '',
                           comment: document.getElementById('form-comment')?.value || '',
                           expiry_date: document.getElementById('form-expiry-date')?.value || ''
@@ -310,17 +285,20 @@ export function permissionsPage(
                   const values = JSON.parse(savedValues);
                   if (document.getElementById('form-user-id')) document.getElementById('form-user-id').value = values.user_id || '';
                   if (plantSelect) plantSelect.value = values.plant_id || '';
-                  if (permissionInput) permissionInput.value = values.access_key || '';
+                  if (permissionSelect) permissionSelect.value = values.access_key || '';
                   if (document.getElementById('form-value')) document.getElementById('form-value').value = values.value || '';
                   if (document.getElementById('form-comment')) document.getElementById('form-comment').value = values.comment || '';
-                  if (document.getElementById('form-expiry-date')) document.getElementById('form-expiry-date').value = values.expiry_date || '';
+                  // Only restore expiry date if it was saved, otherwise use default
+                  if (values.expiry_date && document.getElementById('form-expiry-date')) {
+                    document.getElementById('form-expiry-date').value = values.expiry_date;
+                  }
                   
                   // Clear saved values after restoring
                   sessionStorage.removeItem('permissionFormValues');
                   
-                  // Trigger permission input handler to update plant select if needed
-                  if (permissionInput && permissionInput.value) {
-                    permissionInput.dispatchEvent(new Event('input'));
+                  // Trigger permission select handler to update plant select if needed
+                  if (permissionSelect && permissionSelect.value) {
+                    permissionSelect.dispatchEvent(new Event('change'));
                   }
                 } catch (e) {
                   console.error('Error restoring form values:', e);
