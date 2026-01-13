@@ -78,6 +78,8 @@ interface SearchResult {
   assigned_to_name: string | null;
   location: string | null;
   latest_audit_date: string | null;
+  plant_id: number | null;
+  isReadonly?: boolean;
 }
 
 interface PcPassword {
@@ -1097,7 +1099,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const hasSearch = await hasSearchPermission(session.username, pool, userPlantId);
       if (!hasSearch) {
         return new Response(
-          searchPage("", null, "You do not have permission to access the search page. Please contact your administrator.", isAdmin, hasPcPwView),
+          searchPage("", null, "You do not have permission to access the search page. Please contact your administrator.", isAdmin, hasPcPwView, userPlantId),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1129,7 +1131,8 @@ async function handleRequest(req: Request): Promise<Response> {
               a.name,
               sa.name
             ) as location,
-            log.created as latest_audit_date
+            log.created as latest_audit_date,
+            p.id as plant_id
           FROM it_equipment e
           LEFT JOIN it_equipment_model m ON e.model_id = m.id
           LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
@@ -1186,12 +1189,27 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         logger.info("Search results", { traceId, query: trimmed, count: rows.length });
-        return new Response(searchPage(trimmed, rows.length > 0 ? (rows as SearchResult[]) : [], null, isAdmin, hasPcPwView), {
+        
+        // Mark items as readonly if they're from a different plant (unless user is admin)
+        const resultsWithReadonly = rows.map((row: RowDataPacket) => {
+          const result = row as SearchResult;
+          // Item is readonly if:
+          // 1. User is not admin
+          // 2. Item has a plant_id
+          // 3. Item's plant_id doesn't match user's plant_id
+          result.isReadonly = !isAdmin && 
+                             result.plant_id !== null && 
+                             userPlantId !== null && 
+                             result.plant_id !== userPlantId;
+          return result;
+        });
+        
+        return new Response(searchPage(trimmed, resultsWithReadonly.length > 0 ? resultsWithReadonly : [], null, isAdmin, hasPcPwView, userPlantId), {
           headers: { "Content-Type": "text/html" },
         });
       }
 
-      return new Response(searchPage("", null, null, isAdmin, hasPcPwView), {
+      return new Response(searchPage("", null, null, isAdmin, hasPcPwView, userPlantId), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -1205,7 +1223,8 @@ async function handleRequest(req: Request): Promise<Response> {
 
       // Allow viewing the add page even without permission - submission will require approval
       const serial = url.searchParams.get("serial") || "";
-      const addData = await getAddData(serial);
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const addData = await getAddData(serial, userPlantId, isAdmin);
       
       return new Response(addPage(addData, false, null, isAdmin, hasPcPwView), {
         headers: { "Content-Type": "text/html" },
@@ -1247,7 +1266,7 @@ async function handleRequest(req: Request): Promise<Response> {
         const clientIp = getClientIp(req);
         
         if (!employeeNo) {
-          const addData = await getAddData(rawData.service_tag || "");
+          const addData = await getAddData(rawData.service_tag || "", userPlantId, isAdmin);
           return new Response(
             addPage(addData, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
             {
@@ -1267,7 +1286,7 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         if (requestId) {
-          const addData = await getAddData(rawData.service_tag || "");
+          const addData = await getAddData(rawData.service_tag || "", userPlantId, isAdmin);
           return new Response(
             addPage(addData, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView),
             {
@@ -1275,7 +1294,7 @@ async function handleRequest(req: Request): Promise<Response> {
             }
           );
         } else {
-          const addData = await getAddData(rawData.service_tag || "");
+          const addData = await getAddData(rawData.service_tag || "", userPlantId, isAdmin);
           return new Response(
             addPage(addData, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
             {
@@ -1362,12 +1381,12 @@ async function handleRequest(req: Request): Promise<Response> {
       const hasEditPermission = await hasEditEquipmentPermission(session.username, pool, userPlantId);
       if (!hasEditPermission) {
         const id = parseInt(path.split("/")[2]);
-        const auditData = await getAuditData(id);
+        const auditData = await getAuditData(id, userPlantId, isAdmin);
         if (!auditData) {
           return new Response("Equipment not found", { status: 404 });
         }
         return new Response(
-          auditPage(auditData, false, "You do not have permission to edit equipment. Please contact your administrator.", isAdmin, hasPcPwView),
+          auditPage(auditData, false, "You do not have permission to edit equipment. Please contact your administrator.", isAdmin, hasPcPwView, false, userPlantId, null, null),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1377,12 +1396,61 @@ async function handleRequest(req: Request): Promise<Response> {
       const id = parseInt(path.split("/")[2]);
       const success = url.searchParams.get("success") === "1";
       
-      const auditData = await getAuditData(id);
+      const auditData = await getAuditData(id, userPlantId, isAdmin);
       if (!auditData) {
         return new Response("Equipment not found", { status: 404 });
       }
 
-      return new Response(auditPage(auditData, success, null, isAdmin, hasPcPwView), {
+      // Check if equipment is from a different plant (readonly mode)
+      const equipmentPlantId = auditData.equipment.plant_id as number | null;
+      const isReadonly = !isAdmin && 
+                        equipmentPlantId !== null && 
+                        userPlantId !== null && 
+                        equipmentPlantId !== userPlantId;
+      
+      if (isReadonly) {
+        // Get user's plant hierarchy for location filtering
+        let allowedRegionIdReadonly: number | null = null;
+        let allowedCountryIdReadonly: number | null = null;
+        if (!isAdmin && userPlantId !== null) {
+          const [plantInfoReadonly] = await pool.query<RowDataPacket[]>(
+            `SELECT p.id, p.country_id, c.region_id
+             FROM it_equipment_plant p
+             LEFT JOIN it_equipment_country c ON p.country_id = c.id
+             WHERE p.id = ? AND p.status = 1`,
+            [userPlantId]
+          );
+          if (plantInfoReadonly.length > 0) {
+            allowedCountryIdReadonly = plantInfoReadonly[0].country_id;
+            allowedRegionIdReadonly = plantInfoReadonly[0].region_id;
+          }
+        }
+        return new Response(
+          auditPage(auditData, success, "Read-only: This equipment belongs to another plant. You can view but not edit.", isAdmin, hasPcPwView, true, userPlantId, allowedRegionIdReadonly, allowedCountryIdReadonly),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+
+      // Get user's plant hierarchy for location filtering
+      let allowedRegionId: number | null = null;
+      let allowedCountryId: number | null = null;
+      if (!isAdmin && userPlantId !== null) {
+        const [plantInfo] = await pool.query<RowDataPacket[]>(
+          `SELECT p.id, p.country_id, c.region_id
+           FROM it_equipment_plant p
+           LEFT JOIN it_equipment_country c ON p.country_id = c.id
+           WHERE p.id = ? AND p.status = 1`,
+          [userPlantId]
+        );
+        if (plantInfo.length > 0) {
+          allowedCountryId = plantInfo[0].country_id;
+          allowedRegionId = plantInfo[0].region_id;
+        }
+      }
+
+      return new Response(auditPage(auditData, success, null, isAdmin, hasPcPwView, false, userPlantId, allowedRegionId, allowedCountryId), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -1398,20 +1466,62 @@ async function handleRequest(req: Request): Promise<Response> {
       const id = parseInt(path.split("/")[2]);
       const formData = await req.formData();
       
+      // Check admin permission for this request
+      const isAdminPost = await hasAdminPermission(session.username, pool);
+      const hasPcPwViewPost = await hasPcPwViewPermission(session.username, pool);
+      
       // Check edit equipment permission
       const userPlantId = await getUserPlantId(session.username, pool);
+      
+      // Check if equipment is from a different plant (prevent editing)
+      const auditData = await getAuditData(id, userPlantId, isAdminPost);
+      if (!auditData) {
+        return new Response("Equipment not found", { status: 404 });
+      }
+      
+      const equipmentPlantId = auditData.equipment.plant_id as number | null;
+      const isReadonly = !isAdminPost && 
+                        equipmentPlantId !== null && 
+                        userPlantId !== null && 
+                        equipmentPlantId !== userPlantId;
+      
+      if (isReadonly) {
+        // Get user's plant hierarchy for location filtering
+        let allowedRegionIdPost: number | null = null;
+        let allowedCountryIdPost: number | null = null;
+        if (!isAdminPost && userPlantId !== null) {
+          const [plantInfoPost] = await pool.query<RowDataPacket[]>(
+            `SELECT p.id, p.country_id, c.region_id
+             FROM it_equipment_plant p
+             LEFT JOIN it_equipment_country c ON p.country_id = c.id
+             WHERE p.id = ? AND p.status = 1`,
+            [userPlantId]
+          );
+          if (plantInfoPost.length > 0) {
+            allowedCountryIdPost = plantInfoPost[0].country_id;
+            allowedRegionIdPost = plantInfoPost[0].region_id;
+          }
+        }
+        return new Response(
+          auditPage(auditData, false, "Cannot edit: This equipment belongs to another plant. You can only view it.", isAdminPost, hasPcPwViewPost, true, userPlantId, allowedRegionIdPost, allowedCountryIdPost),
+          {
+            headers: { "Content-Type": "text/html" },
+          }
+        );
+      }
+      
       const hasEditPermissionPost = await hasEditEquipmentPermission(session.username, pool, userPlantId);
       if (!hasEditPermissionPost) {
         const employeeNo = await getEmployeeNo(session.username, pool);
         const clientIp = getClientIp(req);
         
         if (!employeeNo) {
-          const auditData = await getAuditData(id);
+          const auditData = await getAuditData(id, userPlantId, isAdminPost);
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
+            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1447,23 +1557,23 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         if (requestId) {
-          const auditData = await getAuditData(id);
+          const auditData = await getAuditData(id, userPlantId, isAdminPost);
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView),
+            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null),
             {
               headers: { "Content-Type": "text/html" },
             }
           );
         } else {
-          const auditData = await getAuditData(id);
+          const auditData = await getAuditData(id, userPlantId, isAdminPost);
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
+            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1500,12 +1610,12 @@ async function handleRequest(req: Request): Promise<Response> {
         const clientIp = getClientIp(req);
         
         if (!employeeNo) {
-          const auditData = await getAuditData(id);
+          const auditData = await getAuditData(id, userPlantId, isAdminPost);
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
+            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1523,23 +1633,23 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         if (requestId) {
-          const auditData = await getAuditData(id);
+          const auditData = await getAuditData(id, userPlantId, isAdminPost);
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView),
+            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null),
             {
               headers: { "Content-Type": "text/html" },
             }
           );
         } else {
-          const auditData = await getAuditData(id);
+          const auditData = await getAuditData(id, userPlantId, isAdminPost);
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
+            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1575,7 +1685,11 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditData, false, "Write-off comment is required when writing off equipment.", isAdmin, hasPcPwView), {
+          const auditDataForValidation = await getAuditData(id, userPlantId, isAdminPost);
+          if (!auditDataForValidation) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(auditPage(auditDataForValidation, false, "Write-off comment is required when writing off equipment.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -1586,7 +1700,11 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditData, false, "Repair note is required when registering equipment for repair.", isAdmin, hasPcPwView), {
+          const auditDataForRepairValidation = await getAuditData(id, userPlantId, isAdminPost);
+          if (!auditDataForRepairValidation) {
+            return new Response("Equipment not found", { status: 404 });
+          }
+          return new Response(auditPage(auditDataForRepairValidation, false, "Repair note is required when registering equipment for repair.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -1712,12 +1830,12 @@ async function handleRequest(req: Request): Promise<Response> {
             const clientIp = getClientIp(req);
             
             if (!employeeNo) {
-              const auditData = await getAuditData(id);
+              const auditData = await getAuditData(id, userPlantId, isAdminPost);
               if (!auditData) {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
+                auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -1735,23 +1853,23 @@ async function handleRequest(req: Request): Promise<Response> {
             );
 
             if (requestId) {
-              const auditData = await getAuditData(id);
+              const auditData = await getAuditData(id, userPlantId, isAdminPost);
               if (!auditData) {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView),
+                auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
               );
             } else {
-              const auditData = await getAuditData(id);
+              const auditData = await getAuditData(id, userPlantId, isAdminPost);
               if (!auditData) {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView),
+                auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -1765,11 +1883,14 @@ async function handleRequest(req: Request): Promise<Response> {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         logger.error("Failed to edit equipment", err, { traceId, equipmentId: id });
-        const auditData = await getAuditData(id);
+        const userPlantIdError = await getUserPlantId(session.username, pool);
+        const isAdminError = await hasAdminPermission(session.username, pool);
+        const hasPcPwViewError = await hasPcPwViewPermission(session.username, pool);
+        const auditData = await getAuditData(id, userPlantIdError, isAdminError);
         if (!auditData) {
           return new Response("Equipment not found", { status: 404 });
         }
-        return new Response(auditPage(auditData, false, errorMessage, isAdmin, hasPcPwView), {
+        return new Response(auditPage(auditData, false, errorMessage, isAdminError, hasPcPwViewError, false, userPlantIdError, null, null), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -3159,7 +3280,7 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 }
 
-async function getAuditData(id: number) {
+async function getAuditData(id: number, userPlantId: number | null = null, isAdmin: boolean = false) {
   // Get equipment with latest log entry joined
   const [equipment] = await pool.query<RowDataPacket[]>(`
     SELECT 
@@ -3211,7 +3332,28 @@ async function getAuditData(id: number) {
     return null;
   }
 
-  // Get all lookup data in parallel
+  // Get user's plant hierarchy if not admin and userPlantId is provided
+  let allowedRegionId: number | null = null;
+  let allowedCountryId: number | null = null;
+  let allowedPlantId: number | null = userPlantId;
+
+  if (!isAdmin && userPlantId !== null) {
+    // Get the country and region for the user's plant
+    const [plantInfo] = await pool.query<RowDataPacket[]>(
+      `SELECT p.id, p.country_id, c.region_id
+       FROM it_equipment_plant p
+       LEFT JOIN it_equipment_country c ON p.country_id = c.id
+       WHERE p.id = ? AND p.status = 1`,
+      [userPlantId]
+    );
+
+    if (plantInfo.length > 0) {
+      allowedCountryId = plantInfo[0].country_id;
+      allowedRegionId = plantInfo[0].region_id;
+    }
+  }
+
+  // Get all lookup data in parallel with plant-based filtering
   const [
     [regions],
     [countries],
@@ -3228,12 +3370,30 @@ async function getAuditData(id: number) {
     [suppliers],
     [writeOffReasons]
   ] = await Promise.all([
-    pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, country_id as parent_id FROM it_equipment_plant WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, plant_id as parent_id FROM it_equipment_department WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, department_id as parent_id FROM it_equipment_area WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, area_id as parent_id FROM it_equipment_sub_area WHERE status = 1 ORDER BY name`),
+    // Regions: only show if admin or matches user's region
+    !isAdmin && allowedRegionId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 AND id = ? ORDER BY name`, [allowedRegionId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 ORDER BY name`),
+    // Countries: only show if admin or matches user's country
+    !isAdmin && allowedCountryId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 AND id = ? ORDER BY name`, [allowedCountryId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 ORDER BY name`),
+    // Plants: only show if admin or matches user's plant
+    !isAdmin && allowedPlantId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT id, name, country_id as parent_id FROM it_equipment_plant WHERE status = 1 AND id = ? ORDER BY name`, [allowedPlantId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, country_id as parent_id FROM it_equipment_plant WHERE status = 1 ORDER BY name`),
+    // Departments: only show if admin or belongs to user's plant
+    !isAdmin && allowedPlantId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT id, name, plant_id as parent_id FROM it_equipment_department WHERE status = 1 AND plant_id = ? ORDER BY name`, [allowedPlantId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, plant_id as parent_id FROM it_equipment_department WHERE status = 1 ORDER BY name`),
+    // Areas: only show if admin or belongs to departments in user's plant
+    !isAdmin && allowedPlantId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT a.id, a.name, a.department_id as parent_id FROM it_equipment_area a JOIN it_equipment_department d ON a.department_id = d.id WHERE a.status = 1 AND d.plant_id = ? ORDER BY a.name`, [allowedPlantId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, department_id as parent_id FROM it_equipment_area WHERE status = 1 ORDER BY name`),
+    // Sub Areas: only show if admin or belongs to areas in user's plant
+    !isAdmin && allowedPlantId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT sa.id, sa.name, sa.area_id as parent_id FROM it_equipment_sub_area sa JOIN it_equipment_area a ON sa.area_id = a.id JOIN it_equipment_department d ON a.department_id = d.id WHERE sa.status = 1 AND d.plant_id = ? ORDER BY sa.name`, [allowedPlantId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, area_id as parent_id FROM it_equipment_sub_area WHERE status = 1 ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, type_name as name FROM it_equipment_type WHERE status = 1 ORDER BY type_name`),
     pool.query<RowDataPacket[]>(`SELECT id, name, type_id as parent_id FROM it_equipment_product_line WHERE status = 1 ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, name, product_line_id as parent_id FROM it_equipment_model WHERE status = 1 ORDER BY name`),
@@ -3263,7 +3423,28 @@ async function getAuditData(id: number) {
   };
 }
 
-async function getAddData(serviceTag: string) {
+async function getAddData(serviceTag: string, userPlantId: number | null = null, isAdmin: boolean = false) {
+  // Get user's plant hierarchy if not admin and userPlantId is provided
+  let allowedRegionId: number | null = null;
+  let allowedCountryId: number | null = null;
+  let allowedPlantId: number | null = userPlantId;
+
+  if (!isAdmin && userPlantId !== null) {
+    // Get the country and region for the user's plant
+    const [plantInfo] = await pool.query<RowDataPacket[]>(
+      `SELECT p.id, p.country_id, c.region_id
+       FROM it_equipment_plant p
+       LEFT JOIN it_equipment_country c ON p.country_id = c.id
+       WHERE p.id = ? AND p.status = 1`,
+      [userPlantId]
+    );
+
+    if (plantInfo.length > 0) {
+      allowedCountryId = plantInfo[0].country_id;
+      allowedRegionId = plantInfo[0].region_id;
+    }
+  }
+
   const [
     [regions],
     [countries],
@@ -3279,12 +3460,30 @@ async function getAddData(serviceTag: string) {
     [employees],
     [inventoryPeriods]
   ] = await Promise.all([
-    pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, country_id as parent_id FROM it_equipment_plant WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, plant_id as parent_id FROM it_equipment_department WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, department_id as parent_id FROM it_equipment_area WHERE status = 1 ORDER BY name`),
-    pool.query<RowDataPacket[]>(`SELECT id, name, area_id as parent_id FROM it_equipment_sub_area WHERE status = 1 ORDER BY name`),
+    // Regions: only show if admin or matches user's region
+    !isAdmin && allowedRegionId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 AND id = ? ORDER BY name`, [allowedRegionId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 ORDER BY name`),
+    // Countries: only show if admin or matches user's country
+    !isAdmin && allowedCountryId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 AND id = ? ORDER BY name`, [allowedCountryId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 ORDER BY name`),
+    // Plants: only show if admin or matches user's plant
+    !isAdmin && allowedPlantId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT id, name, country_id as parent_id FROM it_equipment_plant WHERE status = 1 AND id = ? ORDER BY name`, [allowedPlantId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, country_id as parent_id FROM it_equipment_plant WHERE status = 1 ORDER BY name`),
+    // Departments: only show if admin or belongs to user's plant
+    !isAdmin && allowedPlantId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT id, name, plant_id as parent_id FROM it_equipment_department WHERE status = 1 AND plant_id = ? ORDER BY name`, [allowedPlantId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, plant_id as parent_id FROM it_equipment_department WHERE status = 1 ORDER BY name`),
+    // Areas: only show if admin or belongs to departments in user's plant
+    !isAdmin && allowedPlantId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT a.id, a.name, a.department_id as parent_id FROM it_equipment_area a JOIN it_equipment_department d ON a.department_id = d.id WHERE a.status = 1 AND d.plant_id = ? ORDER BY a.name`, [allowedPlantId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, department_id as parent_id FROM it_equipment_area WHERE status = 1 ORDER BY name`),
+    // Sub Areas: only show if admin or belongs to areas in user's plant
+    !isAdmin && allowedPlantId !== null
+      ? pool.query<RowDataPacket[]>(`SELECT sa.id, sa.name, sa.area_id as parent_id FROM it_equipment_sub_area sa JOIN it_equipment_area a ON sa.area_id = a.id JOIN it_equipment_department d ON a.department_id = d.id WHERE sa.status = 1 AND d.plant_id = ? ORDER BY sa.name`, [allowedPlantId])
+      : pool.query<RowDataPacket[]>(`SELECT id, name, area_id as parent_id FROM it_equipment_sub_area WHERE status = 1 ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, type_name as name FROM it_equipment_type WHERE status = 1 ORDER BY type_name`),
     pool.query<RowDataPacket[]>(`SELECT id, name, type_id as parent_id FROM it_equipment_product_line WHERE status = 1 ORDER BY name`),
     pool.query<RowDataPacket[]>(`SELECT id, name, product_line_id as parent_id FROM it_equipment_model WHERE status = 1 ORDER BY name`),

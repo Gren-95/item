@@ -10,6 +10,8 @@ interface SearchResult {
   assigned_to_name: string | null;
   location: string | null;
   latest_audit_date: string | null;
+  plant_id: number | null;
+  isReadonly?: boolean;
 }
 
 export function searchPage(
@@ -17,7 +19,8 @@ export function searchPage(
   results: SearchResult[] | null = null,
   error: string | null = null,
   isAdmin: boolean = false,
-  hasPcPwView: boolean = false
+  hasPcPwView: boolean = false,
+  userPlantId: number | null = null
 ): string {
   const content = `
       <div class="max-w-6xl mx-auto">
@@ -95,13 +98,19 @@ export function searchPage(
                   <th class="py-3 px-2 md:px-4 hidden md:table-cell">Assigned To</th>
                   <th class="py-3 px-2 md:px-4 hidden lg:table-cell">Location</th>
                   <th class="py-3 px-2 md:px-4 hidden xl:table-cell">Last Update</th>
+                  ${results && results.some(r => r.isReadonly) ? '<th class="py-3 px-2 md:px-4">Status</th>' : ''}
                 </tr>
               </thead>
               <tbody>
-                ${results.map(result => `
-                  <tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                ${results.map(result => {
+                  const isReadonly = result.isReadonly || false;
+                  return `
+                  <tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isReadonly ? 'opacity-75' : ''}">
                     <td class="py-3 px-2 md:px-4 sticky left-0 bg-white dark:bg-gray-800 z-10">
-                      <a href="/edit/${result.id}" class="btn btn-primary btn-sm whitespace-nowrap">View</a>
+                      ${isReadonly 
+                        ? `<span class="btn btn-secondary btn-sm whitespace-nowrap cursor-not-allowed" title="Read-only: Equipment from another plant">View Only</span>`
+                        : `<a href="/edit/${result.id}" class="btn btn-primary btn-sm whitespace-nowrap">View</a>`
+                      }
                     </td>
                     <td class="py-3 px-2 md:px-4 font-mono text-gray-900 dark:text-white text-xs md:text-sm">${escapeHtml(result.service_tag || '')}</td>
                     <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 hidden md:table-cell">${escapeHtml(result.type_name || '—')}</td>
@@ -111,8 +120,10 @@ export function searchPage(
                     <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 hidden md:table-cell">${escapeHtml(result.assigned_to_name || '—')}</td>
                     <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 text-xs hidden lg:table-cell">${escapeHtml(result.location || '—')}</td>
                     <td class="py-3 px-2 md:px-4 text-gray-500 dark:text-gray-400 text-xs hidden xl:table-cell">${result.latest_audit_date ? new Date(result.latest_audit_date).toLocaleDateString() : '—'}</td>
+                    ${results && results.some(r => r.isReadonly) ? `<td class="py-3 px-2 md:px-4">${isReadonly ? '<span class="px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full">Read-only</span>' : '—'}</td>` : ''}
                   </tr>
-                `).join('')}
+                `;
+                }).join('')}
               </tbody>
             </table>
           </div>

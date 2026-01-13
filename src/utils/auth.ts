@@ -95,7 +95,7 @@ export async function hasItemLoginPermission(
 }
 
 /**
- * Get user's plant_id from their employee_no
+ * Get user's plant_id from their permissions (preferred) or equipment assignments (fallback)
  * @param username - The username to check
  * @param pool - The database connection pool
  * @returns plant_id or null if not found
@@ -105,7 +105,26 @@ export async function getUserPlantId(
   pool: import("mysql2/promise").Pool
 ): Promise<number | null> {
   try {
-    // Get user's employee_no from employees list
+    // First, try to get plant_id from user's permissions
+    // Get the most common plant_id from their non-global permissions (excluding plant_id = 0)
+    const [permissionPlants] = await pool.query<import("mysql2").RowDataPacket[]>(
+      `SELECT plant_id, COUNT(*) as count
+       FROM it_user_permissions
+       WHERE user_id = ?
+         AND plant_id > 0
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+       GROUP BY plant_id
+       ORDER BY count DESC, plant_id ASC
+       LIMIT 1`,
+      [username]
+    );
+
+    if (permissionPlants.length > 0 && permissionPlants[0].plant_id) {
+      return permissionPlants[0].plant_id;
+    }
+
+    // Fallback: Get plant_id from employee's most recent equipment assignment
+    // This gets the plant from the location hierarchy of equipment assigned to the employee
     const [users] = await pool.query<import("mysql2").RowDataPacket[]>(
       "SELECT employee_no FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
       [username]
@@ -117,8 +136,6 @@ export async function getUserPlantId(
 
     const employeeNo = users[0].employee_no;
 
-    // Get plant_id from employee's most recent equipment assignment
-    // This gets the plant from the location hierarchy of equipment assigned to the employee
     const [plantData] = await pool.query<import("mysql2").RowDataPacket[]>(
       `SELECT d.plant_id
        FROM it_equipment_log log
@@ -259,7 +276,8 @@ export async function hasAdminPermission(
       return false;
     }
 
-    // First check for global_admin permission (plant_id = 0, permission = 'global_admin', role = 'admin')
+    // Only global_admin permission grants global admin access
+    // Plant-specific permissions with role='admin' only grant admin for that specific plant
     // Exclude expired permissions
     const [globalAdmin] = await pool.query<import("mysql2").RowDataPacket[]>(
       `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
@@ -275,19 +293,7 @@ export async function hasAdminPermission(
       return true;
     }
 
-    // Check if user has admin role on any permission
-    // Exclude expired permissions
-    const [pagePermissions] = await pool.query<import("mysql2").RowDataPacket[]>(
-      `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
-       WHERE user_id = ?
-         AND role = 'admin'
-         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
-       LIMIT 1`,
-      [username]
-    );
-    if (pagePermissions.length > 0) {
-      return true;
-    }
+    // No other permissions grant global admin access
     return false;
   } catch (error) {
     // Only log in non-test environments

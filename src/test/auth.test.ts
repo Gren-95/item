@@ -188,16 +188,6 @@ describe("Authentication and Permissions", () => {
         [{ rows: [] as any }]
       );
 
-      // Mock: fallback check for admin role (should also return empty)
-      mockPool.mockQuery(
-        `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
-       WHERE user_id = ?
-         AND role = 'admin'
-         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
-       LIMIT 1`,
-        [{ rows: [] as any }]
-      );
-
       const result = await hasAdminPermission("testuser", mockPool as any);
       expect(result).toBe(false);
     });
@@ -500,40 +490,13 @@ describe("Authentication and Permissions", () => {
     });
 
     test("should return true when user has search permission", async () => {
-      // Mock: user is not admin
+      // Mock: user exists (for hasAdminPermission check)
       mockPool.mockQuery(
         "SELECT user_id FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
         [{ rows: [{ user_id: "testuser" }] as any }]
       );
 
-      mockPool.mockQuery(
-        `SELECT id FROM it_user_permissions
-       WHERE user_id = ?
-         AND role = 'admin'
-       LIMIT 1`,
-        [{ rows: [] as any }]
-      );
-
-      // Mock: get user's plant_id
-      mockPool.mockQuery(
-        "SELECT employee_no FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
-        [{ rows: [{ employee_no: "12345" }] as any }]
-      );
-
-      mockPool.mockQuery(
-        `SELECT d.plant_id
-       FROM it_equipment_log log
-       LEFT JOIN it_equipment_sub_area sa ON log.equipment_sub_area_id = sa.id
-       LEFT JOIN it_equipment_area a ON sa.area_id = a.id
-       LEFT JOIN it_equipment_department d ON a.department_id = d.id
-       WHERE log.assigned_to = ?
-         AND d.plant_id IS NOT NULL
-       ORDER BY log.created DESC
-       LIMIT 1`,
-        [{ rows: [{ plant_id: 1 }] as any }]
-      );
-
-      // Mock: check for global_admin (should return empty - hasAdminPermission check)
+      // Mock: user is not global admin (for hasAdminPermission)
       mockPool.mockQuery(
         `SELECT id, user_id, plant_id, permission, role, expiry_date FROM it_user_permissions
        WHERE user_id = ?
@@ -545,7 +508,13 @@ describe("Authentication and Permissions", () => {
         [{ rows: [] as any }]
       );
 
-      // Mock: check for global_admin (should return empty - hasPermission check)
+      // Mock: user exists (for hasPermission check)
+      mockPool.mockQuery(
+        "SELECT user_id FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
+        [{ rows: [{ user_id: "testuser" }] as any }]
+      );
+
+      // Mock: user has no global admin (for hasPermission)
       mockPool.mockQuery(
         `SELECT id FROM it_user_permissions
        WHERE user_id = ?
@@ -555,6 +524,19 @@ describe("Authentication and Permissions", () => {
          AND (expiry_date IS NULL OR expiry_date >= CURDATE())
        LIMIT 1`,
         [{ rows: [] as any }]
+      );
+
+      // Mock: getUserPlantId from permissions (new behavior)
+      mockPool.mockQuery(
+        `SELECT plant_id, COUNT(*) as count
+       FROM it_user_permissions
+       WHERE user_id = ?
+         AND plant_id > 0
+         AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+       GROUP BY plant_id
+       ORDER BY count DESC, plant_id ASC
+       LIMIT 1`,
+        [{ rows: [{ plant_id: 1, count: 1 }] as any }]
       );
 
       // Mock: user has search permission

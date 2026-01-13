@@ -93,11 +93,11 @@ export function permissionsPage(
       <div class="card">
         <div class="mb-6">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Add Permission</h2>
-          <form method="POST" action="/permissions" class="grid grid-cols-1 md:grid-cols-6 gap-3">
+          <form id="add-permission-form" method="POST" action="/permissions" class="grid grid-cols-1 md:grid-cols-6 gap-3">
             <input type="hidden" name="action" value="add">
             <div>
               <label class="label">User</label>
-              <select name="user_id" class="select-field" required>
+              <select name="user_id" id="form-user-id" class="select-field" required>
                 <option value="">Select User</option>
                 ${data.users
                   .filter((u) => u.active)
@@ -168,7 +168,7 @@ export function permissionsPage(
             </div>
             <div>
               <label class="label">Role</label>
-              <select name="value" class="select-field" required>
+              <select name="value" id="form-value" class="select-field" required>
                 <option value="">Select Role</option>
                 <option value="user">user - Can perform actions immediately</option>
                 <option value="admin">admin - Receives emails about approval requests and can approve/deny</option>
@@ -179,6 +179,7 @@ export function permissionsPage(
               <input
                 type="text"
                 name="comment"
+                id="form-comment"
                 class="input-field"
                 placeholder="Permission description"
                 required
@@ -189,6 +190,7 @@ export function permissionsPage(
               <input
                 type="date"
                 name="expiry_date"
+                id="form-expiry-date"
                 class="input-field"
                 placeholder="Leave empty for no expiry"
               />
@@ -197,7 +199,7 @@ export function permissionsPage(
               </p>
             </div>
             <div class="flex items-end">
-              ${button("Add Permission", { type: "submit", variant: "primary", fullWidth: true })}
+              ${button("Add Permission", { type: "submit", variant: "primary", fullWidth: true }).replace('<button', '<button id="submit-permission-btn"')}
             </div>
           </form>
           <script>
@@ -221,6 +223,107 @@ export function permissionsPage(
                     helpText.classList.remove('text-blue-600', 'dark:text-blue-400');
                   }
                 });
+              }
+
+              // Handle form submission via AJAX to preserve form values
+              const form = document.getElementById('add-permission-form');
+              if (form) {
+                form.addEventListener('submit', async function(e) {
+                  e.preventDefault();
+                  
+                  const submitBtn = document.getElementById('submit-permission-btn');
+                  const originalText = submitBtn?.textContent || 'Add Permission';
+                  
+                  // Disable submit button
+                  if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Adding...';
+                  }
+                  
+                  try {
+                    const formData = new FormData(form);
+                    const response = await fetch('/permissions', {
+                      method: 'POST',
+                      body: formData
+                    });
+                    
+                    // Check if response is a redirect
+                    if (response.redirected || response.status === 303 || response.status === 302) {
+                      // Parse the redirect URL to get success/error message
+                      const redirectUrl = response.url || response.headers.get('Location') || window.location.href;
+                      const url = new URL(redirectUrl, window.location.origin);
+                      const success = url.searchParams.get('success');
+                      const error = url.searchParams.get('error');
+                      
+                      if (success) {
+                        // Show success message and reload page to show new permission in table
+                        // But preserve form values by storing them
+                        const formValues = {
+                          user_id: document.getElementById('form-user-id')?.value || '',
+                          plant_id: plantSelect?.value || '',
+                          access_key: permissionInput?.value || '',
+                          value: document.getElementById('form-value')?.value || '',
+                          comment: document.getElementById('form-comment')?.value || '',
+                          expiry_date: document.getElementById('form-expiry-date')?.value || ''
+                        };
+                        
+                        // Store in sessionStorage
+                        sessionStorage.setItem('permissionFormValues', JSON.stringify(formValues));
+                        
+                        // Reload page to show updated table
+                        window.location.href = '/permissions?success=' + encodeURIComponent(success);
+                      } else if (error) {
+                        // Show error message without reloading
+                        window.location.href = '/permissions?error=' + encodeURIComponent(error);
+                      } else {
+                        // Just reload
+                        window.location.reload();
+                      }
+                    } else {
+                      // Handle non-redirect response
+                      const text = await response.text();
+                      if (response.ok) {
+                        window.location.reload();
+                      } else {
+                        alert('Error: ' + text);
+                        if (submitBtn) {
+                          submitBtn.disabled = false;
+                          submitBtn.textContent = originalText;
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    alert('Error submitting form: ' + err.message);
+                    if (submitBtn) {
+                      submitBtn.disabled = false;
+                      submitBtn.textContent = originalText;
+                    }
+                  }
+                });
+              }
+
+              // Restore form values from sessionStorage if available
+              const savedValues = sessionStorage.getItem('permissionFormValues');
+              if (savedValues) {
+                try {
+                  const values = JSON.parse(savedValues);
+                  if (document.getElementById('form-user-id')) document.getElementById('form-user-id').value = values.user_id || '';
+                  if (plantSelect) plantSelect.value = values.plant_id || '';
+                  if (permissionInput) permissionInput.value = values.access_key || '';
+                  if (document.getElementById('form-value')) document.getElementById('form-value').value = values.value || '';
+                  if (document.getElementById('form-comment')) document.getElementById('form-comment').value = values.comment || '';
+                  if (document.getElementById('form-expiry-date')) document.getElementById('form-expiry-date').value = values.expiry_date || '';
+                  
+                  // Clear saved values after restoring
+                  sessionStorage.removeItem('permissionFormValues');
+                  
+                  // Trigger permission input handler to update plant select if needed
+                  if (permissionInput && permissionInput.value) {
+                    permissionInput.dispatchEvent(new Event('input'));
+                  }
+                } catch (e) {
+                  console.error('Error restoring form values:', e);
+                }
               }
             })();
           </script>

@@ -64,34 +64,39 @@ interface AuditData {
   writeOffReasons: SelectOption[];
 }
 
-export function auditPage(data: AuditData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false): string {
+export function auditPage(data: AuditData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, isReadonly: boolean = false, userPlantId: number | null = null, allowedRegionId: number | null = null, allowedCountryId: number | null = null): string {
   const eq = data.equipment;
   
   const content = `
-    <div class="max-w-4xl mx-auto">
-      <div class="flex items-center gap-4 mb-6">
-        <a href="/" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
+        <a href="/" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors self-start sm:self-center">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>
         </a>
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Edit Equipment</h1>
-        <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-mono text-sm">${escapeHtml(eq.service_tag)}</span>
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">${isReadonly ? 'View Equipment' : 'Edit Equipment'}</h1>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-mono text-xs sm:text-sm">${escapeHtml(eq.service_tag)}</span>
+          ${isReadonly ? '<span class="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-xs sm:text-sm">Read-only</span>' : ''}
+        </div>
       </div>
 
       ${renderAlert(success, error)}
 
-      <form action="/edit/${eq.id}" method="POST">
-        <!-- Equipment Information -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            Equipment Information
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <form id="equipment-edit-form" action="/edit/${eq.id}" method="POST" ${isReadonly ? 'onsubmit="event.preventDefault(); return false;"' : ''}>
+        <!-- Equipment Information and Type -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <!-- Equipment Information -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              Equipment Information
+            </h2>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label for="purchase_date" class="label">Warranty Start</label>
               <div class="flex items-center gap-2">
@@ -101,12 +106,14 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                   name="purchase_date"
                   value="${formatDateForInput(eq.purchase_date)}"
                   class="input-field flex-1"
+                  ${isReadonly ? 'readonly disabled' : ''}
                 >
                 <button
                   type="button"
                   onclick="restoreWarrantyDates()"
                   class="btn btn-secondary text-xs whitespace-nowrap"
                   title="Restore warranty dates from database"
+                  ${isReadonly ? 'disabled' : ''}
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -122,11 +129,12 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 name="warranty_expiry_date"
                 value="${formatDateForInput(eq.warranty_expiry_date)}"
                 class="input-field ${isExpired(eq.warranty_expiry_date) ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" : ""}"
+                ${isReadonly ? 'readonly disabled' : ''}
               >
             </div>
             <div>
               <label for="vendor_id" class="label">Vendor</label>
-              <select id="vendor_id" name="vendor_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'vendors', 'Vendor'); }">
+              <select id="vendor_id" name="vendor_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'vendors', 'Vendor'); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">Select Vendor...</option>
                 ${data.vendors.map(v => `
                   <option value="${v.id}" ${eq.vendor_id === v.id ? "selected" : ""}>${escapeHtml(v.name)}</option>
@@ -136,7 +144,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </div>
             <div>
               <label for="supplier_id" class="label">Supplier</label>
-              <select id="supplier_id" name="supplier_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'suppliers', 'Supplier'); }">
+              <select id="supplier_id" name="supplier_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'suppliers', 'Supplier'); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">Select Supplier...</option>
                 ${data.suppliers.map(s => `
                   <option value="${s.id}" ${eq.supplier_id === s.id ? "selected" : ""}>${escapeHtml(s.name)}</option>
@@ -156,6 +164,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 name="cerf"
                 value="${eq.cerf || ""}"
                 class="input-field"
+                ${isReadonly ? 'readonly disabled' : ''}
               >
             </div>
             <div>
@@ -167,6 +176,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 value="${eq.ip || ""}"
                 class="input-field font-mono"
                 placeholder="e.g., 192.168.1.100"
+                ${isReadonly ? 'readonly disabled' : ''}
               >
             </div>
             <div>
@@ -178,24 +188,25 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 value="${eq.mac_addresses || ""}"
                 class="input-field font-mono"
                 placeholder="Comma-separated MAC addresses"
+                ${isReadonly ? 'readonly disabled' : ''}
               >
             </div>
+            </div>
           </div>
-        </div>
 
-        <!-- Type & Model Selection -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
-            </svg>
-            Equipment Type
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Type & Model Selection -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+              </svg>
+              Equipment Type
+            </h2>
+            
+            <div class="grid grid-cols-1 gap-4">
             <div>
               <label for="type_id" class="label">Type</label>
-              <select id="type_id" name="type_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'types', 'Type'); } else { loadProductLines(this.value); }">
+              <select id="type_id" name="type_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'types', 'Type'); } else { loadProductLines(this.value); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">Select Type...</option>
                 ${data.types.map(t => `
                   <option value="${t.id}" ${eq.type_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>
@@ -205,7 +216,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </div>
             <div>
               <label for="product_line_id" class="label">Product Line</label>
-              <select id="product_line_id" name="product_line_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'product-lines', 'Product Line', 'type_id'); } else { loadModels(this.value); }">
+              <select id="product_line_id" name="product_line_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'product-lines', 'Product Line', 'type_id'); } else { loadModels(this.value); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">${eq.type_id ? "Select Product Line..." : "Select Type first..."}</option>
                 ${data.productLines.map(pl => `
                   <option value="${pl.id}" data-parent="${pl.parent_id}" ${eq.product_line_id === pl.id ? "selected" : ""} ${eq.type_id !== pl.parent_id ? "hidden" : ""}>${escapeHtml(pl.name)}</option>
@@ -215,7 +226,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </div>
             <div>
               <label for="model_id" class="label">Model</label>
-              <select id="model_id" name="model_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'models', 'Model', 'product_line_id'); }">
+              <select id="model_id" name="model_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'models', 'Model', 'product_line_id'); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">${eq.product_line_id ? "Select Model..." : "Select Product Line first..."}</option>
                 ${data.models.map(m => `
                   <option value="${m.id}" data-parent="${m.parent_id}" ${eq.model_id === m.id ? "selected" : ""} ${eq.product_line_id !== m.parent_id ? "hidden" : ""}>${escapeHtml(m.name)}</option>
@@ -223,23 +234,26 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 <option value="__add_new__" data-parent="__always__" ${eq.product_line_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new model...</option>
               </select>
             </div>
+            </div>
           </div>
         </div>
 
-        <!-- Location Selection -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
-            Location
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Location and Assignment -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <!-- Location Selection -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+              Location
+            </h2>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label for="region_id" class="label">Region</label>
-              <select id="region_id" name="region_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'regions', 'Region'); } else { loadCountries(this.value); }">
+              <select id="region_id" name="region_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'regions', 'Region'); } else { loadCountries(this.value); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">Select Region...</option>
                 ${data.regions.map(r => `
                   <option value="${r.id}" ${eq.region_id === r.id ? "selected" : ""}>${escapeHtml(r.name)}</option>
@@ -249,7 +263,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </div>
             <div>
               <label for="country_id" class="label">Country</label>
-              <select id="country_id" name="country_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'countries', 'Country', 'region_id'); } else { loadPlants(this.value); }">
+              <select id="country_id" name="country_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'countries', 'Country', 'region_id'); } else { loadPlants(this.value); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">${eq.region_id ? "Select Country..." : "Select Region first..."}</option>
                 ${data.countries.map(c => `
                   <option value="${c.id}" data-parent="${c.parent_id}" ${eq.country_id === c.id ? "selected" : ""} ${eq.region_id !== c.parent_id ? "hidden" : ""}>${escapeHtml(c.name)}</option>
@@ -259,7 +273,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </div>
             <div>
               <label for="plant_id" class="label">Plant</label>
-              <select id="plant_id" name="plant_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'plants', 'Plant', 'country_id'); } else { loadDepartments(this.value); }">
+              <select id="plant_id" name="plant_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'plants', 'Plant', 'country_id'); } else { loadDepartments(this.value); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">${eq.country_id ? "Select Plant..." : "Select Country first..."}</option>
                 ${data.plants.map(p => `
                   <option value="${p.id}" data-parent="${p.parent_id}" ${eq.plant_id === p.id ? "selected" : ""} ${eq.country_id !== p.parent_id ? "hidden" : ""}>${escapeHtml(p.name)}</option>
@@ -269,7 +283,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </div>
             <div>
               <label for="department_id" class="label">Department</label>
-              <select id="department_id" name="department_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'departments', 'Department', 'plant_id'); } else { loadAreas(this.value); }">
+              <select id="department_id" name="department_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'departments', 'Department', 'plant_id'); } else { loadAreas(this.value); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">${eq.plant_id ? "Select Department..." : "Select Plant first..."}</option>
                 ${data.departments.map(d => `
                   <option value="${d.id}" data-parent="${d.parent_id}" ${eq.department_id === d.id ? "selected" : ""} ${eq.plant_id !== d.parent_id ? "hidden" : ""}>${escapeHtml(d.name)}</option>
@@ -279,7 +293,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </div>
             <div>
               <label for="area_id" class="label">Area</label>
-              <select id="area_id" name="area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'areas', 'Area', 'department_id'); } else { loadSubAreas(this.value); }">
+              <select id="area_id" name="area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'areas', 'Area', 'department_id'); } else { loadSubAreas(this.value); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">${eq.department_id ? "Select Area..." : "Select Department first..."}</option>
                 ${data.areas.map(a => `
                   <option value="${a.id}" data-parent="${a.parent_id}" ${eq.area_id === a.id ? "selected" : ""} ${eq.department_id !== a.parent_id ? "hidden" : ""}>${escapeHtml(a.name)}</option>
@@ -289,7 +303,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             </div>
             <div>
               <label for="equipment_sub_area_id" class="label">Sub Area</label>
-              <select id="equipment_sub_area_id" name="equipment_sub_area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'sub-areas', 'Sub Area', 'area_id'); }">
+              <select id="equipment_sub_area_id" name="equipment_sub_area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'sub-areas', 'Sub Area', 'area_id'); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">${eq.area_id ? "Select Sub Area..." : "Select Area first..."}</option>
                 ${data.subAreas.map(sa => `
                   <option value="${sa.id}" data-parent="${sa.parent_id}" ${eq.equipment_sub_area_id === sa.id ? "selected" : ""} ${eq.area_id !== sa.parent_id ? "hidden" : ""}>${escapeHtml(sa.name)}</option>
@@ -297,44 +311,22 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 <option value="__add_new__" data-parent="__always__" ${eq.area_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new sub area...</option>
               </select>
             </div>
-          </div>
-        </div>
-
-        <!-- Inventory Period -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-            </svg>
-            Inventory
-          </h2>
-          
-          <div class="grid grid-cols-1 gap-4">
-            <div>
-              <label for="inventory_period_id" class="label">Inventory Period</label>
-              <select id="inventory_period_id" name="inventory_period_id" class="select-field">
-                <option value="">No inventory period</option>
-                ${data.inventoryPeriods.map(ip => `
-                  <option value="${ip.id}" ${eq.inventory_period_id === ip.id ? "selected" : ""}>${escapeHtml(ip.name)} (${ip.start_date} - ${ip.end_date})</option>
-                `).join("")}
-              </select>
             </div>
           </div>
-        </div>
 
-        <!-- Assignment & TeamViewer -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-            </svg>
-            Assignment & Remote Access
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Assignment & TeamViewer -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+              Assignment & Remote Access
+            </h2>
+            
+            <div class="grid grid-cols-1 gap-4">
             <div>
               <label for="assigned_to" class="label">Assigned To</label>
-              <select id="assigned_to" name="assigned_to" class="select-field">
+              <select id="assigned_to" name="assigned_to" class="select-field" ${isReadonly ? 'disabled' : ''}>
                 <option value="">Unassigned</option>
                 ${data.employees.map(e => `
                   <option value="${escapeHtml(e.employee_no)}" ${eq.assigned_to === e.employee_no ? "selected" : ""}>${escapeHtml(e.name)} (${escapeHtml(e.employee_no)})</option>
@@ -350,58 +342,23 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 value="${eq.teamviewer || ""}"
                 placeholder="Enter TeamViewer ID..."
                 class="input-field"
+                ${isReadonly ? 'readonly disabled' : ''}
               >
             </div>
-            <div class="md:col-span-2">
-              <label for="comment" class="label">Comment</label>
-              <textarea 
-                id="comment" 
-                name="comment"
-                rows="3"
-                placeholder="Add notes about this equipment..."
-                class="input-field"
-              >${eq.comment || ""}</textarea>
+              <div>
+                <label for="comment" class="label">Comment</label>
+                <textarea 
+                  id="comment" 
+                  name="comment"
+                  rows="3"
+                  placeholder="Add notes about this equipment..."
+                  class="input-field"
+                  ${isReadonly ? 'readonly disabled' : ''}
+                >${eq.comment || ""}</textarea>
+              </div>
             </div>
           </div>
         </div>
-
-        <!-- Write-Off Status and Repair Status -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <!-- Write-Off Status -->
-          <div class="card">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-              </svg>
-              Write-Off Status
-            </h2>
-            
-            <div class="flex flex-col gap-3">
-              <div>
-                <p class="text-sm text-gray-700 dark:text-gray-300">
-                  ${eq.is_written_off ? `
-                    <span class="font-semibold">Current Status:</span> 
-                    <span class="px-2 py-1 rounded-full text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                      Written Off
-                    </span>
-                    <span class="ml-2 text-gray-600 dark:text-gray-400">(${escapeHtml(eq.write_off_reason || "Unknown")})</span>
-                  ` : '<span class="text-gray-500 dark:text-gray-400">Not written off (Active)</span>'}
-                </p>
-              </div>
-              <button 
-                type="button" 
-                onclick="openWriteOffModal()"
-                class="btn btn-secondary w-full"
-              >
-                <span class="flex items-center justify-center gap-2">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                  </svg>
-                  ${eq.is_written_off ? 'Edit Write-Off Status' : 'Set Write-Off Status'}
-                </span>
-              </button>
-            </div>
-          </div>
 
         <!-- Write-Off Status Modal -->
         <div id="writeOffModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
@@ -418,7 +375,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
               <div class="space-y-4">
                 <div>
                   <label for="modal_is_written_off" class="label">Write-Off Reason</label>
-                  <select id="modal_is_written_off" name="is_written_off" class="select-field" onchange="toggleModalWriteOffComment(this.value)">
+                  <select id="modal_is_written_off" name="is_written_off" class="select-field" onchange="toggleModalWriteOffComment(this.value)" ${isReadonly ? 'disabled' : ''}>
                     <option value="">Not written off (Active)</option>
                     ${data.writeOffReasons.map(r => `
                       <option value="${r.id}" ${eq.is_written_off === r.id ? "selected" : ""}>${escapeHtml(r.name)}</option>
@@ -437,61 +394,16 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                     placeholder="Please provide a comment explaining why this equipment is being written off..."
                     class="input-field"
                     ${eq.is_written_off ? "required" : ""}
+                    ${isReadonly ? 'readonly disabled' : ''}
                   ></textarea>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">A comment is required when writing off equipment.</p>
                 </div>
               </div>
               <div class="flex justify-end gap-3 mt-6">
                 <button type="button" onclick="closeWriteOffModal()" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-success">Save</button>
+                <button type="submit" class="btn btn-success" ${isReadonly ? 'disabled' : ''}>Save</button>
               </div>
             </form>
-          </div>
-        </div>
-
-          <!-- Repair Status -->
-          <div class="card">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-              </svg>
-              Repair Status
-            </h2>
-            
-            <div class="flex flex-col gap-3">
-              <div>
-                <p class="text-sm text-gray-700 dark:text-gray-300">
-                  ${eq.repair_status ? `
-                    <span class="font-semibold">Current Status:</span> 
-                    <span class="px-2 py-1 rounded-full text-xs ${
-                      eq.repair_status === 'needs_repair' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
-                      eq.repair_status === 'at_supplier' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
-                      eq.repair_status === 'returned' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
-                      'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300'
-                    }">
-                      ${eq.repair_status === 'needs_repair' ? 'Needs Repair' :
-                        eq.repair_status === 'at_supplier' ? 'At Supplier' :
-                        eq.repair_status === 'returned' ? 'Returned' :
-                        'In Use'}
-                    </span>
-                  ` : '<span class="text-gray-500 dark:text-gray-400">Not in repair (Active)</span>'}
-                </p>
-                ${eq.repair_note ? `<p class="text-xs text-gray-600 dark:text-gray-400 mt-1">${escapeHtml(eq.repair_note.substring(0, 100))}${eq.repair_note.length > 100 ? '...' : ''}</p>` : ''}
-              </div>
-              <button 
-                type="button" 
-                onclick="openRepairModal()"
-                class="btn btn-secondary w-full"
-              >
-                <span class="flex items-center justify-center gap-2">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                  </svg>
-                  ${eq.repair_status ? 'Edit Repair Status' : 'Set Repair Status'}
-                </span>
-              </button>
-            </div>
           </div>
         </div>
 
@@ -510,7 +422,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
               <div class="space-y-4">
                 <div>
                   <label for="modal_repair_status" class="label">Repair Status</label>
-                  <select id="modal_repair_status" name="repair_status" class="select-field" onchange="toggleModalRepairFields(this.value)">
+                  <select id="modal_repair_status" name="repair_status" class="select-field" onchange="toggleModalRepairFields(this.value)" ${isReadonly ? 'disabled' : ''}>
                     <option value="">Not in repair (Active)</option>
                     <option value="needs_repair" ${eq.repair_status === 'needs_repair' ? 'selected' : ''}>Needs Repair</option>
                     <option value="at_supplier" ${eq.repair_status === 'at_supplier' ? 'selected' : ''}>At Supplier</option>
@@ -531,6 +443,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                       placeholder="Describe the repair issue..."
                       class="input-field"
                       ${eq.repair_status === 'needs_repair' ? 'required' : ''}
+                      ${isReadonly ? 'readonly disabled' : ''}
                     >${escapeHtml(eq.repair_note || '')}</textarea>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">A note is required when registering equipment for repair.</p>
                   </div>
@@ -544,6 +457,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                       value="${escapeHtml(eq.repair_physical_location || '')}"
                       class="input-field"
                       maxlength="255"
+                      ${isReadonly ? 'readonly disabled' : ''}
                     >
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Record where the equipment is physically located.</p>
                   </div>
@@ -551,7 +465,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
               </div>
               <div class="flex justify-end gap-3 mt-6">
                 <button type="button" onclick="closeRepairModal()" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-success">Save</button>
+                <button type="submit" class="btn btn-success" ${isReadonly ? 'disabled' : ''}>Save</button>
               </div>
             </form>
           </div>
@@ -763,6 +677,33 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           // Initialize on page load
           document.addEventListener('DOMContentLoaded', function() {
             // Modals are opened on button click, no initialization needed
+            
+            ${!isAdmin && userPlantId !== null ? `
+            // Restrict location selection to user's plant only (server already filters, this is a safety check)
+            const userPlantIdValue = ${userPlantId};
+            const plantSelect = document.getElementById('plant_id');
+            
+            // Hide and disable plants that don't match user's plant
+            if (plantSelect) {
+              const plantOptions = plantSelect.querySelectorAll('option[value]:not([value=""]):not([value="__add_new__"])');
+              plantOptions.forEach(opt => {
+                const plantId = parseInt(opt.value);
+                if (plantId !== userPlantIdValue) {
+                  opt.disabled = true;
+                  opt.style.display = 'none';
+                }
+              });
+              
+              // Prevent selecting other plants
+              plantSelect.addEventListener('change', function() {
+                if (this.value && parseInt(this.value) !== userPlantIdValue) {
+                  alert('You can only select locations from your assigned plant. Resetting to your plant.');
+                  this.value = userPlantIdValue.toString();
+                  this.dispatchEvent(new Event('change'));
+                }
+              });
+            }
+            ` : ''}
           });
 
           // Close modals on escape key
@@ -794,24 +735,57 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
         </script>
 
         <!-- Submit -->
-        <div class="flex justify-end gap-4">
-          <a href="/" class="btn btn-secondary">Cancel</a>
-          <button type="button" id="print-label" class="btn btn-secondary" data-service-tag="${escapeHtml(eq.service_tag)}">
-            <span class="flex items-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-              </svg>
-              Print Label
-            </span>
-          </button>
-          <button type="submit" class="btn btn-success">
-            <span class="flex items-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-              </svg>
-              Save Changes
-            </span>
-          </button>
+        <div class="mt-6">
+          <div class="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4">
+            <a href="/" class="btn btn-secondary w-full sm:w-auto text-center">Cancel</a>
+            <button type="button" id="print-label" class="btn btn-secondary w-full sm:w-auto" data-service-tag="${escapeHtml(eq.service_tag)}" ${isReadonly ? 'disabled' : ''}>
+              <span class="flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                </svg>
+                Print Label
+              </span>
+            </button>
+            <button type="submit" form="equipment-edit-form" class="btn btn-success w-full sm:w-auto" ${isReadonly ? 'disabled' : ''} ${isReadonly ? '' : 'id="save-changes-btn"'}>
+              <span class="flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                ${isReadonly ? 'Read-only Mode' : 'Save Changes'}
+              </span>
+            </button>
+          </div>
+          
+          <!-- Write-Off and Repair Status Buttons -->
+          <div class="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 mt-4">
+            <button 
+              type="button" 
+              onclick="openWriteOffModal()"
+              class="btn btn-secondary w-full sm:w-auto"
+              ${isReadonly ? 'disabled' : ''}
+            >
+              <span class="flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                ${eq.is_written_off ? `Write-Off: ${escapeHtml(eq.write_off_reason || "Written Off")}` : 'Set Write-Off Status'}
+              </span>
+            </button>
+            <button 
+              type="button" 
+              onclick="openRepairModal()"
+              class="btn btn-secondary w-full sm:w-auto"
+              ${isReadonly ? 'disabled' : ''}
+            >
+              <span class="flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                ${eq.repair_status ? `Repair: ${eq.repair_status === 'needs_repair' ? 'Needs Repair' : eq.repair_status === 'at_supplier' ? 'At Supplier' : eq.repair_status === 'returned' ? 'Returned' : 'In Use'}` : 'Set Repair Status'}
+              </span>
+            </button>
+          </div>
         </div>
         
         <!-- Print Modal -->
@@ -966,6 +940,24 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
             }
+            
+            ${isReadonly ? `
+            // Disable all form fields in readonly mode
+            (function() {
+              const form = document.querySelector('form[action*="/edit/"]');
+              if (form) {
+                const inputs = form.querySelectorAll('input:not([type="hidden"]), select, textarea, button[type="submit"], button[type="button"]');
+                inputs.forEach(el => {
+                  if (el.tagName === 'INPUT' && el.type !== 'hidden') {
+                    el.setAttribute('readonly', 'readonly');
+                    el.setAttribute('disabled', 'disabled');
+                  } else if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.tagName === 'BUTTON') {
+                    el.setAttribute('disabled', 'disabled');
+                  }
+                });
+              }
+            })();
+            ` : ''}
           })();
         </script>
       </form>
