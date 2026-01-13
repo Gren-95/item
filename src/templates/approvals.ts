@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { DOCUMENT_TEXT_ICON } from "./icons";
 
 interface ApprovalRequest {
   id: number;
@@ -196,7 +197,10 @@ export function approvalsPage(
   const content = `
     <div class="max-w-7xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Approval Requests</h1>
+        <div class="flex items-center gap-2">
+          ${DOCUMENT_TEXT_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Approval Requests</h1>
+        </div>
       </div>
 
       ${alert}

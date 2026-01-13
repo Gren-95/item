@@ -1,5 +1,6 @@
 import { layout } from "./layout";
 import { button, deleteButton } from "./buttons";
+import { USER_GROUP_ICON } from "./icons";
 
 interface User {
   user_id: string;
@@ -85,7 +86,10 @@ export function permissionsPage(
   const content = `
     <div class="max-w-6xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">User Permissions</h1>
+        <div class="flex items-center gap-2">
+          ${USER_GROUP_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">User Permissions</h1>
+        </div>
         <p class="text-sm text-gray-500 dark:text-gray-400">Manage user permissions for the IT Equipment Management system</p>
       </div>
 

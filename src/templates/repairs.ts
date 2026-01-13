@@ -1,5 +1,6 @@
 import { layout } from "./layout";
 import { button } from "./buttons";
+import { WRENCH_ICON } from "./icons";
 
 interface RepairItem {
   id: number;
@@ -59,7 +60,10 @@ export function repairsPage(data: RepairsData, success = "", error = "", isAdmin
   const content = `
     <div class="max-w-7xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Supplier Repair Tracking</h1>
+        <div class="flex items-center gap-2">
+          ${WRENCH_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Supplier Repair Tracking</h1>
+        </div>
         <p class="text-sm text-gray-500 dark:text-gray-400">Track equipment sent for repair and monitor repair status.</p>
       </div>
 

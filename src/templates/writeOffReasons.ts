@@ -1,6 +1,7 @@
 import { layout } from "./layout";
 import { renderAlert, escapeHtml } from "./components";
 import { button, editButton, deleteButton } from "./buttons";
+import { X_CIRCLE_ICON } from "./icons";
 
 interface WriteOffReasonItem {
   id: number;
@@ -18,7 +19,10 @@ export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", err
   const content = `
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Write-Off Reasons</h1>
+        <div class="flex items-center gap-2">
+          ${X_CIRCLE_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Write-Off Reasons</h1>
+        </div>
         <p class="text-sm text-gray-500 dark:text-gray-400">Manage write-off reasons and see how many equipment items use each reason.</p>
       </div>
 
