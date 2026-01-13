@@ -1,6 +1,7 @@
 import { layout } from "./layout";
 import { button, editButton, deleteButton, activateButton, deactivateButton } from "./buttons";
 import { renderAlert, escapeHtml } from "./components";
+import { LOCATION_ICON } from "./icons";
 
 interface LocationItem {
   id: number;
@@ -40,7 +41,10 @@ export function locationsPage(data: LocationsData, success = "", error = "", isA
   const content = `
     <div class="max-w-6xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Locations</h1>
+        <div class="flex items-center gap-2">
+          ${LOCATION_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Locations</h1>
+        </div>
         <p class="text-sm text-gray-500 dark:text-gray-400">Manage hierarchy and see assigned equipment counts.</p>
       </div>
 

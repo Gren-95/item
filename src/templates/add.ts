@@ -2,6 +2,7 @@ import { layout } from "./layout";
 import { renderAlert, escapeHtml } from "./components";
 import { getModalHtml, getScriptsHtml } from "./components";
 import { button, buttonLink } from "./buttons";
+import { PLUS_ICON, ARROW_LEFT_ICON } from "./icons";
 
 interface SelectOption {
   id: number;
@@ -38,11 +39,12 @@ export function addPage(data: AddData, success: boolean = false, error: string |
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-4 mb-6">
         <a href="/" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-          </svg>
+          ${ARROW_LEFT_ICON.replace('w-5 h-5', 'w-6 h-6')}
         </a>
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Add New Equipment</h1>
+        <div class="flex items-center gap-2">
+          ${PLUS_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Add New Equipment</h1>
+        </div>
       </div>
 
       ${renderAlert(success, error)}

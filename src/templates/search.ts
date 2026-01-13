@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { SEARCH_ICON } from "./icons";
 
 interface SearchResult {
   id: number;
@@ -26,7 +27,10 @@ export function searchPage(
   const content = `
       <div class="max-w-6xl mx-auto">
       <div class="card mb-8">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Equipment Search</h1>
+        <div class="flex items-center gap-2 mb-6">
+          ${SEARCH_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Equipment Search</h1>
+        </div>
         
         <form id="search-form" action="/" method="GET" class="flex gap-4 items-end flex-wrap">
           <div class="w-full flex flex-col gap-2">

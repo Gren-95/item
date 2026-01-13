@@ -1,5 +1,6 @@
 import { layout } from "./layout";
 import { button, printButton, deleteButton } from "./buttons";
+import { KEY_ICON } from "./icons";
 
 interface PcPassword {
   id: number;
@@ -64,7 +65,10 @@ export function pcPwPage(
   const content = `
     <div class="max-w-6xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">PC Passwords</h1>
+        <div class="flex items-center gap-2">
+          ${KEY_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">PC Passwords</h1>
+        </div>
         <p class="text-sm text-gray-500 dark:text-gray-400">Manage computer credentials for general use accounts</p>
       </div>
 
@@ -73,7 +77,7 @@ export function pcPwPage(
       ${hasEdit ? `
       <div class="card mb-6">
         <div class="mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">${data.passwords.length > 0 ? 'Edit' : 'Add'} Password</h2>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Add User</h2>
           <form method="POST" action="/pc-pw" class="grid grid-cols-1 md:grid-cols-5 gap-3">
             <input type="hidden" name="action" value="add">
             <div>
@@ -124,6 +128,7 @@ export function pcPwPage(
 
       <div class="card">
         <div class="overflow-x-auto">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Factory Users</h2>
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-gray-200 dark:border-gray-700 text-left text-gray-600 dark:text-gray-400">

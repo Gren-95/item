@@ -1,6 +1,7 @@
 import { layout } from "./layout";
 import { renderAlert, escapeHtml } from "./components";
 import { getModalHtml, getScriptsHtml } from "./components";
+import { INFORMATION_CIRCLE_ICON, EDIT_ICON } from "./icons";
 
 interface Equipment {
   id: number;
@@ -75,7 +76,19 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>
         </a>
-        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">${isReadonly ? 'View Equipment' : 'Edit Equipment'}</h1>
+        <div class="flex items-center gap-2">
+          ${isReadonly 
+            ? require("./icons").INFORMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-6 h-6 sm:w-7 sm:h-7')
+            : require("./icons").EDIT_ICON.replace('w-4 h-4', 'w-6 h-6 sm:w-7 sm:h-7')
+          }
+          <div class="flex items-center gap-2">
+          ${isReadonly 
+            ? INFORMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-6 h-6 sm:w-7 sm:h-7').replace('text-current', 'text-gray-900 dark:text-white')
+            : EDIT_ICON.replace('w-4 h-4', 'w-6 h-6 sm:w-7 sm:h-7').replace('text-current', 'text-gray-900 dark:text-white')
+          }
+          <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">${isReadonly ? 'View Equipment' : 'Edit Equipment'}</h1>
+        </div>
+        </div>
         <div class="flex flex-wrap items-center gap-2">
           <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-mono text-xs sm:text-sm">${escapeHtml(eq.service_tag)}</span>
           ${isReadonly ? '<span class="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-xs sm:text-sm">Read-only</span>' : ''}

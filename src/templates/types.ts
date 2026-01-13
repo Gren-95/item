@@ -1,6 +1,7 @@
 import { layout } from "./layout";
 import { button, editButton, activateButton, deactivateButton } from "./buttons";
 import { renderAlert, escapeHtml } from "./components";
+import { COG_ICON } from "./icons";
 
 interface TypeItem {
   id: number;
@@ -43,7 +44,10 @@ export function typesPage(data: TypesData, success = "", error = "", isAdmin: bo
   const content = `
     <div class="max-w-6xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Equipment Types, Product Lines & Models</h1>
+        <div class="flex items-center gap-2">
+          ${COG_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Equipment Types, Product Lines & Models</h1>
+        </div>
         <p class="text-sm text-gray-500 dark:text-gray-400">Manage equipment types, product lines, and models, see assigned equipment counts.</p>
       </div>
 
