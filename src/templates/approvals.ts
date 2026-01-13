@@ -60,7 +60,8 @@ export function approvalsPage(
   isAdmin: boolean,
   success = "",
   error = "",
-  hasPcPwView: boolean = false
+  hasPcPwView: boolean = false,
+  username: string | null = null
 ): string {
   if (!isAdmin) {
     const content = `
@@ -78,8 +79,8 @@ export function approvalsPage(
         </div>
       </div>
     `;
-    return layout("Approval Requests", content, isAdmin, hasPcPwView);
-  }
+    return layout("Approval Requests", content, isAdmin, hasPcPwView, username);
+}
 
   const alert = success
     ? `<div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6 text-green-700 dark:text-green-400">✅ ${escapeHtml(success)}</div>`

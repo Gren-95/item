@@ -8,7 +8,54 @@ const CHANGE_PASSWORD_ENDPOINT = process.env.CHANGE_PASSWORD_ENDPOINT || (() => 
   return "http://rakintra/lswkpi/ajax/t6nu/changePass.php";
 })();
 
+// General admin user credentials from environment variables
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+/**
+ * Check if a username matches the configured admin username
+ * @param username - The username to check
+ * @returns true if username matches ADMIN_USERNAME (case-sensitive)
+ */
+export function isAdminUser(username: string): boolean {
+  return ADMIN_USERNAME !== undefined && ADMIN_USERNAME !== "" && username === ADMIN_USERNAME;
+}
+
+/**
+ * Verify admin user credentials
+ * @param username - The username to check
+ * @param password - The password to verify
+ * @returns true if credentials match admin user from .env
+ */
+export function verifyAdminCredentials(username: string, password: string): boolean {
+  if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
+    // Only log in non-test environments
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.log("Admin credentials not configured");
+    }
+    return false;
+  }
+  const matches = username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
+  // Only log in non-test environments
+  if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+    if (username === ADMIN_USERNAME) {
+      console.log("Admin username matched, checking password...", { username, passwordMatch: password === ADMIN_PASSWORD });
+    }
+  }
+  return matches;
+}
+
 export async function verifyCredentials(username: string, password: string): Promise<boolean> {
+  // Check admin credentials first (bypasses auth API)
+  if (verifyAdminCredentials(username, password)) {
+    // Only log in non-test environments
+    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
+      console.log("Admin user login attempt:", username);
+    }
+    return true;
+  }
+
+  // Proceed with normal auth API call for non-admin users
   try {
     const formData = new URLSearchParams();
     formData.append("user", username);
@@ -61,6 +108,11 @@ export async function hasItemLoginPermission(
   username: string,
   pool: import("mysql2/promise").Pool
 ): Promise<boolean> {
+  // Admin user always has login permission
+  if (isAdminUser(username)) {
+    return true;
+  }
+
   try {
     // Must be an active employee
     const [users] = await pool.query<import("mysql2").RowDataPacket[]>(
@@ -104,6 +156,11 @@ export async function getUserPlantId(
   username: string,
   pool: import("mysql2/promise").Pool
 ): Promise<number | null> {
+  // Admin user has no plant restrictions (returns null to bypass all plant checks)
+  if (isAdminUser(username)) {
+    return null;
+  }
+
   try {
     // First, try to get plant_id from user's permissions
     // Get the most common plant_id from their non-global permissions (excluding plant_id = 0)
@@ -180,6 +237,11 @@ export async function hasPermission(
   plantId?: number | null,
   requireAdmin: boolean = false
 ): Promise<boolean> {
+  // Admin user always has all permissions
+  if (isAdminUser(username)) {
+    return true;
+  }
+
   try {
     // Ensure user exists
     const [users] = await pool.query<import("mysql2").RowDataPacket[]>(
@@ -265,6 +327,11 @@ export async function hasAdminPermission(
   username: string,
   pool: import("mysql2/promise").Pool
 ): Promise<boolean> {
+  // Admin user always has admin permission
+  if (isAdminUser(username)) {
+    return true;
+  }
+
   try {
     // Ensure user exists
     const [users] = await pool.query<import("mysql2").RowDataPacket[]>(
@@ -758,6 +825,11 @@ export async function hasPcPwViewPermission(
   username: string,
   pool: import("mysql2/promise").Pool
 ): Promise<boolean> {
+  // Admin user always has PC password view permission (bypasses all database checks)
+  if (isAdminUser(username)) {
+    return true;
+  }
+
   try {
     // Ensure user exists
     const [users] = await pool.query<import("mysql2").RowDataPacket[]>(
@@ -815,6 +887,11 @@ export async function hasPcPwEditPermission(
   username: string,
   pool: import("mysql2/promise").Pool
 ): Promise<boolean> {
+  // Admin user always has PC password edit permission (bypasses all database checks)
+  if (isAdminUser(username)) {
+    return true;
+  }
+
   try {
     // Ensure user exists
     const [users] = await pool.query<import("mysql2").RowDataPacket[]>(

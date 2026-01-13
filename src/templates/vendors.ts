@@ -25,7 +25,7 @@ interface VendorsData {
   suppliers: SupplierItem[];
 }
 
-export function vendorsPage(data: VendorsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false): string {
+export function vendorsPage(data: VendorsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null): string {
   const alert = renderAlert(success, error);
 
   const content = `
@@ -84,7 +84,7 @@ export function vendorsPage(data: VendorsData, success = "", error = "", isAdmin
     </script>
   `;
 
-  return layout("Vendor Management", content, isAdmin, hasPcPwView);
+  return layout("Vendor Management", content, isAdmin, hasPcPwView, username);
 }
 
 function renderVendorsSection(vendors: VendorItem[]): string {

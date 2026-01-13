@@ -52,7 +52,8 @@ export function permissionsPage(
   isAdmin: boolean,
   hasPcPwView: boolean = false,
   success = "",
-  error = ""
+  error = "",
+  username: string | null = null
 ): string {
   // If not admin, show only insufficient permissions message
   if (!isAdmin) {
@@ -72,7 +73,7 @@ export function permissionsPage(
         </div>
       </div>
     `;
-    return layout("User Permissions", content, isAdmin, hasPcPwView);
+    return layout("User Permissions", content, isAdmin, hasPcPwView, username);
   }
 
   const alert = success
