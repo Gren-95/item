@@ -3045,6 +3045,42 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
+    // Dell warranty API
+    if (path.startsWith("/api/dell-warranty/") && req.method === "GET") {
+      const serviceTag = path.replace("/api/dell-warranty/", "");
+      
+      if (!serviceTag) {
+        return new Response(
+          JSON.stringify({ success: false, message: "Service tag is required" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      
+      try {
+        const { getDellWarrantyInfo, isDellApiConfigured } = await import("./utils/dell");
+        
+        if (!isDellApiConfigured()) {
+          return new Response(
+            JSON.stringify({ success: false, message: "Dell API is not configured" }),
+            { status: 503, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        
+        const result = await getDellWarrantyInfo(serviceTag);
+        return new Response(JSON.stringify(result), {
+          status: result.success ? 200 : 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Dell API error", { traceId, serviceTag, error: errorMessage });
+        return new Response(
+          JSON.stringify({ success: false, message: errorMessage }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Print label API
     if (path === "/api/print" && req.method === "POST") {
       try {
