@@ -36,8 +36,8 @@ cp .env.example .env
 | `DATABASE_NAME` | Database name | `it` |
 | `PORT` | Server port | `3000` |
 | `BARTENDER_HOST` |Bartender printing service host| `http://localhost/`|
-| `AUTH_ENDPOINT` | Authentication endpoint URL | `http://rakintra/lswkpi/ajax/t6nu/verifyLogin.php` |
-| `CHANGE_PASSWORD_ENDPOINT` | Password change endpoint URL | Auto-constructed from `PMS_DB_HOST` or `http://rakintra/lswkpi/ajax/t6nu/changePass.php` |
+| `AUTH_ENDPOINT` | Authentication endpoint URL | `example...` |
+| `CHANGE_PASSWORD_ENDPOINT` | Password change endpoint URL | Auto-constructed from `PMS_DB_HOST` or `example...` |
 | `PMS_DB_HOST` | Database host for constructing auth endpoints | Not set |
 | `HTTPS_CERT_FILE` | Path to TLS certificate (inside container) | `/app/certs/ssl.pem` |
 | `HTTPS_KEY_FILE` | Path to TLS key (inside container) | `/app/certs/ssl-key.pem` |
