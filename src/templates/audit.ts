@@ -112,38 +112,39 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label for="purchase_date" class="label">Warranty Start</label>
+              <input
+                type="date"
+                id="purchase_date"
+                name="purchase_date"
+                value="${formatDateForInput(eq.purchase_date)}"
+                class="input-field"
+                ${isReadonly ? 'readonly disabled' : ''}
+              >
+            </div>
+            <div>
+              <label for="warranty_expiry_date" class="label">Warranty Expiry</label>
               <div class="flex items-center gap-2">
                 <input
                   type="date"
-                  id="purchase_date"
-                  name="purchase_date"
-                  value="${formatDateForInput(eq.purchase_date)}"
-                  class="input-field flex-1"
+                  id="warranty_expiry_date"
+                  name="warranty_expiry_date"
+                  value="${formatDateForInput(eq.warranty_expiry_date)}"
+                  class="input-field flex-1 ${isExpired(eq.warranty_expiry_date) ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" : ""}"
                   ${isReadonly ? 'readonly disabled' : ''}
                 >
                 <button
                   type="button"
-                  onclick="restoreWarrantyDates()"
-                  class="btn btn-secondary text-xs whitespace-nowrap"
-                  title="Restore warranty dates from database"
+                  id="check-dell-warranty-btn"
+                  onclick="checkDellWarranty()"
+                  class="btn btn-success text-xs whitespace-nowrap hidden"
+                  title="Fetch warranty info from Dell"
                   ${isReadonly ? 'disabled' : ''}
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                   </svg>
                 </button>
               </div>
-            </div>
-            <div>
-              <label for="warranty_expiry_date" class="label">Warranty Expiry</label>
-              <input
-                type="date"
-                id="warranty_expiry_date"
-                name="warranty_expiry_date"
-                value="${formatDateForInput(eq.warranty_expiry_date)}"
-                class="input-field ${isExpired(eq.warranty_expiry_date) ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" : ""}"
-                ${isReadonly ? 'readonly disabled' : ''}
-              >
             </div>
             <div>
               <label for="vendor_id" class="label">Vendor</label>
@@ -673,22 +674,141 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           window.toggleModalRepairFields = toggleModalRepairFields;
           window.submitRepairModal = submitRepairModal;
           
-          function restoreWarrantyDates() {
-            const purchaseDateInput = document.getElementById('purchase_date');
-            const warrantyExpiryInput = document.getElementById('warranty_expiry_date');
-            const originalPurchaseDate = '${formatDateForInput(eq.purchase_date)}';
-            const originalWarrantyExpiry = '${formatDateForInput(eq.warranty_expiry_date)}';
-            
-            if (purchaseDateInput) {
-              purchaseDateInput.value = originalPurchaseDate;
-            }
-            if (warrantyExpiryInput) {
-              warrantyExpiryInput.value = originalWarrantyExpiry;
+          // Dell Warranty Integration
+          let dellWarrantyData = null;
+          
+          function isDellVendor() {
+            const vendorSelect = document.getElementById('vendor_id');
+            if (!vendorSelect) return false;
+            const selectedOption = vendorSelect.options[vendorSelect.selectedIndex];
+            if (!selectedOption || !selectedOption.text) return false;
+            return selectedOption.text.toLowerCase().includes('dell');
+          }
+          
+          function updateDellWarrantyButtonVisibility() {
+            const btn = document.getElementById('check-dell-warranty-btn');
+            if (!btn) return;
+            if (isDellVendor()) {
+              btn.classList.remove('hidden');
+            } else {
+              btn.classList.add('hidden');
             }
           }
           
+          window.checkDellWarranty = async function() {
+            const modal = document.getElementById('dellWarrantyModal');
+            const loading = document.getElementById('dellWarrantyLoading');
+            const error = document.getElementById('dellWarrantyError');
+            const errorMsg = document.getElementById('dellWarrantyErrorMessage');
+            const content = document.getElementById('dellWarrantyContent');
+            const applyBtn = document.getElementById('apply-dell-warranty-btn');
+            
+            // Show modal with loading state
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            loading.classList.remove('hidden');
+            error.classList.add('hidden');
+            content.classList.add('hidden');
+            applyBtn.classList.add('hidden');
+            
+            const serviceTag = '${escapeHtml(eq.service_tag)}';
+            
+            try {
+              const response = await fetch('/api/dell-warranty/' + encodeURIComponent(serviceTag));
+              const result = await response.json();
+              
+              loading.classList.add('hidden');
+              
+              if (!result.success) {
+                error.classList.remove('hidden');
+                errorMsg.textContent = result.message || 'Failed to fetch warranty information';
+                return;
+              }
+              
+              dellWarrantyData = result.data;
+              
+              // Populate device info
+              document.getElementById('dell-service-tag').textContent = dellWarrantyData.serviceTag || '-';
+              document.getElementById('dell-model').textContent = dellWarrantyData.model || '-';
+              document.getElementById('dell-product-line').textContent = dellWarrantyData.productLine || '-';
+              document.getElementById('dell-ship-date').textContent = dellWarrantyData.shipDate || '-';
+              
+              // Populate warranty dates
+              document.getElementById('dell-warranty-start').textContent = dellWarrantyData.warrantyStart || '-';
+              document.getElementById('dell-warranty-end').textContent = dellWarrantyData.warrantyEnd || '-';
+              
+              // Populate new date inputs
+              document.getElementById('dell-new-start').value = dellWarrantyData.warrantyStart || '';
+              document.getElementById('dell-new-end').value = dellWarrantyData.warrantyEnd || '';
+              
+              // Populate entitlements
+              const entContainer = document.getElementById('dell-entitlements-container');
+              const entList = document.getElementById('dell-entitlements');
+              
+              if (dellWarrantyData.entitlements && dellWarrantyData.entitlements.length > 0) {
+                entContainer.classList.remove('hidden');
+                entList.innerHTML = dellWarrantyData.entitlements.map(ent => \`
+                  <div class="bg-gray-50 dark:bg-gray-700/50 rounded p-2 text-sm">
+                    <div class="font-medium text-gray-900 dark:text-white">\${(ent.serviceLevel || 'Unknown Service').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                    <div class="text-gray-500 dark:text-gray-400 text-xs">\${ent.startDate || ''} - \${ent.endDate || ''}</div>
+                  </div>
+                \`).join('');
+              } else {
+                entContainer.classList.add('hidden');
+              }
+              
+              content.classList.remove('hidden');
+              applyBtn.classList.remove('hidden');
+              
+            } catch (err) {
+              loading.classList.add('hidden');
+              error.classList.remove('hidden');
+              errorMsg.textContent = 'Error: ' + (err.message || 'Unknown error');
+            }
+          };
+          
+          window.closeDellWarrantyModal = function() {
+            const modal = document.getElementById('dellWarrantyModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            dellWarrantyData = null;
+          };
+          
+          window.applyDellWarranty = function() {
+            if (!dellWarrantyData) return;
+            
+            const purchaseDateInput = document.getElementById('purchase_date');
+            const warrantyExpiryInput = document.getElementById('warranty_expiry_date');
+            
+            if (dellWarrantyData.warrantyStart && purchaseDateInput) {
+              purchaseDateInput.value = dellWarrantyData.warrantyStart;
+            }
+            
+            if (dellWarrantyData.warrantyEnd && warrantyExpiryInput) {
+              warrantyExpiryInput.value = dellWarrantyData.warrantyEnd;
+              // Update styling for expired/valid warranty
+              const today = new Date();
+              const expiryDate = new Date(dellWarrantyData.warrantyEnd);
+              if (expiryDate < today) {
+                warrantyExpiryInput.classList.add('text-red-600', 'dark:text-red-400', 'bg-red-50', 'dark:bg-red-900/20', 'border-red-200', 'dark:border-red-800');
+              } else {
+                warrantyExpiryInput.classList.remove('text-red-600', 'dark:text-red-400', 'bg-red-50', 'dark:bg-red-900/20', 'border-red-200', 'dark:border-red-800');
+              }
+            }
+            
+            closeDellWarrantyModal();
+          };
+          
           // Initialize on page load
           document.addEventListener('DOMContentLoaded', function() {
+            // Update Dell warranty button visibility on page load
+            updateDellWarrantyButtonVisibility();
+            
+            // Update Dell warranty button visibility when vendor changes
+            const vendorSelect = document.getElementById('vendor_id');
+            if (vendorSelect) {
+              vendorSelect.addEventListener('change', updateDellWarrantyButtonVisibility);
+            }
             // Modals are opened on button click, no initialization needed
             
             ${!isAdmin && userPlantId !== null ? `
@@ -724,11 +844,15 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             if (e.key === 'Escape') {
               const repairModal = document.getElementById('repairModal');
               const writeOffModal = document.getElementById('writeOffModal');
+              const dellWarrantyModal = document.getElementById('dellWarrantyModal');
               if (repairModal && !repairModal.classList.contains('hidden')) {
                 closeRepairModal();
               }
               if (writeOffModal && !writeOffModal.classList.contains('hidden')) {
                 closeWriteOffModal();
+              }
+              if (dellWarrantyModal && !dellWarrantyModal.classList.contains('hidden')) {
+                closeDellWarrantyModal();
               }
             }
           });
@@ -743,6 +867,12 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           document.getElementById('writeOffModal')?.addEventListener('click', function(e) {
             if (e.target === this) {
               closeWriteOffModal();
+            }
+          });
+
+          document.getElementById('dellWarrantyModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+              closeDellWarrantyModal();
             }
           });
         </script>
@@ -798,6 +928,108 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 ${eq.repair_status ? `Repair: ${eq.repair_status === 'needs_repair' ? 'Needs Repair' : eq.repair_status === 'at_supplier' ? 'At Supplier' : eq.repair_status === 'returned' ? 'Returned' : 'In Use'}` : 'Set Repair Status'}
               </span>
             </button>
+          </div>
+        </div>
+        
+        <!-- Dell Warranty Modal -->
+        <div id="dellWarrantyModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 transition-colors max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+                Dell Warranty Information
+              </h3>
+              <button onclick="closeDellWarrantyModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            
+            <div id="dellWarrantyLoading" class="text-center py-8">
+              <svg class="w-10 h-10 animate-spin text-blue-600 dark:text-blue-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              <p class="text-gray-600 dark:text-gray-400 mt-3">Fetching warranty info from Dell...</p>
+            </div>
+            
+            <div id="dellWarrantyError" class="hidden text-center py-8">
+              <svg class="w-10 h-10 text-red-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <p id="dellWarrantyErrorMessage" class="text-red-600 dark:text-red-400"></p>
+            </div>
+            
+            <div id="dellWarrantyContent" class="hidden">
+              <div class="space-y-4">
+                <!-- Device Info -->
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                  <h4 class="font-medium text-gray-900 dark:text-white mb-2">Device Information</h4>
+                  <dl class="grid grid-cols-2 gap-2 text-sm">
+                    <dt class="text-gray-500 dark:text-gray-400">Service Tag:</dt>
+                    <dd id="dell-service-tag" class="font-mono text-gray-900 dark:text-white"></dd>
+                    <dt class="text-gray-500 dark:text-gray-400">Model:</dt>
+                    <dd id="dell-model" class="text-gray-900 dark:text-white"></dd>
+                    <dt class="text-gray-500 dark:text-gray-400">Product Line:</dt>
+                    <dd id="dell-product-line" class="text-gray-900 dark:text-white"></dd>
+                    <dt class="text-gray-500 dark:text-gray-400">Ship Date:</dt>
+                    <dd id="dell-ship-date" class="text-gray-900 dark:text-white"></dd>
+                  </dl>
+                </div>
+                
+                <!-- Warranty Dates -->
+                <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                  <h4 class="font-medium text-blue-900 dark:text-blue-200 mb-2">Warranty Period</h4>
+                  <dl class="grid grid-cols-2 gap-2 text-sm">
+                    <dt class="text-blue-600 dark:text-blue-400">Warranty Start:</dt>
+                    <dd id="dell-warranty-start" class="font-semibold text-blue-900 dark:text-blue-200"></dd>
+                    <dt class="text-blue-600 dark:text-blue-400">Warranty End:</dt>
+                    <dd id="dell-warranty-end" class="font-semibold text-blue-900 dark:text-blue-200"></dd>
+                  </dl>
+                </div>
+                
+                <!-- Entitlements List -->
+                <div id="dell-entitlements-container" class="hidden">
+                  <h4 class="font-medium text-gray-900 dark:text-white mb-2">Service Entitlements</h4>
+                  <div id="dell-entitlements" class="space-y-2 max-h-40 overflow-y-auto"></div>
+                </div>
+                
+                <!-- Update Preview -->
+                <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <h4 class="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Apply Changes
+                  </h4>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">The following warranty dates will be updated:</p>
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="label text-xs">New Warranty Start</label>
+                      <input type="date" id="dell-new-start" class="input-field text-sm" readonly>
+                    </div>
+                    <div>
+                      <label class="label text-xs">New Warranty End</label>
+                      <input type="date" id="dell-new-end" class="input-field text-sm" readonly>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6">
+              <button onclick="closeDellWarrantyModal()" class="btn btn-secondary">Cancel</button>
+              <button id="apply-dell-warranty-btn" onclick="applyDellWarranty()" class="btn btn-primary hidden">
+                <span class="flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  Apply Warranty Dates
+                </span>
+              </button>
+            </div>
           </div>
         </div>
         
