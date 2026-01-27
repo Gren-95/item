@@ -42,6 +42,7 @@ export const CHEVRON_DOWN_ICON = iconSvg("M19 9l-7 7-7-7");
 // Status Icons
 export const CHECK_CIRCLE_ICON = iconSvg("M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z");
 export const EXCLAMATION_CIRCLE_ICON = iconSvg("M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z");
+export const EXCLAMATION_TRIANGLE_ICON = iconSvg("M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z");
 export const INFORMATION_CIRCLE_ICON = iconSvg("M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z");
 export const X_ICON = iconSvg("M6 18L18 6M6 6l12 12");
 
@@ -59,6 +60,7 @@ export const EDIT_ICON = iconSvg("M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 0
 export const PRINTER_ICON = iconSvg("M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z");
 export const CHECK_ICON = iconSvg("M5 13l4 4L19 7");
 export const ARCHIVE_ICON = iconSvg("M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4");
+export const CLIPBOARD_CHECK_ICON = iconSvg("M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4");
 
 // Helper function to create icon with custom size
 export function icon(iconName: keyof typeof iconMap, size: string = "w-5 h-5", className: string = ""): string {
@@ -91,6 +93,7 @@ const iconMap = {
   chevronDown: CHEVRON_DOWN_ICON,
   checkCircle: CHECK_CIRCLE_ICON,
   exclamationCircle: EXCLAMATION_CIRCLE_ICON,
+  exclamationTriangle: EXCLAMATION_TRIANGLE_ICON,
   informationCircle: INFORMATION_CIRCLE_ICON,
   x: X_ICON,
   documentText: DOCUMENT_TEXT_ICON,
@@ -102,4 +105,5 @@ const iconMap = {
   printer: PRINTER_ICON,
   check: CHECK_ICON,
   archive: ARCHIVE_ICON,
+  clipboardCheck: CLIPBOARD_CHECK_ICON,
 };

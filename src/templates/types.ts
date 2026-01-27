@@ -32,7 +32,7 @@ interface TypesData {
   productLines: ProductLineItem[];
 }
 
-export function typesPage(data: TypesData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null): string {
+export function typesPage(data: TypesData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
   const alert = renderAlert(success, error);
 
   const sections = [
@@ -117,7 +117,7 @@ export function typesPage(data: TypesData, success = "", error = "", isAdmin: bo
     </div>
   `;
 
-  return layout("Equipment Types", content, isAdmin, hasPcPwView, username);
+  return layout("Equipment Types", content, isAdmin, hasPcPwView, username, hasAuditApprover);
 }
 
 function renderSection(

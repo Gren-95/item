@@ -32,7 +32,17 @@ export const equipmentEditSchema = equipmentAddSchema.partial().extend({
 
 export const apiAddItemSchema = z.object({
   name: z.string().min(1).max(255).trim(),
-  parent_id: z.string().optional().nullable(),
+  parent_id: z.union([z.string(), z.number(), z.null()]).optional().transform((val) => {
+    if (val === null || val === undefined) return null;
+    if (typeof val === 'number') return isNaN(val) ? null : val;
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed === '') return null;
+      const parsed = parseInt(trimmed, 10);
+      return isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  }),
 });
 
 export const locationsActionSchema = z.object({

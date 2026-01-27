@@ -1,5 +1,5 @@
 import { layout } from "./layout";
-import { renderAlert, escapeHtml } from "./components";
+import { renderAlert } from "./components";
 import { getModalHtml, getScriptsHtml } from "./components";
 import { INFORMATION_CIRCLE_ICON, EDIT_ICON } from "./icons";
 
@@ -8,6 +8,7 @@ interface Equipment {
   service_tag: string;
   model_id: number | null;
   vendor_id: number | null;
+  supplier_id: number | null;
   type_id: number | null;
   product_line_id: number | null;
   type_name: string | null;
@@ -32,6 +33,11 @@ interface Equipment {
   is_written_off: number | null;
   write_off_reason: string | null;
   repair_status: 'needs_repair' | 'at_supplier' | 'returned' | 'in_backup' | null;
+  cerf: number | null;
+  ip: string | null;
+  mac_addresses: string | null;
+  repair_note: string | null;
+  repair_physical_location: string | null;
 }
 
 interface SelectOption {
@@ -65,7 +71,7 @@ interface AuditData {
   writeOffReasons: SelectOption[];
 }
 
-export function auditPage(data: AuditData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, isReadonly: boolean = false, userPlantId: number | null = null, allowedRegionId: number | null = null, allowedCountryId: number | null = null, username: string | null = null): string {
+export function auditPage(data: AuditData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, isReadonly: boolean = false, userPlantId: number | null = null, allowedRegionId: number | null = null, allowedCountryId: number | null = null, username: string | null = null, hasAuditApprover: boolean = false, hasManageLocations: boolean = false): string {
   const eq = data.equipment;
   
   const content = `
@@ -272,7 +278,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 ${data.regions.map(r => `
                   <option value="${r.id}" ${eq.region_id === r.id ? "selected" : ""}>${escapeHtml(r.name)}</option>
                 `).join("")}
-                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new region...</option>
+                ${isAdmin ? '<option value="__add_new__" class="text-blue-600 font-medium">+ Add new region...</option>' : ''}
               </select>
             </div>
             <div>
@@ -282,7 +288,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 ${data.countries.map(c => `
                   <option value="${c.id}" data-parent="${c.parent_id}" ${eq.country_id === c.id ? "selected" : ""} ${eq.region_id !== c.parent_id ? "hidden" : ""}>${escapeHtml(c.name)}</option>
                 `).join("")}
-                <option value="__add_new__" data-parent="__always__" ${eq.region_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new country...</option>
+                ${isAdmin ? `<option value="__add_new__" data-parent="__always__" ${eq.region_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new country...</option>` : ''}
               </select>
             </div>
             <div>
@@ -292,7 +298,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 ${data.plants.map(p => `
                   <option value="${p.id}" data-parent="${p.parent_id}" ${eq.plant_id === p.id ? "selected" : ""} ${eq.country_id !== p.parent_id ? "hidden" : ""}>${escapeHtml(p.name)}</option>
                 `).join("")}
-                <option value="__add_new__" data-parent="__always__" ${eq.country_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new plant...</option>
+                ${isAdmin ? `<option value="__add_new__" data-parent="__always__" ${eq.country_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new plant...</option>` : ''}
               </select>
             </div>
             <div>
@@ -302,7 +308,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 ${data.departments.map(d => `
                   <option value="${d.id}" data-parent="${d.parent_id}" ${eq.department_id === d.id ? "selected" : ""} ${eq.plant_id !== d.parent_id ? "hidden" : ""}>${escapeHtml(d.name)}</option>
                 `).join("")}
-                <option value="__add_new__" data-parent="__always__" ${eq.plant_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new department...</option>
+                ${hasManageLocations ? `<option value="__add_new__" data-parent="__always__" ${eq.plant_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new department...</option>` : ''}
               </select>
             </div>
             <div>
@@ -312,7 +318,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 ${data.areas.map(a => `
                   <option value="${a.id}" data-parent="${a.parent_id}" ${eq.area_id === a.id ? "selected" : ""} ${eq.department_id !== a.parent_id ? "hidden" : ""}>${escapeHtml(a.name)}</option>
                 `).join("")}
-                <option value="__add_new__" data-parent="__always__" ${eq.department_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new area...</option>
+                ${hasManageLocations ? `<option value="__add_new__" data-parent="__always__" ${eq.department_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new area...</option>` : ''}
               </select>
             </div>
             <div>
@@ -322,7 +328,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
                 ${data.subAreas.map(sa => `
                   <option value="${sa.id}" data-parent="${sa.parent_id}" ${eq.equipment_sub_area_id === sa.id ? "selected" : ""} ${eq.area_id !== sa.parent_id ? "hidden" : ""}>${escapeHtml(sa.name)}</option>
                 `).join("")}
-                <option value="__add_new__" data-parent="__always__" ${eq.area_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new sub area...</option>
+                ${hasManageLocations ? `<option value="__add_new__" data-parent="__always__" ${eq.area_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new sub area...</option>` : ''}
               </select>
             </div>
             </div>
@@ -811,6 +817,19 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
             }
             // Modals are opened on button click, no initialization needed
             
+            // Initialize sub-area filtering based on selected area
+            const areaSelect = document.getElementById('area_id');
+            const subAreaSelect = document.getElementById('equipment_sub_area_id');
+            if (areaSelect && subAreaSelect) {
+              const selectedAreaId = areaSelect.value;
+              if (selectedAreaId) {
+                loadSubAreas(selectedAreaId);
+              } else {
+                // If no area selected, hide all sub-areas
+                loadSubAreas('');
+              }
+            }
+            
             ${!isAdmin && userPlantId !== null ? `
             // Restrict location selection to user's plant only (server already filters, this is a safety check)
             const userPlantIdValue = ${userPlantId};
@@ -1212,7 +1231,7 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
     ${getScriptsHtml()}
   `;
 
-  return layout(`ITEM - ${eq.service_tag}`, content, isAdmin, hasPcPwView, username);
+  return layout(`ITEM - ${eq.service_tag}`, content, isAdmin, hasPcPwView, username, hasAuditApprover);
 }
 
 function escapeHtml(str: string): string {
@@ -1235,14 +1254,14 @@ function isExpired(dateStr: string): boolean {
   return new Date(dateStr) < new Date();
 }
 
-function formatDateForInput(dateStr: string | null | undefined): string {
+function formatDateForInput(dateStr: string | Date | null | undefined): string {
   if (!dateStr) return "";
   // MySQL DATE format is already YYYY-MM-DD, but handle Date objects or other formats
-  if (dateStr instanceof Date) {
+  if (typeof dateStr === 'object' && dateStr instanceof Date) {
     return dateStr.toISOString().split('T')[0];
   }
   // If it's already in YYYY-MM-DD format, return as is
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     return dateStr;
   }
   // Try to parse and format

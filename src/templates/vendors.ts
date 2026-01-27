@@ -1,5 +1,5 @@
 import { layout } from "./layout";
-import { renderAlert, escapeHtml } from "./components";
+import { renderAlert } from "./components";
 import { button, editButton, deleteButton, saveButton } from "./buttons";
 import { SHOPPING_BAG_ICON } from "./icons";
 
@@ -26,7 +26,7 @@ interface VendorsData {
   suppliers: SupplierItem[];
 }
 
-export function vendorsPage(data: VendorsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null): string {
+export function vendorsPage(data: VendorsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
   const alert = renderAlert(success, error);
 
   const content = `
@@ -88,7 +88,7 @@ export function vendorsPage(data: VendorsData, success = "", error = "", isAdmin
     </script>
   `;
 
-  return layout("Vendor Management", content, isAdmin, hasPcPwView, username);
+  return layout("Vendor Management", content, isAdmin, hasPcPwView, username, hasAuditApprover);
 }
 
 function renderVendorsSection(vendors: VendorItem[]): string {

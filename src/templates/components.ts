@@ -192,7 +192,10 @@ export function getScriptsHtml(): string {
           // Trigger change event to cascade if needed
           select.dispatchEvent(new Event('change'));
           
-          closeModal();
+          // Clear input and error, keep modal open for adding more
+          document.getElementById('modalInput').value = '';
+          document.getElementById('modalError').classList.add('hidden');
+          document.getElementById('modalInput').focus();
         } catch (err) {
           document.getElementById('modalError').textContent = err.message;
           document.getElementById('modalError').classList.remove('hidden');
@@ -238,27 +241,62 @@ export function getScriptsHtml(): string {
         select.value = '';
       }
 
+      function resetAllChildren(selectId) {
+        // Reset all child selects when a parent changes
+        const childMap = {
+          'region_id': ['country_id', 'plant_id', 'department_id', 'area_id', 'equipment_sub_area_id'],
+          'country_id': ['plant_id', 'department_id', 'area_id', 'equipment_sub_area_id'],
+          'plant_id': ['department_id', 'area_id', 'equipment_sub_area_id'],
+          'department_id': ['area_id', 'equipment_sub_area_id'],
+          'area_id': ['equipment_sub_area_id']
+        };
+        
+        const children = childMap[selectId] || [];
+        children.forEach(childId => {
+          const childSelect = document.getElementById(childId);
+          if (childSelect) {
+            childSelect.value = '';
+            // Hide all options in child selects
+            const childOptions = childSelect.querySelectorAll('option[data-parent]');
+            childOptions.forEach(opt => {
+              opt.hidden = true;
+              opt.selected = false;
+            });
+            // Hide "Add new" option
+            const addNewOption = childSelect.querySelector('option[value="__add_new__"]');
+            if (addNewOption) {
+              addNewOption.hidden = true;
+            }
+          }
+        });
+      }
+
       function loadCountries(regionId) {
+        resetAllChildren('region_id');
         filterOptions('country_id', regionId);
         loadPlants('');
       }
 
       function loadPlants(countryId) {
+        resetAllChildren('country_id');
         filterOptions('plant_id', countryId);
         loadDepartments('');
       }
 
       function loadDepartments(plantId) {
+        resetAllChildren('plant_id');
         filterOptions('department_id', plantId);
         loadAreas('');
       }
 
       function loadAreas(departmentId) {
+        resetAllChildren('department_id');
         filterOptions('area_id', departmentId);
         loadSubAreas('');
       }
 
       function loadSubAreas(areaId) {
+        resetAllChildren('area_id');
         filterOptions('equipment_sub_area_id', areaId);
       }
 

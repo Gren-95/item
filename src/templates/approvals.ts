@@ -62,7 +62,8 @@ export function approvalsPage(
   success = "",
   error = "",
   hasPcPwView: boolean = false,
-  username: string | null = null
+  username: string | null = null,
+  hasAuditApprover: boolean = false
 ): string {
   if (!isAdmin) {
     const content = `
@@ -80,7 +81,7 @@ export function approvalsPage(
         </div>
       </div>
     `;
-    return layout("Approval Requests", content, isAdmin, hasPcPwView, username);
+    return layout("Approval Requests", content, isAdmin, hasPcPwView, username, hasAuditApprover);
 }
 
   const alert = success
@@ -295,7 +296,7 @@ export function approvalsPage(
     </script>
   `;
 
-  return layout("Approval Requests", content, isAdmin);
+  return layout("Approval Requests", content, isAdmin, false, null, hasAuditApprover);
 }
 
 

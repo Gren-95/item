@@ -3,8 +3,10 @@
   "version": "1.0.0",
   "scripts": {
     "start": "bun run src/server.ts",
-    "dev": "bun run --watch src/server.ts",
+    "dev": "bun run scripts/watch.ts",
+    "dev:full": "bun run build:css && bun run dev",
     "build:css": "bunx tailwindcss -i ./src/styles/input.css -o ./public/css/style.css --minify",
+    "build:css:watch": "bunx tailwindcss -i ./src/styles/input.css -o ./public/css/style.css --watch",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "bun test",
@@ -20,11 +22,13 @@
   },
   "dependencies": {
     "mysql2": "^3.11.0",
+    "nodemailer": "^6.9.0",
     "qr-scanner": "^1.4.2",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/nodemailer": "^6.4.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
     "eslint": "^8.54.0",

@@ -347,7 +347,6 @@ CREATE TABLE IF NOT EXISTS `it_equipment_log` (
     `inventory_period_id` INT UNSIGNED NULL COMMENT 'Reference to current inventory period',
     `updated_by` VARCHAR(9) NULL COMMENT 'Employee number - who updated this log entry',
     `comment` TEXT NULL COMMENT 'General comments/notes about the equipment',
-    `audit_period_id` INT UNSIGNED NULL COMMENT 'Reference to audit period',
     `updated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
@@ -357,14 +356,12 @@ CREATE TABLE IF NOT EXISTS `it_equipment_log` (
     KEY `idx_log_sub_area` (`equipment_sub_area_id`),
     KEY `idx_log_inventory_period` (`inventory_period_id`),
     KEY `idx_log_created` (`created`),
-    KEY `idx_log_audit_period` (`audit_period_id`),
     KEY `idx_log_updated` (`updated`),
     CONSTRAINT `fk_log_equipment` FOREIGN KEY (`equipment_id`) REFERENCES `it_equipment` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT `fk_log_sub_area` FOREIGN KEY (`equipment_sub_area_id`) REFERENCES `it_equipment_sub_area` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_log_inventory_period` FOREIGN KEY (`inventory_period_id`) REFERENCES `it_inventory_period` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_log_assigned_to` FOREIGN KEY (`assigned_to`) REFERENCES `it_employees_list` (`employee_no`) ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT `fk_log_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `it_employees_list` (`employee_no`) ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT `fk_log_audit_period` FOREIGN KEY (`audit_period_id`) REFERENCES `it_equipment_audit_periods` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT `fk_log_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `it_employees_list` (`employee_no`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -374,7 +371,6 @@ CREATE TABLE IF NOT EXISTS `it_equipment_log` (
 CREATE TABLE IF NOT EXISTS `it_equipment_audit` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `equipment_id` INT UNSIGNED NOT NULL COMMENT 'Reference to equipment table',
-    `audit_period_id` INT UNSIGNED NULL COMMENT 'Reference to audit period',
     `service_tag` VARCHAR(30) NOT NULL,
     `model_id` INT UNSIGNED NULL COMMENT 'Reference to equipment_model table',
     `vendor_id` INT UNSIGNED NULL COMMENT 'Reference to equipment_vendor table (manufacturer/brand)',
@@ -400,7 +396,6 @@ CREATE TABLE IF NOT EXISTS `it_equipment_audit` (
     `updated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_audit_equipment` (`equipment_id`),
-    KEY `idx_audit_period` (`audit_period_id`),
     KEY `idx_audit_service_tag` (`service_tag`),
     KEY `idx_audit_model` (`model_id`),
     KEY `idx_audit_vendor` (`vendor_id`),
@@ -412,7 +407,6 @@ CREATE TABLE IF NOT EXISTS `it_equipment_audit` (
     KEY `idx_audit_created` (`created`),
     KEY `idx_audit_updated` (`updated`),
     CONSTRAINT `fk_audit_equipment` FOREIGN KEY (`equipment_id`) REFERENCES `it_equipment` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT `fk_audit_audit_period` FOREIGN KEY (`audit_period_id`) REFERENCES `it_equipment_audit_periods` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_audit_model` FOREIGN KEY (`model_id`) REFERENCES `it_equipment_model` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_audit_vendor` FOREIGN KEY (`vendor_id`) REFERENCES `it_equipment_vendor` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_audit_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `it_equipment_supplier` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
@@ -516,7 +510,6 @@ BEGIN
         e.`equipment_sub_area_id` = a.`equipment_sub_area_id`,
         e.`updated_by` = p_confirmed_by,
         e.`comment` = a.`comment`,
-        e.`audit_period_id` = a.`audit_period_id`,
         e.`bill_id` = a.`bill_id`,
         e.`updated` = CURRENT_TIMESTAMP
     WHERE a.`inventory_period_id` = p_inventory_period_id;
@@ -531,7 +524,6 @@ BEGIN
         `inventory_period_id`,
         `updated_by`,
         `comment`,
-        `audit_period_id`,
         `created`,
         `updated`
     )
@@ -544,7 +536,6 @@ BEGIN
         a.`inventory_period_id`,
         p_confirmed_by,
         CONCAT(COALESCE(a.`comment`, ''), ' [Updated from audit - Inventory Period: ', p_inventory_period_id, ']') AS `comment`,
-        a.`audit_period_id`,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     FROM `it_equipment_audit` a

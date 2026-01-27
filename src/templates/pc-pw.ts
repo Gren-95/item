@@ -33,7 +33,8 @@ export function pcPwPage(
   hasPcPwView: boolean,
   success = "",
   error = "",
-  username: string | null = null
+  username: string | null = null,
+  hasAuditApprover: boolean = false
 ): string {
   // If no view permission, show insufficient permissions message
   if (!hasView) {
@@ -223,5 +224,5 @@ export function pcPwPage(
     </script>
   `;
 
-  return layout("PC Passwords", content, isAdmin, hasPcPwView);
+  return layout("PC Passwords", content, isAdmin, hasPcPwView, null, hasAuditApprover);
 }

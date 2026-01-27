@@ -2,3 +2,6 @@
 002_add_repair_tracking.sql
 003_add_sample_employees.sql
 004_add_users_and_permissions.sql
+005_add_permission_expiry_and_auditing.sql
+006_remove_audit_period_id.sql
+007_add_permission_audit_log.sql
