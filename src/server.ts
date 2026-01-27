@@ -22,6 +22,7 @@ import {
   changePassword, 
   hasItemLoginPermission, 
   hasAdminPermission,
+  hasPermission,
   hasSearchPermission,
   hasAddEquipmentPermission,
   hasEditEquipmentPermission,
@@ -69,6 +70,9 @@ import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { randomUUID } from "crypto";
 import { runMigrations } from "./migrations/migrate";
 
+type AddDataType = Parameters<typeof addPage>[0];
+type AuditDataType = Parameters<typeof auditPage>[0];
+type LocationsDataType = Parameters<typeof locationsPage>[0];
 interface SearchResult {
   id: number;
   service_tag: string;
@@ -403,6 +407,7 @@ async function handleRequest(req: Request): Promise<Response> {
   // Check authentication for protected routes and get admin status
   let isAdmin = false;
   let hasPcPwView = false;
+  let hasAuditApprover = false;
   let currentUsername: string | null = null;
   if (!isPublicRoute) {
     const session = getSessionFromRequest(req);
@@ -420,10 +425,125 @@ async function handleRequest(req: Request): Promise<Response> {
     // Check PC passwords view permission for navigation menu
     hasPcPwView = await hasPcPwViewPermission(session.username, pool);
     logger.info("PC Passwords view permission", { traceId, username: session.username, hasPcPwView });
+    
+    // Check audit-approver permission for navigation menu
+    const userPlantId = await getUserPlantId(session.username, pool);
+    hasAuditApprover = isAdmin || await hasPermission(session.username, pool, "audit-approver", userPlantId, true);
+    logger.info("Audit approver permission", { traceId, username: session.username, hasAuditApprover });
   }
 
   // Routes
   try {
+    // Inventory Periods - GET (redirect to review page)
+    if (path === "/inventory-periods" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/inventory-audit/review", 302);
+      }
+
+      if (!isAdmin) {
+        const { errorPage } = await import("./templates/error");
+        return new Response(
+          errorPage(
+            "Access Denied",
+            "You do not have permission to access the Inventory Periods page.",
+            "You need administrative permissions to manage inventory periods. Please contact your administrator if you need access.",
+            403,
+            isAdmin,
+            hasPcPwView,
+            session.username,
+            hasAuditApprover
+          ),
+          { 
+            status: 403,
+            headers: { "Content-Type": "text/html" }
+          }
+        );
+      }
+
+      // Redirect to review page with periods tab
+      return Response.redirect("/inventory-audit/review#periods", 302);
+    }
+
+    // Inventory Periods - POST (create/delete)
+    if (path === "/inventory-periods" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/inventory-audit/review", 302);
+      }
+
+      if (!isAdmin) {
+        return Response.redirect("/inventory-audit/review?error=" + encodeURIComponent("Access denied") + "#periods", 303);
+      }
+
+      const form = await req.formData();
+      const action = (form.get("action") || "").toString();
+
+      try {
+        if (action === "add") {
+          const startDate = form.get("start_date")?.toString();
+          const endDate = form.get("end_date")?.toString();
+          const comment = form.get("comment")?.toString() || null;
+
+          if (!startDate || !endDate) {
+            throw new Error("Start and end date are required");
+          }
+
+          // Auto-generate inventory_nr: INV-YYYY-QX-N
+          const start = new Date(startDate);
+          const year = start.getUTCFullYear();
+          const quarter = Math.floor(start.getUTCMonth() / 3) + 1;
+          const prefix = `INV-${year}-Q${quarter}`;
+
+          const [existing] = await pool.query<RowDataPacket[]>(
+            `SELECT inventory_nr FROM it_inventory_period WHERE inventory_nr LIKE ? ORDER BY inventory_nr DESC LIMIT 1`,
+            [`${prefix}-%`]
+          );
+
+          let nextSeq = 1;
+          if (existing.length > 0) {
+            const parts = existing[0].inventory_nr.split("-");
+            const last = parts[parts.length - 1];
+            const n = parseInt(last, 10);
+            if (!Number.isNaN(n)) {
+              nextSeq = n + 1;
+            }
+          }
+
+          const inventoryNr = `${prefix}-${nextSeq}`;
+
+          await pool.query(
+            `INSERT INTO it_inventory_period (inventory_nr, start_date, end_date, comment)
+             VALUES (?, ?, ?, ?)`,
+            [inventoryNr, startDate, endDate, comment]
+          );
+
+          return Response.redirect("/inventory-audit/review?success=" + encodeURIComponent("Inventory period created") + "#periods", 303);
+        }
+
+        if (action === "delete") {
+          const id = form.get("id")?.toString();
+          if (!id) {
+            throw new Error("Missing period id");
+          }
+
+          // Only allow delete when not confirmed
+          await pool.query(
+            `DELETE FROM it_inventory_period WHERE id = ? AND confirmed_by IS NULL`,
+            [id]
+          );
+
+          return Response.redirect("/inventory-audit/review?success=" + encodeURIComponent("Inventory period deleted") + "#periods", 303);
+        }
+
+        throw new Error("Unknown action");
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Inventory periods action failed", err, { traceId });
+        return Response.redirect("/inventory-audit/review?error=" + encodeURIComponent(errorMessage) + "#periods", 303);
+      }
+    }
+
     // Login page - GET
     if (path === "/login" && req.method === "GET") {
       // If already logged in, redirect to home
@@ -536,7 +656,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
       const success = url.searchParams.get("success") || null;
       const error = url.searchParams.get("error") || null;
-      return new Response(changePasswordPage(success, error, isAdmin, hasPcPwView), {
+      return new Response(changePasswordPage(success, error, isAdmin, hasPcPwView, currentUsername, hasAuditApprover), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -599,7 +719,8 @@ async function handleRequest(req: Request): Promise<Response> {
             hasPcPwView,
             "",
             "",
-            session.username
+            session.username,
+            hasAuditApprover
           ),
           {
             headers: { "Content-Type": "text/html" },
@@ -649,7 +770,8 @@ async function handleRequest(req: Request): Promise<Response> {
             hasPcPwView,
             success,
             error,
-            session.username
+            session.username,
+            hasAuditApprover
           ),
           {
             headers: { "Content-Type": "text/html" },
@@ -658,7 +780,7 @@ async function handleRequest(req: Request): Promise<Response> {
       } catch (err) {
         logger.error("Error loading permissions page", err, { traceId });
         return new Response(
-          permissionsPage({ users: [], permissions: [] }, false, hasPcPwView, "", "Error loading permissions", session.username),
+          permissionsPage({ users: [], permissions: [] }, false, hasPcPwView, "", "Error loading permissions", session.username, hasAuditApprover),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -709,11 +831,20 @@ async function handleRequest(req: Request): Promise<Response> {
           }
 
           await pool.query(
-            `INSERT INTO it_user_permissions 
+            `INSERT INTO it_user_permissions
              (user_id, plant_id, permission, role, comment, expiry_date, added_by_user_id)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [user_id, plant_id, access_key, value, comment, expiry_date, added_by_user_id]
           );
+
+          // Log to permission audit trail
+          const clientIp = getClientIp(req);
+          await pool.query(
+            `INSERT INTO it_permission_audit_log
+             (action, user_id, plant_id, permission, role, expiry_date, comment, changed_by, ip_address)
+             VALUES ('add', ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [user_id, plant_id, access_key, value, expiry_date, comment, session.username, clientIp]
+          ).catch(err => logger.error("Failed to log permission audit", err, { traceId }));
 
           logger.info("Permission added", { traceId, user_id, access_key, value, expiry_date, added_by_user_id });
           return Response.redirect("/permissions?success=" + encodeURIComponent("Permission added successfully"), 303);
@@ -724,7 +855,25 @@ async function handleRequest(req: Request): Promise<Response> {
             return Response.redirect("/permissions?error=" + encodeURIComponent("Invalid permission ID"), 303);
           }
 
+          // Get permission details before deletion for audit log
+          const [permToDelete] = await pool.query<RowDataPacket[]>(
+            "SELECT user_id, plant_id, permission, role, expiry_date, comment FROM it_user_permissions WHERE id = ?",
+            [permission_id]
+          );
+
           await pool.query("DELETE FROM it_user_permissions WHERE id = ?", [permission_id]);
+
+          // Log to permission audit trail
+          if (permToDelete.length > 0) {
+            const perm = permToDelete[0];
+            const clientIp = getClientIp(req);
+            await pool.query(
+              `INSERT INTO it_permission_audit_log
+               (action, user_id, plant_id, permission, old_role, old_expiry_date, comment, changed_by, ip_address)
+               VALUES ('delete', ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [perm.user_id, perm.plant_id, perm.permission, perm.role, perm.expiry_date, perm.comment, session.username, clientIp]
+            ).catch(err => logger.error("Failed to log permission audit", err, { traceId }));
+          }
 
           logger.info("Permission deleted", { traceId, permission_id });
           return Response.redirect("/permissions?success=" + encodeURIComponent("Permission deleted successfully"), 303);
@@ -753,7 +902,8 @@ async function handleRequest(req: Request): Promise<Response> {
             "",
             "",
             hasPcPwView,
-            session.username
+            session.username,
+            hasAuditApprover
           ),
           {
             headers: { "Content-Type": "text/html" },
@@ -814,7 +964,8 @@ async function handleRequest(req: Request): Promise<Response> {
             success,
             error,
             hasPcPwView,
-            session.username
+            session.username,
+            hasAuditApprover
           ),
           {
             headers: { "Content-Type": "text/html" },
@@ -827,7 +978,10 @@ async function handleRequest(req: Request): Promise<Response> {
             { pendingRequests: [], processedRequests: [], totalProcessed: 0, currentPage: 1, totalPages: 1 },
             false,
             "",
-            "Error loading approval requests"
+            "Error loading approval requests",
+            hasPcPwView,
+            session.username,
+            hasAuditApprover
           ),
           {
             headers: { "Content-Type": "text/html" },
@@ -861,7 +1015,8 @@ async function handleRequest(req: Request): Promise<Response> {
             hasPcPwView,
             "",
             "",
-            session.username
+            session.username,
+            hasAuditApprover
           ),
           {
             headers: { "Content-Type": "text/html" },
@@ -883,7 +1038,8 @@ async function handleRequest(req: Request): Promise<Response> {
             hasPcPwView,
             success,
             error,
-            session.username
+            session.username,
+            hasAuditApprover
           ),
           {
             headers: { "Content-Type": "text/html" },
@@ -892,7 +1048,7 @@ async function handleRequest(req: Request): Promise<Response> {
       } catch (err) {
         logger.error("Error loading PC passwords page", err, { traceId });
         return new Response(
-          pcPwPage({ passwords: [] }, hasView, hasEdit, isAdmin, hasPcPwView, "", "Error loading passwords", session.username),
+          pcPwPage({ passwords: [] }, hasView, hasEdit, isAdmin, hasPcPwView, "", "Error loading passwords", session.username, hasAuditApprover),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1028,6 +1184,198 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
+    // API endpoint to check if user needs approval for an action
+    if (path === "/api/check-permission" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const permission = url.searchParams.get("permission");
+        if (!permission) {
+          return new Response(JSON.stringify({ error: "Permission parameter required" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        const userPlantId = await getUserPlantId(session.username, pool);
+        const hasPermissionResult = await hasPermission(session.username, pool, permission, userPlantId);
+
+        return new Response(JSON.stringify({
+          hasPermission: hasPermissionResult,
+          requiresApproval: !hasPermissionResult,
+          message: hasPermissionResult
+            ? "You have permission to perform this action"
+            : "This action requires approval from an administrator"
+        }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        logger.error("Error checking permission", err, { traceId });
+        return new Response(JSON.stringify({ error: "Failed to check permission" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // API endpoint to get permission expiry information
+    if (path === "/api/permissions/expiring" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: "Admin permission required" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const days = parseInt(url.searchParams.get("days") || "30");
+
+        // Get permissions expiring within the specified days
+        const [expiringPermissions] = await pool.query<RowDataPacket[]>(`
+          SELECT
+            p.id,
+            p.user_id,
+            p.plant_id,
+            p.permission,
+            p.role,
+            p.comment,
+            p.expiry_date,
+            p.added_by_user_id,
+            pl.name as plant_name,
+            e.name as user_name,
+            DATEDIFF(p.expiry_date, CURDATE()) as days_until_expiry
+          FROM it_user_permissions p
+          LEFT JOIN it_equipment_plant pl ON p.plant_id = pl.id
+          LEFT JOIN it_employees_list e ON p.user_id = e.user_id
+          WHERE p.expiry_date IS NOT NULL
+            AND p.expiry_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
+          ORDER BY p.expiry_date ASC
+        `, [days]);
+
+        // Get recently expired permissions
+        const [expiredPermissions] = await pool.query<RowDataPacket[]>(`
+          SELECT
+            p.id,
+            p.user_id,
+            p.plant_id,
+            p.permission,
+            p.role,
+            p.comment,
+            p.expiry_date,
+            p.added_by_user_id,
+            pl.name as plant_name,
+            e.name as user_name,
+            DATEDIFF(CURDATE(), p.expiry_date) as days_since_expiry
+          FROM it_user_permissions p
+          LEFT JOIN it_equipment_plant pl ON p.plant_id = pl.id
+          LEFT JOIN it_employees_list e ON p.user_id = e.user_id
+          WHERE p.expiry_date IS NOT NULL
+            AND p.expiry_date < CURDATE()
+          ORDER BY p.expiry_date DESC
+          LIMIT 50
+        `);
+
+        return new Response(JSON.stringify({
+          expiring: expiringPermissions,
+          expired: expiredPermissions
+        }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        logger.error("Error fetching expiring permissions", err, { traceId });
+        return new Response(JSON.stringify({ error: "Failed to fetch expiring permissions" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // API endpoint to get permission audit log
+    if (path === "/api/permissions/audit-log" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: "Admin permission required" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "100"), 500);
+        const offset = parseInt(url.searchParams.get("offset") || "0");
+        const userId = url.searchParams.get("user_id");
+
+        let query = `
+          SELECT
+            l.*,
+            pl.name as plant_name,
+            e1.name as user_name,
+            e2.name as changed_by_name
+          FROM it_permission_audit_log l
+          LEFT JOIN it_equipment_plant pl ON l.plant_id = pl.id
+          LEFT JOIN it_employees_list e1 ON l.user_id = e1.user_id
+          LEFT JOIN it_employees_list e2 ON l.changed_by = e2.user_id
+        `;
+        const params: (string | number)[] = [];
+
+        if (userId) {
+          query += " WHERE l.user_id = ?";
+          params.push(userId);
+        }
+
+        query += " ORDER BY l.created DESC LIMIT ? OFFSET ?";
+        params.push(limit, offset);
+
+        const [auditLog] = await pool.query<RowDataPacket[]>(query, params);
+
+        // Get total count
+        let countQuery = "SELECT COUNT(*) as total FROM it_permission_audit_log";
+        const countParams: string[] = [];
+        if (userId) {
+          countQuery += " WHERE user_id = ?";
+          countParams.push(userId);
+        }
+        const [countResult] = await pool.query<RowDataPacket[]>(countQuery, countParams);
+        const total = countResult[0]?.total || 0;
+
+        return new Response(JSON.stringify({
+          data: auditLog,
+          total,
+          limit,
+          offset
+        }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        logger.error("Error fetching permission audit log", err, { traceId });
+        return new Response(JSON.stringify({ error: "Failed to fetch audit log" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Approvals page - POST (approve/reject)
     if (path === "/approvals" && req.method === "POST") {
       const session = getSessionFromRequest(req);
@@ -1117,7 +1465,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const hasSearch = await hasSearchPermission(session.username, pool, userPlantId);
       if (!hasSearch) {
         return new Response(
-          searchPage("", null, "You do not have permission to access the search page. Please contact your administrator.", isAdmin, hasPcPwView, userPlantId, currentUsername),
+          searchPage("", null, "You do not have permission to access the search page. Please contact your administrator.", isAdmin, hasPcPwView, userPlantId, currentUsername, hasAuditApprover),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1222,12 +1570,12 @@ async function handleRequest(req: Request): Promise<Response> {
           return result;
         });
         
-        return new Response(searchPage(trimmed, resultsWithReadonly.length > 0 ? resultsWithReadonly : [], null, isAdmin, hasPcPwView, userPlantId, currentUsername), {
+        return new Response(searchPage(trimmed, resultsWithReadonly.length > 0 ? resultsWithReadonly : [], null, isAdmin, hasPcPwView, userPlantId, currentUsername, hasAuditApprover), {
           headers: { "Content-Type": "text/html" },
         });
       }
 
-      return new Response(searchPage("", null, null, isAdmin, hasPcPwView, userPlantId, currentUsername), {
+      return new Response(searchPage("", null, null, isAdmin, hasPcPwView, userPlantId, currentUsername, hasAuditApprover), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -1244,7 +1592,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const userPlantId = await getUserPlantId(session.username, pool);
       const addData = await getAddData(serial, userPlantId, isAdmin);
       
-      return new Response(addPage(addData, false, null, isAdmin, hasPcPwView, currentUsername), {
+      return new Response(addPage(addData as unknown as AddDataType, false, null, isAdmin, hasPcPwView, currentUsername), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -1286,7 +1634,7 @@ async function handleRequest(req: Request): Promise<Response> {
         if (!employeeNo) {
           const addData = await getAddData(rawData.service_tag || "", userPlantId, isAdmin);
           return new Response(
-            addPage(addData, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView, currentUsername),
+            addPage(addData as unknown as AddDataType, false, "Unable to create approval request. Please contact your administrator.", isAdmin, hasPcPwView, currentUsername),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1306,7 +1654,7 @@ async function handleRequest(req: Request): Promise<Response> {
         if (requestId) {
           const addData = await getAddData(rawData.service_tag || "", userPlantId, isAdmin);
           return new Response(
-            addPage(addData, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView, currentUsername),
+            addPage(addData as unknown as AddDataType, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView, currentUsername),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1314,7 +1662,7 @@ async function handleRequest(req: Request): Promise<Response> {
         } else {
           const addData = await getAddData(rawData.service_tag || "", userPlantId, isAdmin);
           return new Response(
-            addPage(addData, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView, currentUsername),
+            addPage(addData as unknown as AddDataType, false, "Failed to create approval request. Please contact your administrator.", isAdmin, hasPcPwView, currentUsername),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1380,7 +1728,7 @@ async function handleRequest(req: Request): Promise<Response> {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         logger.error("Failed to add equipment", err, { traceId, serviceTag: rawData.service_tag });
         const addData = await getAddData(rawData.service_tag || "");
-        return new Response(addPage(addData, false, errorMessage, isAdmin, hasPcPwView, currentUsername), {
+        return new Response(addPage(addData as unknown as AddDataType, false, errorMessage, isAdmin, hasPcPwView, currentUsername), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -1403,8 +1751,9 @@ async function handleRequest(req: Request): Promise<Response> {
         if (!auditData) {
           return new Response("Equipment not found", { status: 404 });
         }
+        const hasManageLocations = isAdmin || await hasManageLocationsPermission(session.username, pool, userPlantId);
         return new Response(
-          auditPage(auditData, false, "You do not have permission to edit equipment. Please contact your administrator.", isAdmin, hasPcPwView, false, userPlantId, null, null, currentUsername),
+          auditPage(auditData as unknown as AuditDataType, false, "You do not have permission to edit equipment. Please contact your administrator.", isAdmin, hasPcPwView, false, userPlantId, null, null, currentUsername, hasAuditApprover, hasManageLocations),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1418,6 +1767,9 @@ async function handleRequest(req: Request): Promise<Response> {
       if (!auditData) {
         return new Response("Equipment not found", { status: 404 });
       }
+
+      // Check location management permission
+      const hasManageLocations = isAdmin || await hasManageLocationsPermission(session.username, pool, userPlantId);
 
       // Check if equipment is from a different plant (readonly mode)
       const equipmentPlantId = auditData.equipment.plant_id as number | null;
@@ -1444,7 +1796,7 @@ async function handleRequest(req: Request): Promise<Response> {
           }
         }
         return new Response(
-          auditPage(auditData, success, "Read-only: This equipment belongs to another plant. You can view but not edit.", isAdmin, hasPcPwView, true, userPlantId, allowedRegionIdReadonly, allowedCountryIdReadonly, currentUsername),
+          auditPage(auditData as unknown as AuditDataType, success, "Read-only: This equipment belongs to another plant. You can view but not edit.", isAdmin, hasPcPwView, true, userPlantId, allowedRegionIdReadonly, allowedCountryIdReadonly, currentUsername, hasAuditApprover, hasManageLocations),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1468,7 +1820,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
       }
 
-      return new Response(auditPage(auditData, success, null, isAdmin, hasPcPwView, false, userPlantId, allowedRegionId, allowedCountryId, currentUsername), {
+      return new Response(auditPage(auditData as unknown as AuditDataType, success, null, isAdmin, hasPcPwView, false, userPlantId, allowedRegionId, allowedCountryId, currentUsername, hasAuditApprover, hasManageLocations), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -1520,8 +1872,9 @@ async function handleRequest(req: Request): Promise<Response> {
             allowedRegionIdPost = plantInfoPost[0].region_id;
           }
         }
+        const hasManageLocationsPost = isAdminPost || await hasManageLocationsPermission(session.username, pool, userPlantId);
         return new Response(
-          auditPage(auditData, false, "Cannot edit: This equipment belongs to another plant. You can only view it.", isAdminPost, hasPcPwViewPost, true, userPlantId, allowedRegionIdPost, allowedCountryIdPost, session.username),
+          auditPage(auditData as unknown as AuditDataType, false, "Cannot edit: This equipment belongs to another plant. You can only view it.", isAdminPost, hasPcPwViewPost, true, userPlantId, allowedRegionIdPost, allowedCountryIdPost, session.username, hasAuditApprover, hasManageLocationsPost),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1529,6 +1882,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
       
       const hasEditPermissionPost = await hasEditEquipmentPermission(session.username, pool, userPlantId);
+      const hasManageLocationsPost = isAdminPost || await hasManageLocationsPermission(session.username, pool, userPlantId);
       if (!hasEditPermissionPost) {
         const employeeNo = await getEmployeeNo(session.username, pool);
         const clientIp = getClientIp(req);
@@ -1539,7 +1893,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username),
+            auditPage(auditData as unknown as AuditDataType, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1580,7 +1934,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username),
+            auditPage(auditData as unknown as AuditDataType, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1591,7 +1945,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username),
+            auditPage(auditData as unknown as AuditDataType, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -1621,59 +1975,6 @@ async function handleRequest(req: Request): Promise<Response> {
         repair_note: formData.get("repair_note") || null,
         repair_physical_location: formData.get("repair_physical_location") || null,
       };
-
-      // Permission already checked above, continue with update
-      if (false) {
-        const employeeNo = await getEmployeeNo(session?.username || "", pool);
-        const clientIp = getClientIp(req);
-        
-        if (!employeeNo) {
-          const auditData = await getAuditData(id, userPlantId, isAdminPost);
-          if (!auditData) {
-            return new Response("Equipment not found", { status: 404 });
-          }
-          return new Response(
-            auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session?.username || null),
-            {
-              headers: { "Content-Type": "text/html" },
-            }
-          );
-        }
-
-        // Create approval request with all form data
-        const requestId = await createApprovalRequest(
-          employeeNo,
-          "edit",
-          "edit_equipment",
-          { id, ...rawData },
-          clientIp,
-          pool
-        );
-
-        if (requestId) {
-          const auditData = await getAuditData(id, userPlantId, isAdminPost);
-          if (!auditData) {
-            return new Response("Equipment not found", { status: 404 });
-          }
-          return new Response(
-            auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username),
-            {
-              headers: { "Content-Type": "text/html" },
-            }
-          );
-        } else {
-          const auditData = await getAuditData(id, userPlantId, isAdminPost);
-          if (!auditData) {
-            return new Response("Equipment not found", { status: 404 });
-          }
-          return new Response(
-            auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username),
-            {
-              headers: { "Content-Type": "text/html" },
-            }
-          );
-        }
-      }
 
       try {
         const validated = equipmentEditSchema.parse(rawData);
@@ -1707,7 +2008,7 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditDataForValidation) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditDataForValidation, false, "Write-off comment is required when writing off equipment.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username), {
+          return new Response(auditPage(auditDataForValidation as unknown as AuditDataType, false, "Write-off comment is required when writing off equipment.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -1722,7 +2023,7 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditDataForRepairValidation) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditDataForRepairValidation, false, "Repair note is required when registering equipment for repair.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username), {
+          return new Response(auditPage(auditDataForRepairValidation as unknown as AuditDataType, false, "Repair note is required when registering equipment for repair.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -1853,7 +2154,7 @@ async function handleRequest(req: Request): Promise<Response> {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username),
+                auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -1876,7 +2177,7 @@ async function handleRequest(req: Request): Promise<Response> {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username),
+                auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -1887,7 +2188,7 @@ async function handleRequest(req: Request): Promise<Response> {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username),
+                auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -1904,11 +2205,12 @@ async function handleRequest(req: Request): Promise<Response> {
         const userPlantIdError = await getUserPlantId(session.username, pool);
         const isAdminError = await hasAdminPermission(session.username, pool);
         const hasPcPwViewError = await hasPcPwViewPermission(session.username, pool);
+        const hasManageLocationsError = isAdminError || await hasManageLocationsPermission(session.username, pool, userPlantIdError);
         const auditData = await getAuditData(id, userPlantIdError, isAdminError);
         if (!auditData) {
           return new Response("Equipment not found", { status: 404 });
         }
-        return new Response(auditPage(auditData, false, errorMessage, isAdminError, hasPcPwViewError, false, userPlantIdError, null, null, session.username), {
+        return new Response(auditPage(auditData, false, errorMessage, isAdminError, hasPcPwViewError, false, userPlantIdError, null, null, session.username, hasAuditApprover, hasManageLocationsError), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -1931,7 +2233,7 @@ async function handleRequest(req: Request): Promise<Response> {
         // Show success feedback even for users without view permission; keep gentle reminder
         const fallbackError = success ? "" : "Actions require approval.";
         return new Response(
-          locationsPage(await getLocationsData(), success, error || fallbackError, isAdmin, hasPcPwView, session.username),
+          locationsPage(await getLocationsData(), success, error || fallbackError, isAdmin, hasPcPwView, session.username, hasAuditApprover),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -1939,7 +2241,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       const data = await getLocationsData();
-      return new Response(locationsPage(data, success, error, isAdmin, hasPcPwView, session.username), {
+      return new Response(locationsPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2111,7 +2413,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getVendorsAndSuppliersData();
-      return new Response(vendorsPage(data, success, error, isAdmin, hasPcPwView, session.username), {
+      return new Response(vendorsPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2357,9 +2659,20 @@ async function handleRequest(req: Request): Promise<Response> {
       const userPlantId = await getUserPlantId(session.username, pool);
       const hasView = await hasTypesViewPermission(session.username, pool, userPlantId);
       if (!hasView) {
+        const { errorPage } = await import("./templates/error");
         return new Response(
-          typesPage(await getTypesData(), "", "You do not have permission to view types/configurations. Please contact your administrator.", isAdmin, hasPcPwView, session.username),
+          errorPage(
+            "Access Denied",
+            "You do not have permission to view types/configurations.",
+            "You need the 'types_view' or 'types_edit' permission to access this page. Please contact your administrator if you need access.",
+            403,
+            isAdmin,
+            hasPcPwView,
+            session.username,
+            hasAuditApprover
+          ),
           {
+            status: 403,
             headers: { "Content-Type": "text/html" },
           }
         );
@@ -2368,7 +2681,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getTypesData();
-      return new Response(typesPage(data, success, error, isAdmin, hasPcPwView, session.username), {
+      return new Response(typesPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2643,7 +2956,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const hasView = await hasWriteOffReasonsViewPermission(session.username, pool, userPlantId);
       if (!hasView) {
         return new Response(
-          writeOffReasonsPage(await getWriteOffReasonsData(), "", "Actions require approval.", isAdmin, hasPcPwView, session.username),
+          writeOffReasonsPage(await getWriteOffReasonsData(), "", "Actions require approval.", isAdmin, hasPcPwView, session.username, hasAuditApprover),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -2653,7 +2966,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getWriteOffReasonsData();
-      return new Response(writeOffReasonsPage(data, success, error, isAdmin, hasPcPwView, session.username), {
+      return new Response(writeOffReasonsPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2795,14 +3108,34 @@ async function handleRequest(req: Request): Promise<Response> {
     if (path === "/repairs" && req.method === "GET") {
       // Repairs page is public (no login required), but check permission if logged in
       const session = getSessionFromRequest(req);
+      let repairsIsAdmin = false;
+      let repairsHasPcPwView = false;
+      let repairsHasAuditApprover = false;
+      
       if (session) {
-        // Check repairs permission for logged-in users
+        // Calculate permissions for logged-in users (since this is a public route, global vars aren't set)
+        repairsIsAdmin = await hasAdminPermission(session.username, pool);
+        repairsHasPcPwView = await hasPcPwViewPermission(session.username, pool);
         const userPlantId = await getUserPlantId(session.username, pool);
+        repairsHasAuditApprover = repairsIsAdmin || await hasPermission(session.username, pool, "audit-approver", userPlantId, true);
+        
+        // Check repairs permission for logged-in users
         const hasRepairs = await hasRepairsPermission(session.username, pool, userPlantId);
         if (!hasRepairs) {
+          const { errorPage } = await import("./templates/error");
           return new Response(
-            repairsPage(await getRepairsData(), "", "You do not have permission to view repairs. Please contact your administrator.", isAdmin, hasPcPwView, session.username),
+            errorPage(
+              "Access Denied",
+              "You do not have permission to view repairs.",
+              "You need the 'repairs' permission to access this page. Please contact your administrator if you need access.",
+              403,
+              repairsIsAdmin,
+              repairsHasPcPwView,
+              session.username,
+              repairsHasAuditApprover
+            ),
             {
+              status: 403,
               headers: { "Content-Type": "text/html" },
             }
           );
@@ -2812,7 +3145,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getRepairsData();
-      return new Response(repairsPage(data, success, error, isAdmin, hasPcPwView, session?.username || null), {
+      return new Response(repairsPage(data, success, error, repairsIsAdmin, repairsHasPcPwView, session?.username || null, repairsHasAuditApprover), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2936,7 +3269,917 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Get printers from Bartender
+    // Inventory Audit - GET (redirect to review page)
+    if (path === "/inventory-audit" && req.method === "GET") {
+      return Response.redirect("/inventory-audit/review", 302);
+    }
+
+    // Inventory Audit - POST (save audit record)
+    if (path === "/inventory-audit/save" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/inventory-audit", 302);
+      }
+
+      try {
+        const form = await req.formData();
+        const equipmentId = parseInt(form.get("equipment_id")?.toString() || "0");
+        const inventoryPeriodId = parseInt(form.get("inventory_period_id")?.toString() || "0");
+        
+        if (!equipmentId || !inventoryPeriodId) {
+          throw new Error("Missing required fields");
+        }
+        
+        // Get equipment details with latest record from either (log+equipment) or audit table using CTE
+        const [equipment] = await pool.query<RowDataPacket[]>(
+          `WITH latest_records AS (
+            SELECT l.equipment_id, l.assigned_to, l.equipment_sub_area_id, eq.teamviewer, l.comment, l.created as record_date
+            FROM it_equipment_log l
+            INNER JOIN it_equipment eq ON l.equipment_id = eq.id
+            UNION ALL
+            SELECT equipment_id, assigned_to, equipment_sub_area_id, teamviewer, comment, COALESCE(updated, created) as record_date
+            FROM it_equipment_audit
+          ),
+          latest_per_equipment AS (
+            SELECT lr.*
+            FROM latest_records lr
+            INNER JOIN (
+              SELECT equipment_id, MAX(record_date) as max_date
+              FROM latest_records
+              GROUP BY equipment_id
+            ) mx ON lr.equipment_id = mx.equipment_id AND lr.record_date = mx.max_date
+          )
+          SELECT
+            e.*,
+            lpe.assigned_to,
+            lpe.equipment_sub_area_id,
+            lpe.comment,
+            COALESCE(lpe.teamviewer, e.teamviewer) as latest_teamviewer
+          FROM it_equipment e
+          LEFT JOIN latest_per_equipment lpe ON e.id = lpe.equipment_id
+          WHERE e.id = ?`,
+          [equipmentId]
+        );
+        
+        if (equipment.length === 0) {
+          throw new Error("Equipment not found");
+        }
+        
+        const eq = equipment[0];
+        
+        // Resolve employee_no for updated_by; use null for admin users (admin doesn't have employee_no)
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const updatedBy = isAdminUser(session.username) ? null : (employeeNo || null);
+        
+        // Insert/update audit record ONLY - do NOT update main equipment table
+        await pool.query(
+          `INSERT INTO it_equipment_audit (
+            equipment_id, inventory_period_id, service_tag, model_id, vendor_id, supplier_id,
+            cerf, device_no, is_personal, purchase_date, warranty_expiry_date, is_written_off,
+            teamviewer, imei1, imei2, ip, mac_addresses, assigned_to, equipment_sub_area_id,
+            comment, updated_by, created, updated
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON DUPLICATE KEY UPDATE
+            service_tag = VALUES(service_tag),
+            model_id = VALUES(model_id),
+            vendor_id = VALUES(vendor_id),
+            supplier_id = VALUES(supplier_id),
+            cerf = VALUES(cerf),
+            device_no = VALUES(device_no),
+            is_personal = VALUES(is_personal),
+            purchase_date = VALUES(purchase_date),
+            warranty_expiry_date = VALUES(warranty_expiry_date),
+            is_written_off = VALUES(is_written_off),
+            teamviewer = VALUES(teamviewer),
+            imei1 = VALUES(imei1),
+            imei2 = VALUES(imei2),
+            ip = VALUES(ip),
+            mac_addresses = VALUES(mac_addresses),
+            assigned_to = VALUES(assigned_to),
+            equipment_sub_area_id = VALUES(equipment_sub_area_id),
+            comment = VALUES(comment),
+            updated_by = VALUES(updated_by),
+            updated = CURRENT_TIMESTAMP`,
+          [
+            equipmentId, inventoryPeriodId, eq.service_tag, eq.model_id, eq.vendor_id, eq.supplier_id,
+            eq.cerf, eq.device_no, eq.is_personal, eq.purchase_date, eq.warranty_expiry_date, eq.is_written_off,
+            eq.latest_teamviewer, eq.imei1, eq.imei2, eq.ip, eq.mac_addresses, eq.assigned_to, eq.equipment_sub_area_id,
+            eq.comment, updatedBy
+          ]
+        );
+
+        logger.info("Audit record saved", { traceId, equipmentId, inventoryPeriodId, username: session.username });
+        
+        return Response.redirect(`/inventory-audit?search=${encodeURIComponent(eq.service_tag)}&success=${encodeURIComponent("Audit recorded successfully")}`, 303);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to save audit record", err, { traceId });
+        return Response.redirect(`/inventory-audit?error=${encodeURIComponent(errorMessage)}`, 303);
+      }
+    }
+
+    // Inventory Audit - Quick Edit POST (only updates audit table, NOT main equipment table)
+    if (path === "/inventory-audit/quick-edit" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/inventory-audit", 302);
+      }
+
+      try {
+        const form = await req.formData();
+        const equipmentId = parseInt(form.get("equipment_id")?.toString() || "0");
+        const inventoryPeriodId = parseInt(form.get("inventory_period_id")?.toString() || "0");
+        const assignedTo = form.get("assigned_to")?.toString() || null;
+        const teamviewer = form.get("teamviewer")?.toString() || null;
+        const comment = form.get("comment")?.toString() || null;
+        const equipmentSubAreaId = form.get("equipment_sub_area_id")?.toString() || null;
+        
+        if (!equipmentId || !inventoryPeriodId) {
+          throw new Error("Missing required fields");
+        }
+        
+        // Get equipment service_tag and current data with latest from either (log+equipment) or audit table using CTE
+        const [equipmentRows] = await pool.query<RowDataPacket[]>(
+          `WITH latest_records AS (
+            SELECT l.equipment_id, l.assigned_to, l.equipment_sub_area_id, eq.teamviewer, l.comment, l.created as record_date
+            FROM it_equipment_log l
+            INNER JOIN it_equipment eq ON l.equipment_id = eq.id
+            UNION ALL
+            SELECT equipment_id, assigned_to, equipment_sub_area_id, teamviewer, comment, COALESCE(updated, created) as record_date
+            FROM it_equipment_audit
+          ),
+          latest_per_equipment AS (
+            SELECT lr.*
+            FROM latest_records lr
+            INNER JOIN (
+              SELECT equipment_id, MAX(record_date) as max_date
+              FROM latest_records
+              GROUP BY equipment_id
+            ) mx ON lr.equipment_id = mx.equipment_id AND lr.record_date = mx.max_date
+          )
+          SELECT
+            e.*,
+            lpe.assigned_to,
+            lpe.equipment_sub_area_id,
+            lpe.comment,
+            COALESCE(lpe.teamviewer, e.teamviewer) as latest_teamviewer
+           FROM it_equipment e
+           LEFT JOIN latest_per_equipment lpe ON e.id = lpe.equipment_id
+           WHERE e.id = ?`,
+          [equipmentId]
+        );
+        
+        if (equipmentRows.length === 0) {
+          throw new Error("Equipment not found");
+        }
+        
+        const eq = equipmentRows[0];
+        const serviceTag = eq.service_tag;
+        
+        // Resolve employee_no for updated_by; use null for admin users (admin doesn't have employee_no)
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const updatedBy = isAdminUser(session.username) ? null : (employeeNo || null);
+        
+        // Use form values if provided, otherwise use current values from latest record (log or audit)
+        const auditAssignedTo = assignedTo !== null ? assignedTo : eq.assigned_to;
+        const auditSubAreaId = equipmentSubAreaId !== null ? (equipmentSubAreaId ? parseInt(equipmentSubAreaId) : null) : eq.equipment_sub_area_id;
+        const auditComment = comment !== null ? comment : eq.comment;
+        const auditTeamviewer = teamviewer !== null ? (teamviewer ? parseInt(teamviewer) : null) : eq.latest_teamviewer;
+        
+        // Update ONLY the audit table - do NOT update main equipment table or log table
+        await pool.query(
+          `INSERT INTO it_equipment_audit (
+            equipment_id, inventory_period_id, service_tag, model_id, vendor_id, supplier_id,
+            cerf, device_no, is_personal, purchase_date, warranty_expiry_date, is_written_off,
+            teamviewer, imei1, imei2, ip, mac_addresses, assigned_to, equipment_sub_area_id,
+            comment, updated_by, created, updated
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON DUPLICATE KEY UPDATE
+            teamviewer = VALUES(teamviewer),
+            assigned_to = VALUES(assigned_to),
+            equipment_sub_area_id = VALUES(equipment_sub_area_id),
+            comment = VALUES(comment),
+            updated_by = VALUES(updated_by),
+            updated = CURRENT_TIMESTAMP`,
+          [
+            equipmentId, inventoryPeriodId, serviceTag, eq.model_id, eq.vendor_id, eq.supplier_id,
+            eq.cerf, eq.device_no, eq.is_personal, eq.purchase_date, eq.warranty_expiry_date, eq.is_written_off,
+            auditTeamviewer, eq.imei1, eq.imei2, eq.ip, eq.mac_addresses, auditAssignedTo, auditSubAreaId,
+            auditComment, updatedBy
+          ]
+        );
+        
+        logger.info("Audit quick edit saved", { traceId, equipmentId, username: session.username });
+        
+        return Response.redirect(`/inventory-audit?search=${encodeURIComponent(serviceTag)}&success=${encodeURIComponent("Audit updated successfully")}`, 303);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to quick edit audit", err, { traceId });
+        return Response.redirect(`/inventory-audit?error=${encodeURIComponent(errorMessage)}`, 303);
+      }
+    }
+
+    // Inventory Audit Review - GET (page with Audit, Review, and Periods tabs)
+    if (path === "/inventory-audit/review" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/inventory-audit/review", 302);
+      }
+
+      try {
+        const userPlantId = await getUserPlantId(session.username, pool);
+
+        // Get user's plant hierarchy for filtering (if not admin)
+        let allowedPlantId: number | null = null;
+        let allowedCountryId: number | null = null;
+        let allowedRegionId: number | null = null;
+        
+        if (!isAdmin && userPlantId !== null) {
+          allowedPlantId = userPlantId;
+          const [plantInfo] = await pool.query<RowDataPacket[]>(
+            `SELECT p.id, p.country_id, c.region_id
+             FROM it_equipment_plant p
+             LEFT JOIN it_equipment_country c ON p.country_id = c.id
+             WHERE p.id = ? AND p.status = 1`,
+            [userPlantId]
+          );
+          if (plantInfo.length > 0) {
+            allowedCountryId = plantInfo[0].country_id;
+            allowedRegionId = plantInfo[0].region_id;
+          }
+        }
+
+        const { inventoryAuditReviewPage } = await import("./templates/inventory-audit-review");
+        
+        // Get inventory periods filtered by plant (only show periods that have audits for equipment in user's plant)
+        let periodsQuery = `
+          SELECT DISTINCT ip.id, ip.inventory_nr, ip.start_date, ip.end_date, ip.comment
+          FROM it_inventory_period ip
+          INNER JOIN it_equipment_audit a ON ip.id = a.inventory_period_id
+          INNER JOIN it_equipment_sub_area sa ON a.equipment_sub_area_id = sa.id
+          INNER JOIN it_equipment_area area ON sa.area_id = area.id
+          INNER JOIN it_equipment_department d ON area.department_id = d.id
+        `;
+        
+        const periodsParams: unknown[] = [];
+        if (!isAdmin && allowedPlantId !== null) {
+          periodsQuery += " WHERE d.plant_id = ?";
+          periodsParams.push(allowedPlantId);
+        }
+        
+        periodsQuery += " ORDER BY ip.start_date DESC";
+        
+        const [allPeriods] = await pool.query<RowDataPacket[]>(periodsQuery, periodsParams);
+        
+        // Get latest active inventory period (default) - also filtered by plant
+        let latestPeriodsQuery = `
+          SELECT DISTINCT ip.id, ip.inventory_nr, ip.start_date, ip.end_date, ip.comment
+          FROM it_inventory_period ip
+          INNER JOIN it_equipment_audit a ON ip.id = a.inventory_period_id
+          INNER JOIN it_equipment_sub_area sa ON a.equipment_sub_area_id = sa.id
+          INNER JOIN it_equipment_area area ON sa.area_id = area.id
+          INNER JOIN it_equipment_department d ON area.department_id = d.id
+          WHERE ip.end_date >= CURDATE()
+        `;
+        
+        const latestPeriodsParams: unknown[] = [];
+        if (!isAdmin && allowedPlantId !== null) {
+          latestPeriodsQuery += " AND d.plant_id = ?";
+          latestPeriodsParams.push(allowedPlantId);
+        }
+        
+        latestPeriodsQuery += " ORDER BY ip.start_date DESC LIMIT 1";
+        
+        const [latestPeriods] = await pool.query<RowDataPacket[]>(latestPeriodsQuery, latestPeriodsParams);
+        
+        const defaultPeriod = latestPeriods.length > 0 ? latestPeriods[0] : (allPeriods.length > 0 ? allPeriods[0] : null);
+        
+        // Get all periods for the periods tab (admin only)
+        const [allPeriodsForTab] = await pool.query<RowDataPacket[]>(
+          `SELECT id, inventory_nr, start_date, end_date, comment, confirmed_by, created
+           FROM it_inventory_period
+           ORDER BY start_date DESC`
+        );
+        
+        // Get success/error messages from URL params
+        const success = url.searchParams.get("success");
+        const error = url.searchParams.get("error");
+        const message = success || error;
+        const messageType: "success" | "error" | "info" = success ? "success" : error ? "error" : "info";
+
+        // Get location data for edit modal
+        const [
+          [regions],
+          [countries],
+          [plants],
+          [departments],
+          [areas],
+          [subAreas],
+          [employees]
+        ] = await Promise.all([
+          pool.query<RowDataPacket[]>(`SELECT id, name FROM it_equipment_region WHERE status = 1 ORDER BY name`),
+          pool.query<RowDataPacket[]>(`SELECT id, name, region_id as parent_id FROM it_equipment_country WHERE status = 1 ORDER BY name`),
+          pool.query<RowDataPacket[]>(`SELECT id, name, country_id as parent_id FROM it_equipment_plant WHERE status = 1 ORDER BY name`),
+          pool.query<RowDataPacket[]>(`SELECT id, name, plant_id as parent_id FROM it_equipment_department WHERE status = 1 ORDER BY name`),
+          pool.query<RowDataPacket[]>(`SELECT id, name, department_id as parent_id FROM it_equipment_area WHERE status = 1 ORDER BY name`),
+          pool.query<RowDataPacket[]>(`SELECT id, name, area_id as parent_id FROM it_equipment_sub_area WHERE status = 1 ORDER BY name`),
+          pool.query<RowDataPacket[]>(`SELECT employee_no, name FROM it_employees_list WHERE status = 1 ORDER BY name`)
+        ]);
+
+        const locationData = { regions, countries, plants, departments, areas, subAreas };
+
+        return new Response(
+          inventoryAuditReviewPage(allPeriods as any, defaultPeriod as any, isAdmin, hasPcPwView, session.username, hasAuditApprover, allPeriodsForTab as any, message, messageType, locationData as any, employees as any),
+          { headers: { "Content-Type": "text/html" } }
+        );
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to load inventory audit review page", err, { traceId });
+        return new Response(`Error: ${errorMessage}`, { status: 500 });
+      }
+    }
+
+    // Inventory Audit Search - API
+    if (path === "/api/inventory-audit/search" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      try {
+        const query = url.searchParams.get("q")?.trim();
+        if (!query) {
+          return new Response(JSON.stringify({ success: false, error: "Search query required" }), {
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        // Get equipment from main table with latest record from either (log+equipment) or audit using CTE
+        const [equipment] = await pool.query<RowDataPacket[]>(`
+          WITH latest_records AS (
+            SELECT l.equipment_id, l.assigned_to, l.equipment_sub_area_id, e.teamviewer, l.comment, l.created as record_date
+            FROM it_equipment_log l
+            INNER JOIN it_equipment e ON l.equipment_id = e.id
+            UNION ALL
+            SELECT equipment_id, assigned_to, equipment_sub_area_id, teamviewer, comment, COALESCE(updated, created) as record_date
+            FROM it_equipment_audit
+          ),
+          latest_per_equipment AS (
+            SELECT lr.*
+            FROM latest_records lr
+            INNER JOIN (
+              SELECT equipment_id, MAX(record_date) as max_date
+              FROM latest_records
+              GROUP BY equipment_id
+            ) mx ON lr.equipment_id = mx.equipment_id AND lr.record_date = mx.max_date
+          )
+          SELECT
+            e.id,
+            e.service_tag,
+            t.type_name as type_name,
+            pl.name as product_line_name,
+            m.name as model_name,
+            v.name as vendor_name,
+            COALESCE(lpe.teamviewer, e.teamviewer) as teamviewer,
+            lpe.assigned_to,
+            emp.name as assigned_to_name,
+            (SELECT MAX(a.created) FROM it_equipment_audit a WHERE a.equipment_id = e.id) as latest_audit_date,
+            e.purchase_date,
+            e.warranty_expiry_date,
+            e.is_written_off,
+            wor.reason as write_off_reason,
+            e.repair_status,
+            r.id as region_id,
+            r.name as region_name,
+            c.id as country_id,
+            c.name as country_name,
+            p.id as plant_id,
+            p.name as plant_name,
+            d.id as department_id,
+            d.name as department_name,
+            ar.id as area_id,
+            ar.name as area_name,
+            sa.name as sub_area_name,
+            lpe.equipment_sub_area_id,
+            lpe.comment
+          FROM it_equipment e
+          LEFT JOIN latest_per_equipment lpe ON e.id = lpe.equipment_id
+          LEFT JOIN it_equipment_model m ON e.model_id = m.id
+          LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
+          LEFT JOIN it_equipment_type t ON pl.type_id = t.id
+          LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
+          LEFT JOIN it_equipment_write_off_reason wor ON e.is_written_off = wor.id
+          LEFT JOIN it_employees_list emp ON lpe.assigned_to = emp.employee_no
+          LEFT JOIN it_equipment_sub_area sa ON lpe.equipment_sub_area_id = sa.id
+          LEFT JOIN it_equipment_area ar ON sa.area_id = ar.id
+          LEFT JOIN it_equipment_department d ON ar.department_id = d.id
+          LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
+          LEFT JOIN it_equipment_country c ON p.country_id = c.id
+          LEFT JOIN it_equipment_region r ON c.region_id = r.id
+          WHERE e.service_tag = ?
+          LIMIT 1
+        `, [query]);
+
+        if (equipment.length === 0) {
+          return new Response(JSON.stringify({ success: false, error: "Not found" }), {
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true, data: equipment[0] }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (err) {
+        logger.error("Audit search failed", err, { traceId });
+        return new Response(JSON.stringify({ success: false, error: "Search failed" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // Inventory Audit Review - API (live updates)
+    if (path === "/api/inventory-audit/review" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      try {
+        const userPlantId = await getUserPlantId(session.username, pool);
+        
+        if (!hasAuditApprover) {
+          return new Response(JSON.stringify({ error: "Access denied" }), { 
+            status: 403,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        const inventoryPeriodId = url.searchParams.get("period_id");
+        
+        // Get user's plant for filtering (if not admin)
+        let allowedPlantId: number | null = null;
+        
+        if (!isAdmin && userPlantId !== null) {
+          allowedPlantId = userPlantId;
+        }
+        
+        let query = `
+          SELECT 
+            a.id,
+            a.equipment_id,
+            a.inventory_period_id,
+            a.service_tag,
+            a.teamviewer,
+            a.assigned_to,
+            a.comment,
+            a.updated_by,
+            a.created,
+            a.updated,
+            ip.inventory_nr,
+            CONCAT(emp.first_name, ' ', emp.last_name) as assigned_to_name,
+            CONCAT_WS(' - ',
+              r.name,
+              c.name,
+              p.name,
+              d.name,
+              a_loc.name,
+              sa.name
+            ) as location,
+            CONCAT_WS(' - ',
+              v.name,
+              t.type_name,
+              pl.name,
+              m.name
+            ) as equipment_type
+          FROM it_equipment_audit a
+          LEFT JOIN it_inventory_period ip ON a.inventory_period_id = ip.id
+          LEFT JOIN it_employees_list emp ON a.assigned_to = emp.employee_no
+          LEFT JOIN it_equipment_sub_area sa ON a.equipment_sub_area_id = sa.id
+          LEFT JOIN it_equipment_area a_loc ON sa.area_id = a_loc.id
+          LEFT JOIN it_equipment_department d ON a_loc.department_id = d.id
+          LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
+          LEFT JOIN it_equipment_country c ON p.country_id = c.id
+          LEFT JOIN it_equipment_region r ON c.region_id = r.id
+          LEFT JOIN it_equipment e ON a.equipment_id = e.id
+          LEFT JOIN it_equipment_model m ON e.model_id = m.id
+          LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
+          LEFT JOIN it_equipment_type t ON pl.type_id = t.id
+          LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
+        `;
+        
+        const params: unknown[] = [];
+        const whereConditions: string[] = [];
+        
+        // Filter by plant if not admin
+        if (!isAdmin && allowedPlantId !== null) {
+          whereConditions.push("d.plant_id = ?");
+          params.push(allowedPlantId);
+        }
+        
+        // Filter by inventory period if specified
+        if (inventoryPeriodId) {
+          whereConditions.push("a.inventory_period_id = ?");
+          params.push(parseInt(inventoryPeriodId));
+        }
+        
+        if (whereConditions.length > 0) {
+          query += " WHERE " + whereConditions.join(" AND ");
+        }
+        
+        query += " ORDER BY a.updated DESC";
+        
+        const [auditRecords] = await pool.query<RowDataPacket[]>(query, params);
+        
+        return new Response(
+          JSON.stringify({ success: true, data: auditRecords }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to fetch audit review data", err, { traceId });
+        return new Response(
+          JSON.stringify({ success: false, error: errorMessage }),
+          { 
+            status: 500,
+            headers: { "Content-Type": "application/json" }
+          }
+        );
+      }
+    }
+
+    // Inventory Audit Review - CSV Export
+    if (path === "/inventory-audit/review/export" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/inventory-audit/review", 302);
+      }
+
+      try {
+        const userPlantId = await getUserPlantId(session.username, pool);
+        
+        if (!hasAuditApprover) {
+          const { errorPage } = await import("./templates/error");
+          return new Response(
+            errorPage(
+              "Access Denied",
+              "You do not have permission to export audit review data.",
+              "You need the 'audit-approver' permission to export audit reviews. Please contact your administrator if you need access.",
+              403,
+              isAdmin,
+              hasPcPwView,
+              session.username,
+              false
+            ),
+            { 
+              status: 403,
+              headers: { "Content-Type": "text/html" }
+            }
+          );
+        }
+
+        const inventoryPeriodId = url.searchParams.get("period_id");
+        
+        // Get user's plant for filtering (if not admin)
+        let allowedPlantId: number | null = null;
+        
+        if (!isAdmin && userPlantId !== null) {
+          allowedPlantId = userPlantId;
+        }
+        
+        let query = `
+          SELECT 
+            a.service_tag,
+            a.teamviewer,
+            a.assigned_to,
+            CONCAT(emp.first_name, ' ', emp.last_name) as assigned_to_name,
+            CONCAT_WS(' - ',
+              r.name,
+              c.name,
+              p.name,
+              d.name,
+              a_loc.name,
+              sa.name
+            ) as location,
+            CONCAT_WS(' - ',
+              v.name,
+              t.type_name,
+              pl.name,
+              m.name
+            ) as equipment_type,
+            a.comment,
+            a.updated_by,
+            DATE_FORMAT(a.created, '%Y-%m-%d %H:%i:%s') as created,
+            DATE_FORMAT(a.updated, '%Y-%m-%d %H:%i:%s') as updated,
+            ip.inventory_nr
+          FROM it_equipment_audit a
+          LEFT JOIN it_inventory_period ip ON a.inventory_period_id = ip.id
+          LEFT JOIN it_employees_list emp ON a.assigned_to = emp.employee_no
+          LEFT JOIN it_equipment_sub_area sa ON a.equipment_sub_area_id = sa.id
+          LEFT JOIN it_equipment_area a_loc ON sa.area_id = a_loc.id
+          LEFT JOIN it_equipment_department d ON a_loc.department_id = d.id
+          LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
+          LEFT JOIN it_equipment_country c ON p.country_id = c.id
+          LEFT JOIN it_equipment_region r ON c.region_id = r.id
+          LEFT JOIN it_equipment e ON a.equipment_id = e.id
+          LEFT JOIN it_equipment_model m ON e.model_id = m.id
+          LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
+          LEFT JOIN it_equipment_type t ON pl.type_id = t.id
+          LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
+        `;
+        
+        const params: unknown[] = [];
+        const whereConditions: string[] = [];
+        
+        // Filter by plant if not admin
+        if (!isAdmin && allowedPlantId !== null) {
+          whereConditions.push("d.plant_id = ?");
+          params.push(allowedPlantId);
+        }
+        
+        // Filter by inventory period if specified
+        if (inventoryPeriodId) {
+          whereConditions.push("a.inventory_period_id = ?");
+          params.push(parseInt(inventoryPeriodId));
+        }
+        
+        if (whereConditions.length > 0) {
+          query += " WHERE " + whereConditions.join(" AND ");
+        }
+        
+        query += " ORDER BY a.updated DESC";
+        
+        const [auditRecords] = await pool.query<RowDataPacket[]>(query, params);
+        
+        // Generate CSV
+        const headers = [
+          "Service Tag",
+          "TeamViewer",
+          "Assigned To",
+          "Assigned To Name",
+          "Location",
+          "Equipment Type",
+          "Comment",
+          "Updated By",
+          "Created",
+          "Updated",
+          "Inventory Period"
+        ];
+        
+        const csvRows = [
+          headers.join(","),
+          ...auditRecords.map(row => [
+            `"${(row.service_tag || "").replace(/"/g, '""')}"`,
+            `"${(row.teamviewer || "").toString().replace(/"/g, '""')}"`,
+            `"${(row.assigned_to || "").replace(/"/g, '""')}"`,
+            `"${(row.assigned_to_name || "").replace(/"/g, '""')}"`,
+            `"${(row.location || "").replace(/"/g, '""')}"`,
+            `"${(row.equipment_type || "").replace(/"/g, '""')}"`,
+            `"${(row.comment || "").replace(/"/g, '""')}"`,
+            `"${(row.updated_by || "").replace(/"/g, '""')}"`,
+            `"${(row.created || "").replace(/"/g, '""')}"`,
+            `"${(row.updated || "").replace(/"/g, '""')}"`,
+            `"${(row.inventory_nr || "").replace(/"/g, '""')}"`
+          ].join(","))
+        ];
+        
+        const csv = csvRows.join("\n");
+        const timestamp = new Date().toISOString().split('T')[0];
+        
+        return new Response(csv, {
+          headers: {
+            "Content-Type": "text/csv",
+            "Content-Disposition": `attachment; filename="inventory-audit-${timestamp}.csv"`
+          }
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to export audit review", err, { traceId });
+        return new Response(`Error: ${errorMessage}`, { status: 500 });
+      }
+    }
+
+    // Inventory Audit Review - Apply to Main Table
+    if (path === "/api/inventory-audit/apply" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      try {
+        const userPlantId = await getUserPlantId(session.username, pool);
+        
+        if (!hasAuditApprover) {
+          return new Response(JSON.stringify({ error: "Access denied" }), { 
+            status: 403,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        const body = await req.json();
+        const serviceTag = body.service_tag?.toString();
+        
+        if (!serviceTag) {
+          return new Response(JSON.stringify({ error: "Service tag is required" }), { 
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        // Get the latest audit entry for this service tag
+        const [auditEntries] = await pool.query<RowDataPacket[]>(
+          `SELECT a.*, e.id as equipment_id
+           FROM it_equipment_audit a
+           INNER JOIN it_equipment e ON a.equipment_id = e.id
+           WHERE a.service_tag = ?
+           ORDER BY a.updated DESC
+           LIMIT 1`,
+          [serviceTag]
+        );
+
+        if (auditEntries.length === 0) {
+          return new Response(JSON.stringify({ error: "No audit entry found for this service tag" }), { 
+            status: 404,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        const audit = auditEntries[0];
+        
+        // Resolve employee_no for updated_by; use null for admin users (admin doesn't have employee_no)
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const updatedBy = isAdminUser(session.username) ? null : (employeeNo || null);
+
+        // Update main equipment table (teamviewer only, as other fields shouldn't change)
+        if (audit.teamviewer !== null) {
+          await pool.query(
+            "UPDATE it_equipment SET teamviewer = ?, updated = CURRENT_TIMESTAMP WHERE id = ?",
+            [audit.teamviewer, audit.equipment_id]
+          );
+        }
+
+        // Insert new log entry with audit data
+        await pool.query(
+          `INSERT INTO it_equipment_log (
+            equipment_id, service_tag, assigned_to, equipment_sub_area_id, 
+            inventory_period_id, comment, updated_by
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            audit.equipment_id,
+            audit.service_tag,
+            audit.assigned_to,
+            audit.equipment_sub_area_id,
+            audit.inventory_period_id,
+            audit.comment,
+            updatedBy
+          ]
+        );
+
+        logger.info("Audit entry applied to main table", { traceId, serviceTag, equipmentId: audit.equipment_id, username: session.username });
+
+        return new Response(
+          JSON.stringify({ success: true, message: "Audit entry applied successfully" }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to apply audit entry", err, { traceId });
+        return new Response(
+          JSON.stringify({ success: false, error: errorMessage }),
+          { 
+            status: 500,
+            headers: { "Content-Type": "application/json" }
+          }
+        );
+      }
+    }
+
+    // Inventory Audit Review - Apply Latest for All Service Tags
+    if (path === "/api/inventory-audit/apply-all" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      try {
+        const userPlantId = await getUserPlantId(session.username, pool);
+        
+        if (!hasAuditApprover) {
+          return new Response(JSON.stringify({ error: "Access denied" }), { 
+            status: 403,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        const body = await req.json();
+        const inventoryPeriodId = body.period_id ? parseInt(body.period_id.toString()) : null;
+
+        // Resolve employee_no for updated_by; use null for admin users (admin doesn't have employee_no)
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        const updatedBy = isAdminUser(session.username) ? null : (employeeNo || null);
+
+        // Get latest audit entry for each unique service tag
+        // If period_id is provided, only consider audits from that period
+        let latestAuditsQuery = `
+          SELECT a1.*, e.id as equipment_id
+          FROM it_equipment_audit a1
+          INNER JOIN it_equipment e ON a1.equipment_id = e.id
+          INNER JOIN (
+            SELECT service_tag, MAX(updated) as max_updated
+            FROM it_equipment_audit
+            ${inventoryPeriodId ? 'WHERE inventory_period_id = ?' : ''}
+            GROUP BY service_tag
+          ) a2 ON a1.service_tag = a2.service_tag AND a1.updated = a2.max_updated
+          ${inventoryPeriodId ? 'WHERE a1.inventory_period_id = ?' : ''}
+        `;
+
+        const params: unknown[] = [];
+        if (inventoryPeriodId) {
+          params.push(inventoryPeriodId);
+          params.push(inventoryPeriodId);
+        }
+
+        const [latestAudits] = await pool.query<RowDataPacket[]>(latestAuditsQuery, params);
+
+        let appliedCount = 0;
+        let errorCount = 0;
+        const errors: string[] = [];
+
+        // Apply each audit entry
+        for (const audit of latestAudits) {
+          try {
+            // Update main equipment table (teamviewer only)
+            if (audit.teamviewer !== null) {
+              await pool.query(
+                "UPDATE it_equipment SET teamviewer = ?, updated = CURRENT_TIMESTAMP WHERE id = ?",
+                [audit.teamviewer, audit.equipment_id]
+              );
+            }
+
+            // Insert new log entry with audit data
+            await pool.query(
+              `INSERT INTO it_equipment_log (
+                equipment_id, service_tag, assigned_to, equipment_sub_area_id, 
+                inventory_period_id, comment, updated_by
+              ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [
+                audit.equipment_id,
+                audit.service_tag,
+                audit.assigned_to,
+                audit.equipment_sub_area_id,
+                audit.inventory_period_id,
+                audit.comment,
+                updatedBy
+              ]
+            );
+
+            appliedCount++;
+          } catch (err) {
+            errorCount++;
+            const errorMsg = err instanceof Error ? err.message : "Unknown error";
+            errors.push(`${audit.service_tag}: ${errorMsg}`);
+            logger.error("Failed to apply audit entry for service tag", { traceId, serviceTag: audit.service_tag, error: errorMsg });
+          }
+        }
+
+        logger.info("Bulk audit apply completed", { traceId, appliedCount, errorCount, username: session.username });
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: `Applied ${appliedCount} audit entries${errorCount > 0 ? `, ${errorCount} errors` : ''}`,
+            applied: appliedCount,
+            errors: errorCount,
+            errorDetails: errors.length > 0 ? errors : undefined
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to apply all audit entries", err, { traceId });
+        return new Response(
+          JSON.stringify({ success: false, error: errorMessage }),
+          { 
+            status: 500,
+            headers: { "Content-Type": "application/json" }
+          }
+        );
+      }
+    }
+  
+      // Get printers from Bartender
     if (path === "/api/printers" && req.method === "GET") {
       try {
         const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
@@ -3334,7 +4577,7 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 }
 
-async function getAuditData(id: number, userPlantId: number | null = null, isAdmin: boolean = false) {
+async function getAuditData(id: number, userPlantId: number | null = null, isAdmin: boolean = false): Promise<AuditDataType | null> {
   // Get equipment with latest log entry joined
   const [equipment] = await pool.query<RowDataPacket[]>(`
     SELECT 
@@ -3474,10 +4717,10 @@ async function getAuditData(id: number, userPlantId: number | null = null, isAdm
     vendors,
     suppliers,
     writeOffReasons
-  };
+  } as unknown as AuditDataType;
 }
 
-async function getAddData(serviceTag: string, userPlantId: number | null = null, isAdmin: boolean = false) {
+async function getAddData(serviceTag: string, userPlantId: number | null = null, isAdmin: boolean = false): Promise<AddDataType> {
   // Get user's plant hierarchy if not admin and userPlantId is provided
   let allowedRegionId: number | null = null;
   let allowedCountryId: number | null = null;
@@ -3562,10 +4805,10 @@ async function getAddData(serviceTag: string, userPlantId: number | null = null,
     suppliers,
     employees,
     inventoryPeriods
-  };
+  } as unknown as AddDataType;
 }
 
-async function getLocationsData() {
+async function getLocationsData(): Promise<LocationsDataType> {
   const [
     [regions],
     [countries],
@@ -3688,7 +4931,7 @@ async function getLocationsData() {
     departments,
     areas,
     subAreas
-  };
+  } as unknown as LocationsDataType;
 }
 
 async function getVendorsAndSuppliersData() {

@@ -1,10 +1,10 @@
-import { SEARCH_ICON, LOCATION_ICON, COG_ICON, SHOPPING_BAG_ICON, X_CIRCLE_ICON, WRENCH_ICON, KEY_ICON, USER_GROUP_ICON, LOCK_CLOSED_ICON } from "./icons";
+import { SEARCH_ICON, LOCATION_ICON, COG_ICON, SHOPPING_BAG_ICON, X_CIRCLE_ICON, WRENCH_ICON, KEY_ICON, USER_GROUP_ICON, LOCK_CLOSED_ICON, CLIPBOARD_CHECK_ICON } from "./icons";
 
 /**
  * Navigation menu component
  * Returns the HTML for the hamburger menu navigation
  */
-export function navigationMenu(isAdmin: boolean = false, hasPcPwView: boolean = false): string {
+export function navigationMenu(isAdmin: boolean = false, hasPcPwView: boolean = false, hasAuditApprover: boolean = false): string {
   return `
     <div id="nav-links" class="hidden flex-col absolute left-0 top-12 bg-white dark:bg-gray-800 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2 min-w-[200px] z-50 transition-colors">
       <a href="/" class="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">
@@ -30,6 +30,10 @@ export function navigationMenu(isAdmin: boolean = false, hasPcPwView: boolean = 
       <a href="/repairs" class="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">
         ${WRENCH_ICON.replace('w-5 h-5', 'w-4 h-4').replace('text-current', 'text-current')}
         Repair Tracking
+      </a>
+      <a href="/inventory-audit" class="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors">
+        ${CLIPBOARD_CHECK_ICON.replace('w-5 h-5', 'w-4 h-4').replace('text-current', 'text-current')}
+        Inventory Audit
       </a>
       <a href="/pc-pw" class="flex items-center gap-2 ${hasPcPwView ? 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white' : 'text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'} font-medium transition-colors">
         ${KEY_ICON.replace('w-5 h-5', 'w-4 h-4').replace('text-current', 'text-current')}

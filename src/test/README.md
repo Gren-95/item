@@ -17,6 +17,7 @@ This directory contains tests for the equipment audit application, covering func
 - `health.test.ts` - Tests for health check endpoint
 - `validation.test.ts` - Tests for input validation schemas
 - `auth.test.ts` - Tests for authentication and permission checks
+- `audit.test.ts` - Tests for audit foreign key constraint fix (admin users)
 - `utils.ts` - Test utilities and helpers
 
 ## Running Tests

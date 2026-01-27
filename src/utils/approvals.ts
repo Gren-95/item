@@ -1,6 +1,7 @@
 import type { Pool } from "mysql2/promise";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { isAdminUser } from "./auth";
+import { sendApprovalNotification } from "./email";
 
 /**
  * Get employee_no from username
@@ -16,16 +17,34 @@ export async function getEmployeeNo(
   }
 
   try {
-    const [users] = await pool.query<RowDataPacket[]>(
-      "SELECT employee_no FROM `it_employees_list` WHERE `user_id` = ? AND `status` = 1",
+    // Prefer active records, but allow any status as a fallback to avoid NULL updated_by
+    const [byUserId] = await pool.query<RowDataPacket[]>(
+      `SELECT employee_no
+       FROM it_employees_list
+       WHERE user_id = ?
+       ORDER BY status DESC
+       LIMIT 1`,
       [username]
     );
 
-    if (users.length === 0 || !users[0].employee_no) {
-      return null;
+    if (byUserId.length > 0 && byUserId[0].employee_no) {
+      return byUserId[0].employee_no as string;
     }
 
-    return users[0].employee_no;
+    // Fallback: some installs use employee_no as the username
+    const [byEmployeeNo] = await pool.query<RowDataPacket[]>(
+      `SELECT employee_no
+       FROM it_employees_list
+       WHERE employee_no = ?
+       LIMIT 1`,
+      [username]
+    );
+
+    if (byEmployeeNo.length > 0 && byEmployeeNo[0].employee_no) {
+      return byEmployeeNo[0].employee_no as string;
+    }
+
+    return null;
   } catch (error) {
     console.error("Error getting employee_no:", error);
     return null;
@@ -45,13 +64,19 @@ export async function createApprovalRequest(
 ): Promise<number | null> {
   try {
     const [result] = await pool.query<ResultSetHeader>(
-      `INSERT INTO it_request 
+      `INSERT INTO it_request
        (created_by, permission_required, action_type, action_data, ip, status)
        VALUES (?, ?, ?, ?, ?, 'pending')`,
       [employeeNo, permissionRequired, actionType, JSON.stringify(actionData), ip]
     );
 
-    return result.insertId;
+    const requestId = result.insertId;
+
+    // Send email notification to admins (fire-and-forget)
+    sendApprovalNotification(requestId, permissionRequired, actionType, actionData, employeeNo, pool)
+      .catch((err) => console.error("Background email notification failed:", err));
+
+    return requestId;
   } catch (error) {
     console.error("Error creating approval request:", error);
     return null;

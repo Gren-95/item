@@ -1,7 +1,7 @@
 import { layout } from "./layout";
-import { renderAlert, escapeHtml } from "./components";
+import { renderAlert } from "./components";
 import { getModalHtml, getScriptsHtml } from "./components";
-import { button, buttonLink } from "./buttons";
+import { button } from "./buttons";
 import { PLUS_ICON, ARROW_LEFT_ICON } from "./icons";
 
 interface SelectOption {
@@ -34,7 +34,7 @@ interface AddData {
   inventoryPeriods: InventoryPeriod[];
 }
 
-export function addPage(data: AddData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null): string {
+export function addPage(data: AddData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
   const content = `
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-4 mb-6">
@@ -48,6 +48,21 @@ export function addPage(data: AddData, success: boolean = false, error: string |
       </div>
 
       ${renderAlert(success, error)}
+
+      <!-- Pre-action approval warning banner -->
+      <div id="approval-warning" class="hidden mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+        <div class="flex items-start gap-3">
+          <svg class="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <div>
+            <h3 class="font-semibold text-yellow-800 dark:text-yellow-200">Approval Required</h3>
+            <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+              You don't have direct permission to add equipment. When you submit this form, it will be sent to an administrator for approval.
+            </p>
+          </div>
+        </div>
+      </div>
 
       <form action="/add" method="POST">
         <!-- Basic Information -->
@@ -74,13 +89,29 @@ export function addPage(data: AddData, success: boolean = false, error: string |
             </div>
             <div>
               <label for="vendor_id" class="label">Vendor</label>
-              <select id="vendor_id" name="vendor_id" class="select-field" onchange="handleSelectChange(this, 'vendors', 'Vendor')">
+              <select id="vendor_id" name="vendor_id" class="select-field" onchange="handleVendorChange(this)">
                 <option value="">Select Vendor...</option>
                 ${data.vendors.map(v => `
-                  <option value="${v.id}">${escapeHtml(v.name)}</option>
+                  <option value="${v.id}" data-name="${escapeHtml(v.name)}">${escapeHtml(v.name)}</option>
                 `).join("")}
                 <option value="__add_new__" class="text-blue-600 font-medium">+ Add new vendor...</option>
               </select>
+              <div id="dell-warranty-hint" class="hidden mt-2 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>Enter the service tag and click <strong>Get Warranty</strong> to auto-fill dates.</span>
+                  </p>
+                  <button type="button" id="get-warranty-btn" onclick="fetchDellWarranty()" class="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Get Warranty
+                  </button>
+                </div>
+              </div>
             </div>
             <div>
               <label for="purchase_date" class="label">Purchase Date <span class="text-red-500">*</span></label>
@@ -186,7 +217,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
                 ${data.regions.map(r => `
                   <option value="${r.id}">${escapeHtml(r.name)}</option>
                 `).join("")}
-                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new region...</option>
+                ${isAdmin ? '<option value="__add_new__" class="text-blue-600 font-medium">+ Add new region...</option>' : ''}
               </select>
             </div>
             <div>
@@ -196,7 +227,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
                 ${data.countries.map(c => `
                   <option value="${c.id}" data-parent="${c.parent_id}" hidden>${escapeHtml(c.name)}</option>
                 `).join("")}
-                <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new country...</option>
+                ${isAdmin ? '<option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new country...</option>' : ''}
               </select>
             </div>
             <div>
@@ -206,7 +237,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
                 ${data.plants.map(p => `
                   <option value="${p.id}" data-parent="${p.parent_id}" hidden>${escapeHtml(p.name)}</option>
                 `).join("")}
-                <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new plant...</option>
+                ${isAdmin ? '<option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new plant...</option>' : ''}
               </select>
             </div>
             <div>
@@ -384,7 +415,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
           </div>
           <div class="flex justify-end gap-3">
             ${button("Cancel", { variant: "secondary", onClick: "closePrintModal()" })}
-            ${button("Print", { variant: "primary", id: "confirm-print", className: "hidden", onClick: "confirmPrint()" })}
+            ${button("Print", { variant: "primary", className: "hidden", onClick: "confirmPrint()" })}
           </div>
         </div>
       </div>
@@ -530,6 +561,92 @@ export function addPage(data: AddData, success: boolean = false, error: string |
               .replace(/'/g, '&#039;');
           }
         })();
+
+        // Dell warranty fetch handler
+        window.fetchDellWarranty = async function() {
+          const serviceTagInput = document.getElementById('service_tag');
+          const serviceTag = serviceTagInput ? serviceTagInput.value.trim() : '';
+
+          if (!serviceTag) {
+            alert('Please enter a service tag first.');
+            serviceTagInput?.focus();
+            return;
+          }
+
+          const btn = document.getElementById('get-warranty-btn');
+          const originalHtml = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Loading...';
+
+          try {
+            const response = await fetch('/api/dell-warranty/' + encodeURIComponent(serviceTag));
+            const result = await response.json();
+
+            if (result.success && result.data) {
+              const purchaseDateInput = document.getElementById('purchase_date');
+              const warrantyExpiryInput = document.getElementById('warranty_expiry_date');
+
+              if (result.data.shipDate && purchaseDateInput) {
+                purchaseDateInput.value = result.data.shipDate;
+              }
+              if (result.data.warrantyEnd && warrantyExpiryInput) {
+                warrantyExpiryInput.value = result.data.warrantyEnd;
+              }
+
+              // Flash success on the fields
+              [purchaseDateInput, warrantyExpiryInput].forEach(input => {
+                if (input) {
+                  input.classList.add('ring-2', 'ring-green-500');
+                  setTimeout(() => input.classList.remove('ring-2', 'ring-green-500'), 2000);
+                }
+              });
+            } else {
+              alert(result.message || 'Could not retrieve warranty information for this service tag.');
+            }
+          } catch (err) {
+            alert('Error fetching warranty: ' + err.message);
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+          }
+        };
+
+        // Dell warranty hint handler
+        function handleVendorChange(select) {
+          const selectedOption = select.options[select.selectedIndex];
+          const vendorName = selectedOption ? selectedOption.dataset.name || '' : '';
+          const dellHint = document.getElementById('dell-warranty-hint');
+
+          // Check if it's the "add new" option
+          if (select.value === '__add_new__') {
+            handleSelectChange(select, 'vendors', 'Vendor');
+            if (dellHint) dellHint.classList.add('hidden');
+            return;
+          }
+
+          // Show hint if Dell is selected (case-insensitive check)
+          if (dellHint) {
+            if (vendorName.toLowerCase().includes('dell')) {
+              dellHint.classList.remove('hidden');
+            } else {
+              dellHint.classList.add('hidden');
+            }
+          }
+        }
+
+        // Check if user needs approval for adding equipment
+        (async function checkAddPermission() {
+          try {
+            const response = await fetch('/api/check-permission?permission=edit');
+            const result = await response.json();
+            const warningBanner = document.getElementById('approval-warning');
+            if (warningBanner && result.requiresApproval) {
+              warningBanner.classList.remove('hidden');
+            }
+          } catch (err) {
+            console.error('Failed to check permission:', err);
+          }
+        })();
       </script>
     </div>
 
@@ -537,7 +654,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
     ${getScriptsHtml()}
   `;
 
-  return layout("Add Equipment", content, isAdmin, hasPcPwView, username);
+  return layout("Add Equipment", content, isAdmin, hasPcPwView, username, hasAuditApprover);
 }
 
 function escapeHtml(str: string): string {

@@ -54,7 +54,8 @@ export function permissionsPage(
   hasPcPwView: boolean = false,
   success = "",
   error = "",
-  username: string | null = null
+  username: string | null = null,
+  hasAuditApprover: boolean = false
 ): string {
   // If not admin, show only insufficient permissions message
   if (!isAdmin) {
@@ -74,7 +75,7 @@ export function permissionsPage(
         </div>
       </div>
     `;
-    return layout("User Permissions", content, isAdmin, hasPcPwView, username);
+    return layout("User Permissions", content, isAdmin, hasPcPwView, username, hasAuditApprover);
   }
 
   const alert = success
@@ -137,6 +138,7 @@ export function permissionsPage(
                 <option value="vendors_edit">vendors_edit - Manage vendors/suppliers (view/add/edit/delete)</option>
                 <option value="write_off_reasons_edit">write_off_reasons_edit - Manage write-off reasons (view/add/edit/delete)</option>
                 <option value="repairs">repairs - Manage repairs (view, manage, and send equipment to repair)</option>
+                <option value="audit-approver">audit-approver - Review and approve inventory audits</option>
                 <option value="pc_pw_view">pc_pw_view - View PC passwords</option>
                 <option value="pc_pw_edit">pc_pw_edit - Edit PC passwords</option>
               </select>
@@ -410,9 +412,200 @@ export function permissionsPage(
           </table>
         </div>
       </div>
+
+      <!-- Expiring Permissions Section -->
+      <div class="card mt-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Expiring & Expired Permissions
+          </h2>
+          <select id="expiry-days-filter" class="select-field w-auto text-sm" onchange="loadExpiringPermissions()">
+            <option value="7">Next 7 days</option>
+            <option value="14">Next 14 days</option>
+            <option value="30" selected>Next 30 days</option>
+            <option value="60">Next 60 days</option>
+            <option value="90">Next 90 days</option>
+          </select>
+        </div>
+        <div id="expiring-permissions-container">
+          <div class="text-center py-4 text-gray-500 dark:text-gray-400">Loading...</div>
+        </div>
+      </div>
+
+      <!-- Permission Audit Log Section -->
+      <div class="card mt-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            Permission Audit Log
+          </h2>
+          <div class="flex items-center gap-2">
+            <select id="audit-user-filter" class="select-field w-auto text-sm">
+              <option value="">All Users</option>
+              ${data.users.filter(u => u.active).map(u => '<option value="' + escapeHtml(u.user_id) + '">' + escapeHtml(u.name) + '</option>').join('')}
+            </select>
+            <button type="button" onclick="loadAuditLog()" class="px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+              Filter
+            </button>
+          </div>
+        </div>
+        <div id="audit-log-container">
+          <div class="text-center py-4 text-gray-500 dark:text-gray-400">Loading...</div>
+        </div>
+        <div id="audit-log-pagination" class="flex justify-center mt-4 gap-2"></div>
+      </div>
     </div>
+
+    <script>
+      let auditLogOffset = 0;
+      const auditLogLimit = 20;
+
+      async function loadExpiringPermissions() {
+        const days = document.getElementById('expiry-days-filter').value;
+        const container = document.getElementById('expiring-permissions-container');
+
+        try {
+          const response = await fetch('/api/permissions/expiring?days=' + days);
+          if (!response.ok) throw new Error('Failed to fetch');
+
+          const data = await response.json();
+
+          if (data.expiring.length === 0 && data.expired.length === 0) {
+            container.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400">No expiring or expired permissions found.</div>';
+            return;
+          }
+
+          let html = '';
+
+          if (data.expired.length > 0) {
+            html += '<div class="mb-4">' +
+              '<h3 class="text-sm font-semibold text-red-600 dark:text-red-400 mb-2">Expired (' + data.expired.length + ')</h3>' +
+              '<div class="overflow-x-auto"><table class="w-full text-sm"><thead>' +
+              '<tr class="border-b border-gray-200 dark:border-gray-700 text-left text-gray-600 dark:text-gray-400">' +
+              '<th class="py-2 px-2">User</th><th class="py-2 px-2">Plant</th><th class="py-2 px-2">Permission</th><th class="py-2 px-2">Role</th><th class="py-2 px-2">Expired</th></tr></thead><tbody>' +
+              data.expired.map(function(p) {
+                return '<tr class="border-b border-gray-200 dark:border-gray-700 bg-red-50 dark:bg-red-900/10">' +
+                  '<td class="py-2 px-2 text-red-600 dark:text-red-400">' + (p.user_name || p.user_id) + '</td>' +
+                  '<td class="py-2 px-2 text-red-600 dark:text-red-400">' + (p.plant_id === 0 ? 'All (global)' : (p.plant_name || 'Unknown')) + '</td>' +
+                  '<td class="py-2 px-2 font-mono text-xs text-red-600 dark:text-red-400">' + p.permission + '</td>' +
+                  '<td class="py-2 px-2"><span class="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">' + p.role + '</span></td>' +
+                  '<td class="py-2 px-2 text-red-600 dark:text-red-400">' + p.expiry_date + ' (' + p.days_since_expiry + ' days ago)</td></tr>';
+              }).join('') + '</tbody></table></div></div>';
+          }
+
+          if (data.expiring.length > 0) {
+            const soonExpiring = data.expiring.filter(function(p) { return p.days_until_expiry >= 0; });
+            if (soonExpiring.length > 0) {
+              html += '<div>' +
+                '<h3 class="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-2">Expiring Soon (' + soonExpiring.length + ')</h3>' +
+                '<div class="overflow-x-auto"><table class="w-full text-sm"><thead>' +
+                '<tr class="border-b border-gray-200 dark:border-gray-700 text-left text-gray-600 dark:text-gray-400">' +
+                '<th class="py-2 px-2">User</th><th class="py-2 px-2">Plant</th><th class="py-2 px-2">Permission</th><th class="py-2 px-2">Role</th><th class="py-2 px-2">Expires</th></tr></thead><tbody>' +
+                soonExpiring.map(function(p) {
+                  var rowClass = p.days_until_expiry <= 7 ? 'bg-yellow-50 dark:bg-yellow-900/10' : '';
+                  var roleClass = p.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                  var expiryClass = p.days_until_expiry <= 7 ? 'text-yellow-600 dark:text-yellow-400 font-semibold' : '';
+                  return '<tr class="border-b border-gray-200 dark:border-gray-700 ' + rowClass + '">' +
+                    '<td class="py-2 px-2">' + (p.user_name || p.user_id) + '</td>' +
+                    '<td class="py-2 px-2">' + (p.plant_id === 0 ? 'All (global)' : (p.plant_name || 'Unknown')) + '</td>' +
+                    '<td class="py-2 px-2 font-mono text-xs">' + p.permission + '</td>' +
+                    '<td class="py-2 px-2"><span class="px-2 py-1 rounded text-xs font-medium ' + roleClass + '">' + p.role + '</span></td>' +
+                    '<td class="py-2 px-2 ' + expiryClass + '">' + p.expiry_date + ' (' + p.days_until_expiry + ' days)</td></tr>';
+                }).join('') + '</tbody></table></div></div>';
+            }
+          }
+
+          container.innerHTML = html || '<div class="text-center py-4 text-gray-500 dark:text-gray-400">No expiring or expired permissions found.</div>';
+        } catch (err) {
+          container.innerHTML = '<div class="text-center py-4 text-red-500">Failed to load expiring permissions.</div>';
+        }
+      }
+
+      async function loadAuditLog(resetOffset) {
+        if (resetOffset !== false) auditLogOffset = 0;
+
+        const userId = document.getElementById('audit-user-filter').value;
+        const container = document.getElementById('audit-log-container');
+        const pagination = document.getElementById('audit-log-pagination');
+
+        try {
+          let url = '/api/permissions/audit-log?limit=' + auditLogLimit + '&offset=' + auditLogOffset;
+          if (userId) url += '&user_id=' + encodeURIComponent(userId);
+
+          const response = await fetch(url);
+          if (!response.ok) throw new Error('Failed to fetch');
+
+          const data = await response.json();
+
+          if (data.data.length === 0) {
+            container.innerHTML = '<div class="text-center py-4 text-gray-500 dark:text-gray-400">No audit log entries found.</div>';
+            pagination.innerHTML = '';
+            return;
+          }
+
+          function actionBadge(action) {
+            switch (action) {
+              case 'add': return '<span class="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">ADD</span>';
+              case 'delete': return '<span class="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">DELETE</span>';
+              case 'modify': return '<span class="px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">MODIFY</span>';
+              default: return action;
+            }
+          }
+
+          container.innerHTML = '<div class="overflow-x-auto"><table class="w-full text-sm"><thead>' +
+            '<tr class="border-b border-gray-200 dark:border-gray-700 text-left text-gray-600 dark:text-gray-400">' +
+            '<th class="py-2 px-2">Date</th><th class="py-2 px-2">Action</th><th class="py-2 px-2">User</th>' +
+            '<th class="py-2 px-2">Plant</th><th class="py-2 px-2">Permission</th><th class="py-2 px-2">Role</th>' +
+            '<th class="py-2 px-2">Changed By</th><th class="py-2 px-2">Comment</th></tr></thead><tbody>' +
+            data.data.map(function(l) {
+              var roleDisplay = l.action === 'delete' ? '<s>' + (l.old_role || '-') + '</s>' : (l.role || '-');
+              return '<tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">' +
+                '<td class="py-2 px-2 text-xs text-gray-500">' + new Date(l.created).toLocaleString() + '</td>' +
+                '<td class="py-2 px-2">' + actionBadge(l.action) + '</td>' +
+                '<td class="py-2 px-2">' + (l.user_name || l.user_id) + '</td>' +
+                '<td class="py-2 px-2">' + (l.plant_id === 0 ? 'All (global)' : (l.plant_name || 'Unknown')) + '</td>' +
+                '<td class="py-2 px-2 font-mono text-xs">' + l.permission + '</td>' +
+                '<td class="py-2 px-2">' + roleDisplay + '</td>' +
+                '<td class="py-2 px-2">' + (l.changed_by_name || l.changed_by) + '</td>' +
+                '<td class="py-2 px-2 text-xs text-gray-500 max-w-xs truncate" title="' + (l.comment || '') + '">' + (l.comment || '-') + '</td></tr>';
+            }).join('') + '</tbody></table></div>';
+
+          // Pagination
+          const totalPages = Math.ceil(data.total / auditLogLimit);
+          const currentPage = Math.floor(auditLogOffset / auditLogLimit) + 1;
+
+          if (totalPages > 1) {
+            let paginationHtml = '';
+            if (currentPage > 1) {
+              paginationHtml += '<button onclick="auditLogOffset = ' + ((currentPage - 2) * auditLogLimit) + '; loadAuditLog(false);" class="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600">Prev</button>';
+            }
+            paginationHtml += '<span class="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">Page ' + currentPage + ' of ' + totalPages + '</span>';
+            if (currentPage < totalPages) {
+              paginationHtml += '<button onclick="auditLogOffset = ' + (currentPage * auditLogLimit) + '; loadAuditLog(false);" class="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600">Next</button>';
+            }
+            pagination.innerHTML = paginationHtml;
+          } else {
+            pagination.innerHTML = '';
+          }
+        } catch (err) {
+          container.innerHTML = '<div class="text-center py-4 text-red-500">Failed to load audit log. The table may not exist yet - please run migrations.</div>';
+          pagination.innerHTML = '';
+        }
+      }
+
+      // Load on page load
+      document.addEventListener('DOMContentLoaded', function() {
+        loadExpiringPermissions();
+        loadAuditLog();
+      });
+    </script>
   `;
 
-  return layout("User Permissions", content, isAdmin, hasPcPwView);
+  return layout("User Permissions", content, isAdmin, hasPcPwView, null, hasAuditApprover);
 }
 

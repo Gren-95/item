@@ -1,5 +1,5 @@
 import { layout } from "./layout";
-import { renderAlert, escapeHtml } from "./components";
+import { renderAlert } from "./components";
 import { button, editButton, deleteButton } from "./buttons";
 import { X_CIRCLE_ICON } from "./icons";
 
@@ -13,7 +13,7 @@ interface WriteOffReasonsData {
   writeOffReasons: WriteOffReasonItem[];
 }
 
-export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null): string {
+export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
   const alert = renderAlert(success, error);
 
   const content = `
@@ -92,7 +92,7 @@ export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", err
     </div>
   `;
 
-  return layout("Write-Off Reasons", content, isAdmin, hasPcPwView, username);
+  return layout("Write-Off Reasons", content, isAdmin, hasPcPwView, username, hasAuditApprover);
 }
 
 function escapeHtml(str: string): string {
