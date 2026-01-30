@@ -29,6 +29,9 @@ services:
     volumes:
       - ./src:/app/src
       - ./public:/app/public
+      # E2E tests
+      - ./e2e:/app/e2e
+      - ./playwright.config.ts:/app/playwright.config.ts
       # Allow writing generated certs from inside the container when running the cert script
       - ./certs:/app/certs
       # Database exports directory - mounted to /tmp/db-exports in container
