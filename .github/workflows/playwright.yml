@@ -69,6 +69,8 @@ jobs:
           DB_NAME: item_test
           PORT: 3000
           BASE_URL: http://localhost:3000
+          ADMIN_USERNAME: admin
+          ADMIN_PASSWORD: service
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
