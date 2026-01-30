@@ -55,6 +55,9 @@ mysql_data/
 # Test artifacts
 test-results/
 junit.xml
+playwright-report/
+playwright/.cache/
+blob-report/
 
 # Database exports (keep directory structure, ignore SQL files)
 tmp/db-exports/*.sql
