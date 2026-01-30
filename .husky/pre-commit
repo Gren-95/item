@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+
+# Run TypeScript type checking
+npx tsc --noEmit || exit 1
+
+echo "Pre-commit checks passed!"

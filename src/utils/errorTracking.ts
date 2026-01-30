@@ -29,7 +29,7 @@ class ErrorTracker {
   /**
    * Capture a message
    */
-  captureMessage(message: string, level: "info" | "warning" | "error" = "error", context?: ErrorContext): void {
+  captureMessage(message: string, level: "info" | "warn" | "error" = "error", context?: ErrorContext): void {
     logger[level](message, context);
 
     // TODO: Uncomment when Sentry is configured
