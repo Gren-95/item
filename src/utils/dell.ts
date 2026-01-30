@@ -215,13 +215,13 @@ export async function getDellWarrantyInfo(serviceTag: string): Promise<DellWarra
     }
     
     const device = entitlements[0];
-    
+
     // Find earliest start date and latest end date
     let earliestStartDate: string | null = null;
     let latestEndDate: string | null = null;
-    
-    const processedEntitlements: DellWarrantyInfo['data']['entitlements'] = [];
-    
+
+    const processedEntitlements: NonNullable<DellWarrantyInfo['data']>['entitlements'] = [];
+
     if (device.entitlements && device.entitlements.length > 0) {
       for (const ent of device.entitlements) {
         const startDate = ent.startDate;

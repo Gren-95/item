@@ -95,6 +95,92 @@ interface PcPassword {
   status: number;
 }
 
+// Database row interfaces for type safety
+interface PlantRow extends RowDataPacket {
+  id: number;
+  name: string;
+}
+
+interface UserRow extends RowDataPacket {
+  user_id: string;
+  user: string;
+  name: string;
+  mail: string;
+  active: number;
+  employee_no: string;
+}
+
+interface PermissionRow extends RowDataPacket {
+  id: number;
+  user_id: string;
+  plant_id: number | null;
+  permission: string;
+  role: string | null;
+  comment: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  expiry_date: string | null;
+  added_by_user_id: string | null;
+}
+
+interface ApprovalRequestRow extends RowDataPacket {
+  id: number;
+  requester_user_id: string;
+  requester_name: string;
+  requested_permission: string;
+  plant_id: number | null;
+  plant_name: string | null;
+  status: string;
+  request_date: string;
+  comment: string | null;
+  processed_by: string | null;
+  processed_date: string | null;
+  processor_comment: string | null;
+}
+
+interface WriteOffReasonRow extends RowDataPacket {
+  id: number;
+  reason: string;
+  equipment_count: number;
+}
+
+type RepairStatus = "needs_repair" | "at_supplier" | "returned" | "in_backup" | null;
+
+interface RepairItemRow extends RowDataPacket {
+  id: number;
+  service_tag: string;
+  model_name: string | null;
+  vendor_name: string | null;
+  supplier_name: string | null;
+  supplier_email: string | null;
+  repair_status: RepairStatus;
+  repair_note: string | null;
+  repair_physical_location: string | null;
+  repair_sent_date: Date | null;
+  repair_returned_date: Date | null;
+  repair_marked_backup_date: Date | null;
+  days_in_repair: number | null;
+}
+
+interface AuditPeriodRow extends RowDataPacket {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+}
+
+interface EmployeeRow extends RowDataPacket {
+  employee_no: string;
+  name: string;
+}
+
+interface LocationRow extends RowDataPacket {
+  id: number;
+  name: string;
+  parent_id?: number | null;
+}
+
 const PORT = process.env.PORT || 3000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const DEFAULT_CERT_PATH = path.join(process.cwd(), "certs", "ssl.pem");
@@ -746,14 +832,14 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         // Get all plants for mapping plant_id to plant name
-        const [plants] = await pool.query<RowDataPacket[]>(
+        const [plants] = await pool.query<PlantRow[]>(
           "SELECT id, name FROM it_equipment_plant WHERE status = 1 ORDER BY name"
         );
 
         // Create plant mapping as plain object for serialization
         const plantMap: Record<number, string> = {};
         const plantsList: Array<{ id: number; name: string }> = [];
-        plants.forEach((plant: any) => {
+        plants.forEach((plant) => {
           plantMap[plant.id] = plant.name;
           plantsList.push({ id: plant.id, name: plant.name });
         });
@@ -761,8 +847,8 @@ async function handleRequest(req: Request): Promise<Response> {
         return new Response(
           permissionsPage(
             {
-              users: users as any[],
-              permissions: permissions as any[],
+              users: users as Parameters<typeof permissionsPage>[0]["users"],
+              permissions: permissions as Parameters<typeof permissionsPage>[0]["permissions"],
               plantMap: plantMap,
               plants: plantsList,
             },
@@ -954,8 +1040,8 @@ async function handleRequest(req: Request): Promise<Response> {
         return new Response(
           approvalsPage(
             {
-              pendingRequests: pendingRequests as any[],
-              processedRequests: processedRequests as any[],
+              pendingRequests: pendingRequests as Parameters<typeof approvalsPage>[0]["pendingRequests"],
+              processedRequests: processedRequests as Parameters<typeof approvalsPage>[0]["processedRequests"],
               totalProcessed: Number(totalProcessed),
               currentPage: page,
               totalPages: totalPages,
@@ -3589,7 +3675,19 @@ async function handleRequest(req: Request): Promise<Response> {
         const locationData = { regions, countries, plants, departments, areas, subAreas };
 
         return new Response(
-          inventoryAuditReviewPage(allPeriods as any, defaultPeriod as any, isAdmin, hasPcPwView, session.username, hasAuditApprover, allPeriodsForTab as any, message, messageType, locationData as any, employees as any),
+          inventoryAuditReviewPage(
+            allPeriods as Parameters<typeof inventoryAuditReviewPage>[0],
+            defaultPeriod as Parameters<typeof inventoryAuditReviewPage>[1],
+            isAdmin,
+            hasPcPwView,
+            session.username,
+            hasAuditApprover,
+            allPeriodsForTab as Parameters<typeof inventoryAuditReviewPage>[6],
+            message,
+            messageType,
+            locationData as Parameters<typeof inventoryAuditReviewPage>[9],
+            employees as Parameters<typeof inventoryAuditReviewPage>[10]
+          ),
           { headers: { "Content-Type": "text/html" } }
         );
       } catch (err) {
@@ -4997,7 +5095,7 @@ async function getWriteOffReasonsData() {
   `);
 
   return {
-    writeOffReasons: writeOffReasons.map((w: any) => ({
+    writeOffReasons: (writeOffReasons as WriteOffReasonRow[]).map((w) => ({
       id: w.id,
       reason: w.reason,
       equipment_count: Number(w.equipment_count) || 0,
@@ -5089,52 +5187,26 @@ async function getRepairsData() {
     `),
   ]);
 
+  const mapRepairItem = (item: RepairItemRow) => ({
+    id: item.id,
+    service_tag: item.service_tag,
+    model_name: item.model_name,
+    vendor_name: item.vendor_name,
+    supplier_name: item.supplier_name,
+    supplier_email: item.supplier_email,
+    repair_status: item.repair_status,
+    repair_note: item.repair_note,
+    repair_physical_location: item.repair_physical_location,
+    repair_sent_date: item.repair_sent_date ? item.repair_sent_date.toISOString().split('T')[0] : null,
+    repair_returned_date: item.repair_returned_date ? item.repair_returned_date.toISOString().split('T')[0] : null,
+    repair_marked_backup_date: item.repair_marked_backup_date ? item.repair_marked_backup_date.toISOString().split('T')[0] : null,
+    days_in_repair: item.days_in_repair !== null ? Number(item.days_in_repair) : null,
+  });
+
   return {
-    needsRepair: needsRepair[0].map((item: any) => ({
-      id: item.id,
-      service_tag: item.service_tag,
-      model_name: item.model_name,
-      vendor_name: item.vendor_name,
-      supplier_name: item.supplier_name,
-      supplier_email: item.supplier_email,
-      repair_status: item.repair_status,
-      repair_note: item.repair_note,
-      repair_physical_location: item.repair_physical_location,
-      repair_sent_date: item.repair_sent_date ? item.repair_sent_date.toISOString().split('T')[0] : null,
-      repair_returned_date: item.repair_returned_date ? item.repair_returned_date.toISOString().split('T')[0] : null,
-      repair_marked_backup_date: item.repair_marked_backup_date ? item.repair_marked_backup_date.toISOString().split('T')[0] : null,
-      days_in_repair: item.days_in_repair !== null ? Number(item.days_in_repair) : null,
-    })),
-    atSupplier: atSupplier[0].map((item: any) => ({
-      id: item.id,
-      service_tag: item.service_tag,
-      model_name: item.model_name,
-      vendor_name: item.vendor_name,
-      supplier_name: item.supplier_name,
-      supplier_email: item.supplier_email,
-      repair_status: item.repair_status,
-      repair_note: item.repair_note,
-      repair_physical_location: item.repair_physical_location,
-      repair_sent_date: item.repair_sent_date ? item.repair_sent_date.toISOString().split('T')[0] : null,
-      repair_returned_date: item.repair_returned_date ? item.repair_returned_date.toISOString().split('T')[0] : null,
-      repair_marked_backup_date: item.repair_marked_backup_date ? item.repair_marked_backup_date.toISOString().split('T')[0] : null,
-      days_in_repair: item.days_in_repair !== null ? Number(item.days_in_repair) : null,
-    })),
-    returned: returned[0].map((item: any) => ({
-      id: item.id,
-      service_tag: item.service_tag,
-      model_name: item.model_name,
-      vendor_name: item.vendor_name,
-      supplier_name: item.supplier_name,
-      supplier_email: item.supplier_email,
-      repair_status: item.repair_status,
-      repair_note: item.repair_note,
-      repair_physical_location: item.repair_physical_location,
-      repair_sent_date: item.repair_sent_date ? item.repair_sent_date.toISOString().split('T')[0] : null,
-      repair_returned_date: item.repair_returned_date ? item.repair_returned_date.toISOString().split('T')[0] : null,
-      repair_marked_backup_date: item.repair_marked_backup_date ? item.repair_marked_backup_date.toISOString().split('T')[0] : null,
-      days_in_repair: item.days_in_repair !== null ? Number(item.days_in_repair) : null,
-    })),
+    needsRepair: (needsRepair[0] as RepairItemRow[]).map(mapRepairItem),
+    atSupplier: (atSupplier[0] as RepairItemRow[]).map(mapRepairItem),
+    returned: (returned[0] as RepairItemRow[]).map(mapRepairItem),
   };
 }
 
