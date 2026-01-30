@@ -339,6 +339,8 @@ async function runMigration(fileName: string): Promise<void> {
           errorMessage.includes("Duplicate key name") ||
           (errorMessage.includes("Table") && errorMessage.includes("already exists")) ||
           errorCode === "ER_TABLE_EXISTS_ERROR" ||
+          errorCode === "ER_CANT_DROP_FIELD_OR_KEY" ||
+          errorMessage.includes("check that column/key exists") ||
           sqlState === "42S01" ||
           sqlState === "HY000" ||
           errorMessage.includes("RESIGNAL when handler not active") ||
