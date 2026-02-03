@@ -115,10 +115,10 @@ export function permissionsPage(
               </select>
             </div>
             <div>
-              <label class="label">Plant</label>
+              <label class="label">Plant <span class="text-red-500">*</span></label>
               <select name="plant_id" id="plant-select" class="select-field" required>
-                <option value="">Select Plant</option>
-                <option value="0">All</option>
+                <option value="">Select Plant (required)</option>
+                <option value="0" selected>All (Global)</option>
                 ${data.plants && data.plants.length > 0
                   ? data.plants
                       .map((plant) => `<option value="${plant.id}">${escapeHtml(plant.name)}</option>`)
@@ -200,9 +200,14 @@ export function permissionsPage(
                   if (permission === 'login' || permission === 'global_admin') {
                     // Force plant_id to 0 for global permissions
                     plantSelect.value = '0';
-                    plantSelect.disabled = true;
+                    // Use readonly attribute instead of disabled to ensure value is submitted
+                    plantSelect.setAttribute('readonly', 'true');
+                    // Add Tailwind classes for readonly styling (works in light and dark mode)
+                    plantSelect.classList.add('bg-gray-100', 'dark:bg-gray-800', 'cursor-not-allowed', 'opacity-75');
                   } else {
-                    plantSelect.disabled = false;
+                    plantSelect.removeAttribute('readonly');
+                    // Remove readonly styling classes
+                    plantSelect.classList.remove('bg-gray-100', 'dark:bg-gray-800', 'cursor-not-allowed', 'opacity-75');
                   }
                 });
               }
