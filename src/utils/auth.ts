@@ -55,6 +55,28 @@ export async function verifyCredentials(username: string, password: string): Pro
     return true;
   }
 
+  // TEST_MODE: Allow login if user exists in it_employees_list (bypasses auth API)
+  if (process.env.TEST_MODE === "true") {
+    try {
+      const pool = (await import("../db")).default;
+      const [users] = await pool.query<import("mysql2").RowDataPacket[]>(
+        "SELECT employee_no FROM `it_employees_list` WHERE `employee_no` = ? OR `user_id` = ?",
+        [username, username]
+      );
+
+      if (users.length > 0) {
+        console.log("TEST_MODE: User authenticated from database:", username);
+        return true;
+      }
+
+      console.log("TEST_MODE: User not found in database:", username);
+      return false;
+    } catch (error) {
+      console.error("TEST_MODE: Database authentication error:", error);
+      return false;
+    }
+  }
+
   // Proceed with normal auth API call for non-admin users
   try {
     const formData = new URLSearchParams();
@@ -74,11 +96,11 @@ export async function verifyCredentials(username: string, password: string): Pro
     }
 
     const text = await response.text();
-    
+
     // Match PHP implementation: trim($response) === "TRUE"
     // Handle both plain text "TRUE"/"FALSE" and HTML responses
     const trimmed = text.trim();
-    
+
     // If it's HTML, extract body content
     if (trimmed.includes("<body>")) {
       const bodyMatch = trimmed.match(/<body>(.*?)<\/body>/i);
@@ -86,7 +108,7 @@ export async function verifyCredentials(username: string, password: string): Pro
         return bodyMatch[1].trim() === "TRUE";
       }
     }
-    
+
     // Otherwise check the trimmed response directly
     return trimmed === "TRUE";
   } catch (error) {

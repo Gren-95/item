@@ -71,7 +71,7 @@ interface AuditData {
   writeOffReasons: SelectOption[];
 }
 
-export function auditPage(data: AuditData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, isReadonly: boolean = false, userPlantId: number | null = null, allowedRegionId: number | null = null, allowedCountryId: number | null = null, username: string | null = null, hasAuditApprover: boolean = false, hasManageLocations: boolean = false): string {
+export function auditPage(data: AuditData, success: string | boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, isReadonly: boolean = false, userPlantId: number | null = null, allowedRegionId: number | null = null, allowedCountryId: number | null = null, username: string | null = null, hasAuditApprover: boolean = false, hasManageLocations: boolean = false): string {
   const eq = data.equipment;
   
   const content = `
@@ -83,17 +83,11 @@ export function auditPage(data: AuditData, success: boolean = false, error: stri
           </svg>
         </a>
         <div class="flex items-center gap-2">
-          ${isReadonly 
-            ? require("./icons").INFORMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-6 h-6 sm:w-7 sm:h-7')
-            : require("./icons").EDIT_ICON.replace('w-4 h-4', 'w-6 h-6 sm:w-7 sm:h-7')
-          }
-          <div class="flex items-center gap-2">
-          ${isReadonly 
+          ${isReadonly
             ? INFORMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-6 h-6 sm:w-7 sm:h-7').replace('text-current', 'text-gray-900 dark:text-white')
             : EDIT_ICON.replace('w-4 h-4', 'w-6 h-6 sm:w-7 sm:h-7').replace('text-current', 'text-gray-900 dark:text-white')
           }
           <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">${isReadonly ? 'View Equipment' : 'Edit Equipment'}</h1>
-        </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-mono text-xs sm:text-sm">${escapeHtml(eq.service_tag)}</span>

@@ -17,13 +17,14 @@ import { pcPwPage } from "./templates/pc-pw";
 import { logger } from "./utils/logger";
 import { getSessionFromRequest, createSession, deleteSession, createSessionCookie, deleteSessionCookie } from "./utils/session";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
-import { 
-  verifyCredentials, 
-  changePassword, 
-  hasItemLoginPermission, 
+import { validateEmailConfig, sendApprovalNotification, sendApprovalDecisionNotification, verifyApprovalToken } from "./utils/email";
+import { startScheduler } from "./utils/scheduler";
+import {
+  verifyCredentials,
+  changePassword,
+  hasItemLoginPermission,
   hasAdminPermission,
   hasPermission,
-  hasSearchPermission,
   hasAddEquipmentPermission,
   hasEditEquipmentPermission,
   getUserPlantId,
@@ -321,30 +322,53 @@ async function executeApprovedAction(
     } else if (actionType === "edit_equipment") {
       // Handle equipment edit - extract from actionData
       const id = actionData.id as number;
-      const model_id = actionData.model_id as number | null;
-      const equipment_sub_area_id = actionData.equipment_sub_area_id as number | null;
-      const assigned_to = actionData.assigned_to as string | null;
-      const teamviewer = actionData.teamviewer as number | null;
-      const comment = actionData.comment as string | null;
-      const inventory_period_id = actionData.inventory_period_id as number | null;
-      const vendor_id = actionData.vendor_id as number | null;
-      const supplier_id = actionData.supplier_id as number | null;
-      const purchase_date = actionData.purchase_date as string | null;
-      const warranty_expiry_date = actionData.warranty_expiry_date as string | null;
-      const cerf = actionData.cerf as number || 0;
-      const ip = actionData.ip as string | null;
-      const mac_addresses = actionData.mac_addresses as string | null;
 
-      const [equipment] = await pool.query<RowDataPacket[]>(
-        "SELECT service_tag FROM it_equipment WHERE id = ?",
+      // Get current equipment data to preserve unchanged values
+      const [currentEquipment] = await pool.query<RowDataPacket[]>(
+        `SELECT e.*, el.assigned_to, el.equipment_sub_area_id, el.comment, el.inventory_period_id
+         FROM it_equipment e
+         LEFT JOIN it_equipment_log el ON e.id = el.equipment_id
+         WHERE e.id = ?
+         ORDER BY el.id DESC LIMIT 1`,
         [id]
       );
 
-      if (equipment.length === 0) {
+      if (currentEquipment.length === 0) {
         throw new Error("Equipment not found");
       }
 
-      const service_tag = equipment[0].service_tag;
+      const current = currentEquipment[0];
+      const service_tag = current.service_tag;
+
+      // Use new values if provided, otherwise keep existing values
+      const model_id = actionData.model_id !== null && actionData.model_id !== undefined && actionData.model_id !== ''
+        ? actionData.model_id as number : current.model_id;
+      const vendor_id = actionData.vendor_id !== null && actionData.vendor_id !== undefined && actionData.vendor_id !== ''
+        ? actionData.vendor_id as number : current.vendor_id;
+      const supplier_id = actionData.supplier_id !== null && actionData.supplier_id !== undefined && actionData.supplier_id !== ''
+        ? actionData.supplier_id as number : current.supplier_id;
+      const purchase_date = actionData.purchase_date !== null && actionData.purchase_date !== undefined && actionData.purchase_date !== ''
+        ? actionData.purchase_date as string : current.purchase_date;
+      const warranty_expiry_date = actionData.warranty_expiry_date !== null && actionData.warranty_expiry_date !== undefined && actionData.warranty_expiry_date !== ''
+        ? actionData.warranty_expiry_date as string : current.warranty_expiry_date;
+      const cerf = actionData.cerf !== null && actionData.cerf !== undefined && actionData.cerf !== ''
+        ? actionData.cerf as number : current.cerf;
+      const ip = actionData.ip !== null && actionData.ip !== undefined && actionData.ip !== ''
+        ? actionData.ip as string : current.ip;
+      const mac_addresses = actionData.mac_addresses !== null && actionData.mac_addresses !== undefined && actionData.mac_addresses !== ''
+        ? actionData.mac_addresses as string : current.mac_addresses;
+      const teamviewer = actionData.teamviewer !== null && actionData.teamviewer !== undefined && actionData.teamviewer !== ''
+        ? actionData.teamviewer as number : current.teamviewer;
+
+      // Log fields - use new values if provided, otherwise keep existing
+      const equipment_sub_area_id = actionData.equipment_sub_area_id !== null && actionData.equipment_sub_area_id !== undefined && actionData.equipment_sub_area_id !== ''
+        ? actionData.equipment_sub_area_id as number : current.equipment_sub_area_id;
+      const assigned_to = actionData.assigned_to !== null && actionData.assigned_to !== undefined && actionData.assigned_to !== ''
+        ? actionData.assigned_to as string : current.assigned_to;
+      const comment = actionData.comment !== null && actionData.comment !== undefined && actionData.comment !== ''
+        ? actionData.comment as string : current.comment;
+      const inventory_period_id = actionData.inventory_period_id !== null && actionData.inventory_period_id !== undefined && actionData.inventory_period_id !== ''
+        ? actionData.inventory_period_id as number : current.inventory_period_id;
 
       await pool.query(
         `UPDATE it_equipment SET
@@ -902,8 +926,34 @@ async function handleRequest(req: Request): Promise<Response> {
           const expiry_date = expiry_date_raw ? expiry_date_raw : null;
           const added_by_user_id = session.username;
 
+          // Detailed logging for debugging
+          logger.info("Permission form submission", {
+            traceId,
+            user_id,
+            plant_id_raw,
+            plant_id,
+            access_key,
+            value,
+            comment,
+            expiry_date,
+            hasUserId: !!user_id,
+            hasAccessKey: !!access_key,
+            hasValue: !!value,
+            hasComment: !!comment,
+            plantIdIsNaN: Number.isNaN(plant_id)
+          });
+
           if (!user_id || !access_key || !value || !comment || Number.isNaN(plant_id)) {
-            return Response.redirect("/permissions?error=" + encodeURIComponent("All fields are required (including plant; use 0 for global)"), 303);
+            const missingFields = [];
+            if (!user_id) missingFields.push("User");
+            if (Number.isNaN(plant_id)) missingFields.push("Plant");
+            if (!access_key) missingFields.push("Permission");
+            if (!value) missingFields.push("Role");
+            if (!comment) missingFields.push("Comment");
+
+            const errorMsg = `Missing required fields: ${missingFields.join(", ")}`;
+            logger.warn("Permission validation failed", { traceId, errorMsg, missingFields });
+            return Response.redirect("/permissions?error=" + encodeURIComponent(errorMsg), 303);
           }
 
           // Validate: login permission must be global (plant_id = 0)
@@ -970,6 +1020,100 @@ async function handleRequest(req: Request): Promise<Response> {
         logger.error("Error processing permission action", err, { traceId, action });
         const errorMessage = err instanceof Error ? err.message : "An error occurred";
         return Response.redirect("/permissions?error=" + encodeURIComponent(errorMessage), 303);
+      }
+    }
+
+    // Quick approve API endpoint (from email link)
+    if (path === "/api/approvals/quick-approve" && req.method === "GET") {
+      const traceId = crypto.randomUUID();
+      logger.info("Quick approve request", { traceId, method: req.method, path });
+
+      try {
+        const token = url.searchParams.get("token");
+        if (!token) {
+          return Response.redirect("/approvals?error=" + encodeURIComponent("Invalid approval link"), 303);
+        }
+
+        // Verify token
+        const verified = verifyApprovalToken(token);
+        if (!verified) {
+          return Response.redirect("/approvals?error=" + encodeURIComponent("Invalid or expired approval link"), 303);
+        }
+
+        const { requestId } = verified;
+
+        // Check if user is logged in
+        const session = getSessionFromRequest(req);
+        if (!session) {
+          return Response.redirect(`/login?redirect=/api/approvals/quick-approve?token=${encodeURIComponent(token)}`, 302);
+        }
+
+        // Get user info
+        const employeeNo = await getEmployeeNo(session.username, pool);
+        if (!employeeNo) {
+          return Response.redirect("/approvals?error=" + encodeURIComponent("Unable to verify your identity"), 303);
+        }
+
+        // Check if user has admin permission
+        const userIsAdmin = await hasAdminPermission(session.username, pool);
+        if (!userIsAdmin) {
+          return Response.redirect("/approvals?error=" + encodeURIComponent("You do not have permission to approve requests"), 303);
+        }
+
+        // Get the approval request
+        const [requests] = await pool.query<RowDataPacket[]>(
+          `SELECT id, status, action_type, action_data, permission_required, created_by
+           FROM it_request
+           WHERE id = ? LIMIT 1`,
+          [requestId]
+        );
+
+        if (requests.length === 0) {
+          return Response.redirect("/approvals?error=" + encodeURIComponent("Approval request not found"), 303);
+        }
+
+        const request = requests[0];
+
+        // Check if already processed
+        if (request.status !== "pending") {
+          return Response.redirect("/approvals?info=" + encodeURIComponent("This request has already been " + request.status), 303);
+        }
+
+        // Parse action data
+        const actionData = typeof request.action_data === 'string'
+          ? JSON.parse(request.action_data)
+          : request.action_data;
+
+        // Execute the approved action (same as regular approve)
+        await executeApprovedAction(request.action_type, actionData, pool);
+
+        // Approve the request
+        // Admin user doesn't have an entry in it_employees_list, so set reviewed_by to NULL for admin
+        const reviewedBy = employeeNo === process.env.ADMIN_USERNAME ? null : employeeNo;
+        await pool.query(
+          `UPDATE it_request
+           SET status = 'approved', reviewed_by = ?, reviewed_at = NOW()
+           WHERE id = ?`,
+          [reviewedBy, requestId]
+        );
+
+        logger.info("Quick approval processed", { traceId, requestId, approvedBy: employeeNo });
+
+        sendApprovalDecisionNotification(
+          requestId,
+          request.permission_required,
+          request.action_type,
+          actionData,
+          request.created_by,
+          'approved',
+          employeeNo,
+          pool
+        ).catch((err) => console.error("Failed to send approval decision notification:", err));
+
+        return Response.redirect("/approvals?success=" + encodeURIComponent("Request approved successfully"), 303);
+      } catch (error) {
+        logger.error("Quick approve failed", error, { traceId });
+        return Response.redirect("/approvals?error=" + encodeURIComponent("Failed to process approval"), 303);
       }
     }
 
@@ -1506,12 +1650,26 @@ async function handleRequest(req: Request): Promise<Response> {
           await executeApprovedAction(request.action_type, actionData, pool);
 
           // Update request status
+          // Admin user doesn't have an entry in it_employees_list, so set reviewed_by to NULL for admin
+          const reviewedBy = employeeNo === process.env.ADMIN_USERNAME ? null : employeeNo;
           await pool.query(
-            `UPDATE it_request 
-             SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP 
+            `UPDATE it_request
+             SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
              WHERE id = ?`,
-            [employeeNo, requestId]
+            [reviewedBy, requestId]
           );
+
+          // Send decision notification (fire-and-forget)
+          sendApprovalDecisionNotification(
+            requestId,
+            request.permission_required,
+            request.action_type,
+            actionData,
+            request.created_by,
+            'approved',
+            employeeNo,
+            pool
+          ).catch((err) => console.error("Failed to send approval decision notification:", err));
 
           logger.info("Request approved", { traceId, requestId, reviewer: employeeNo });
           return Response.redirect("/approvals?success=" + encodeURIComponent("Request approved and action executed"), 303);
@@ -1520,12 +1678,39 @@ async function handleRequest(req: Request): Promise<Response> {
             return Response.redirect("/approvals?error=" + encodeURIComponent("Rejection reason is required"), 303);
           }
 
-          await pool.query(
-            `UPDATE it_request 
-             SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, rejection_reason = ? 
-             WHERE id = ?`,
-            [employeeNo, rejectionReason, requestId]
+          // Get the request data before updating
+          const [requests] = await pool.query<RowDataPacket[]>(
+            "SELECT * FROM it_request WHERE id = ? AND status = 'pending'",
+            [requestId]
           );
+
+          if (requests.length === 0) {
+            return Response.redirect("/approvals?error=" + encodeURIComponent("Request not found or already processed"), 303);
+          }
+
+          const request = requests[0];
+          const actionData = JSON.parse(request.action_data);
+
+          // Admin user doesn't have an entry in it_employees_list, so set reviewed_by to NULL for admin
+          const reviewedBy = employeeNo === process.env.ADMIN_USERNAME ? null : employeeNo;
+          await pool.query(
+            `UPDATE it_request
+             SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, rejection_reason = ?
+             WHERE id = ?`,
+            [reviewedBy, rejectionReason, requestId]
+          );
+
+          // Send decision notification (fire-and-forget)
+          sendApprovalDecisionNotification(
+            requestId,
+            request.permission_required,
+            request.action_type,
+            actionData,
+            request.created_by,
+            'rejected',
+            employeeNo,
+            pool
+          ).catch((err) => console.error("Failed to send approval decision notification:", err));
 
           logger.info("Request rejected", { traceId, requestId, reviewer: employeeNo });
           return Response.redirect("/approvals?success=" + encodeURIComponent("Request rejected"), 303);
@@ -1546,17 +1731,10 @@ async function handleRequest(req: Request): Promise<Response> {
         return Response.redirect("/login?redirect=/", 302);
       }
 
-      // Check search permission
+      // Get user plant ID for filtering results
       const userPlantId = await getUserPlantId(session.username, pool);
-      const hasSearch = await hasSearchPermission(session.username, pool, userPlantId);
-      if (!hasSearch) {
-        return new Response(
-          searchPage("", null, "You do not have permission to access the search page. Please contact your administrator.", isAdmin, hasPcPwView, userPlantId, currentUsername, hasAuditApprover),
-          {
-            headers: { "Content-Type": "text/html" },
-          }
-        );
-      }
+
+      // Search permission removed - all logged-in users can search
 
       const query = url.searchParams.get("q") || url.searchParams.get("serial") || "";
       
@@ -1738,6 +1916,16 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         if (requestId) {
+          // Send email notification (fire-and-forget)
+          sendApprovalNotification(
+            requestId,
+            userPlantId ? `${userPlantId}_add` : "add",
+            "add_equipment",
+            rawData,
+            employeeNo,
+            pool
+          ).catch((err) => console.error("Failed to send approval notification:", err));
+
           const addData = await getAddData(rawData.service_tag || "", userPlantId, isAdmin);
           return new Response(
             addPage(addData as unknown as AddDataType, false, `Approval request created (ID: ${requestId})`, isAdmin, hasPcPwView, currentUsername),
@@ -2015,12 +2203,22 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         if (requestId) {
+          // Send email notification (fire-and-forget)
+          sendApprovalNotification(
+            requestId,
+            "edit",
+            "edit_equipment",
+            rawData,
+            employeeNo,
+            pool
+          ).catch((err) => console.error("Failed to send approval notification:", err));
+
           const auditData = await getAuditData(id, userPlantId, isAdminPost);
           if (!auditData) {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData as unknown as AuditDataType, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
+            auditPage(auditData as unknown as AuditDataType, `Approval request created (ID: ${requestId})`, null, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -5284,6 +5482,12 @@ try {
   logger.error("Failed to run migrations on startup", err);
   console.error("⚠️  Migration failed, but continuing server startup:", err);
 }
+
+// Validate email configuration
+await validateEmailConfig();
+
+// Start background scheduler for email notifications
+startScheduler();
 
 const tlsOptions = await getTlsOptions();
 
