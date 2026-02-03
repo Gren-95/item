@@ -1,6 +1,6 @@
-import { layout } from "./layout";
+import { minimalLayout } from "./layout";
 
-export function loginPage(error: string | null = null, redirect: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
+export function loginPage(error: string | null = null, redirect: string | null = null): string {
   const errorAlert = error
     ? `<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6 text-red-700 dark:text-red-400">⚠️ ${escapeHtml(error)}</div>`
     : "";
@@ -69,7 +69,7 @@ export function loginPage(error: string | null = null, redirect: string | null =
     </div>
   `;
 
-  return layout("Login", content, isAdmin, hasPcPwView, username, hasAuditApprover);
+  return minimalLayout("Login", content);
 }
 
 function escapeHtml(str: string | null | undefined): string {

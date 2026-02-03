@@ -1,5 +1,48 @@
 import { navbar, navbarScripts } from "./navbar";
 
+/**
+ * Minimal layout without navbar - for login page
+ */
+export function minimalLayout(title: string, content: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title} - IT Equipment Management</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="/icons/favicon.ico" type="image/x-icon">
+  <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/icons/favicon-96x96.png" type="image/png" sizes="96x96">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1e293b" media="(prefers-color-scheme: dark)">
+  <script>
+    (function() {
+      const stored = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const theme = stored || (prefersDark ? 'dark' : 'light');
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    ${content}
+  </main>
+
+  <footer class="border-t border-gray-200 dark:border-gray-700 mt-auto transition-colors">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <p class="text-center text-gray-500 dark:text-gray-400 text-sm transition-colors">ITEM - IT Equipment Management</p>
+    </div>
+  </footer>
+</body>
+</html>`;
+}
+
 export function layout(title: string, content: string, isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -147,6 +190,181 @@ ${navbarScripts()}
 
     // Clean up when the page is unloaded
     window.addEventListener('beforeunload', () => clearInterval(intervalId));
+  })();
+</script>
+<script>
+  // Global search autocomplete
+  (function() {
+    const searchInput = document.getElementById('global-search');
+    const suggestionsContainer = document.getElementById('search-suggestions');
+    if (!searchInput || !suggestionsContainer) return;
+
+    // User permissions (injected from server)
+    const USER_PERMISSIONS = {
+      isAdmin: ${isAdmin},
+      hasPcPwView: ${hasPcPwView}
+    };
+
+    let debounceTimer;
+    let currentQuery = '';
+
+    // Navigation tabs that can be searched (with permission requirements)
+    const ALL_NAV_TABS = [
+      { name: 'Search Equipment', url: '/', keywords: ['search', 'equipment', 'home', 'find'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'Locations', url: '/locations', keywords: ['locations', 'location', 'sites', 'plants'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'Configurations', url: '/types', keywords: ['configurations', 'config', 'types', 'settings'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'Providers', url: '/vendors', keywords: ['providers', 'vendors', 'suppliers'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'Write-Off Reasons', url: '/write-off-reasons', keywords: ['write-off', 'writeoff', 'disposal', 'reasons'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'Repair Tracking', url: '/repairs', keywords: ['repair', 'repairs', 'fix', 'maintenance'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'Inventory Audit', url: '/inventory-audit', keywords: ['inventory', 'audit', 'stock'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'PC Passwords', url: '/pc-pw', keywords: ['pc', 'passwords', 'credentials'], requiresAdmin: false, requiresPcPw: true },
+      { name: 'Change Password', url: '/change-password', keywords: ['change', 'password', 'account'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'User Permissions', url: '/permissions', keywords: ['permissions', 'users', 'access', 'admin'], requiresAdmin: true, requiresPcPw: false },
+      { name: 'Add Equipment', url: '/add', keywords: ['add', 'new', 'create', 'equipment'], requiresAdmin: false, requiresPcPw: false }
+    ];
+
+    // Filter tabs based on user permissions
+    const NAV_TABS = ALL_NAV_TABS.filter(tab => {
+      if (tab.requiresAdmin && !USER_PERMISSIONS.isAdmin) return false;
+      if (tab.requiresPcPw && !USER_PERMISSIONS.hasPcPwView) return false;
+      return true;
+    });
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function hideSuggestions() {
+      suggestionsContainer.classList.add('hidden');
+      suggestionsContainer.innerHTML = '';
+    }
+
+    function findMatchingTabs(query) {
+      const lowerQuery = query.toLowerCase();
+
+      // Show all available tabs when typing "tabs", "pages", "menu", or "nav"
+      if (['tabs', 'pages', 'menu', 'nav', 'navigation', 'all'].some(kw => kw.startsWith(lowerQuery) || lowerQuery.startsWith(kw))) {
+        return NAV_TABS;
+      }
+
+      return NAV_TABS.filter(tab =>
+        tab.name.toLowerCase().includes(lowerQuery) ||
+        tab.keywords.some(kw => kw.includes(lowerQuery))
+      ).slice(0, 5);
+    }
+
+    function renderTabSuggestion(tab) {
+      return '<a href="' + tab.url + '" class="block px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors">' +
+        '<div class="flex items-center justify-between">' +
+          '<span class="text-sm font-medium text-gray-900 dark:text-white">' + escapeHtml(tab.name) + '</span>' +
+          '<span class="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">Page</span>' +
+        '</div>' +
+        '<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Go to ' + tab.url + '</div>' +
+      '</a>';
+    }
+
+    function renderEquipmentSuggestion(item) {
+      return '<a href="/audit/' + item.id + '" class="block px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors">' +
+        '<div class="flex items-center justify-between">' +
+          '<span class="font-mono text-sm font-medium text-gray-900 dark:text-white">' + escapeHtml(item.service_tag) + '</span>' +
+          '<span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">' + escapeHtml(item.type_name || 'Unknown') + '</span>' +
+        '</div>' +
+        '<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">' +
+          (item.assigned_to_name ? escapeHtml(item.assigned_to_name) : '<span class="italic">Unassigned</span>') +
+          (item.model_name ? ' &bull; ' + escapeHtml(item.model_name) : '') +
+        '</div>' +
+      '</a>';
+    }
+
+    function showSuggestions(equipmentResults, tabResults) {
+      if (equipmentResults.length === 0 && tabResults.length === 0) {
+        suggestionsContainer.innerHTML = '<div class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">No results found</div>';
+      } else {
+        let html = '';
+
+        // Show tab suggestions first
+        if (tabResults.length > 0) {
+          html += tabResults.map(renderTabSuggestion).join('');
+        }
+
+        // Then equipment results
+        if (equipmentResults.length > 0) {
+          html += equipmentResults.map(renderEquipmentSuggestion).join('');
+        }
+
+        suggestionsContainer.innerHTML = html;
+      }
+      suggestionsContainer.classList.remove('hidden');
+    }
+
+    async function fetchSuggestions(query) {
+      if (query.length < 2) {
+        hideSuggestions();
+        return;
+      }
+
+      // Find matching tabs immediately
+      const tabResults = findMatchingTabs(query);
+
+      try {
+        const response = await fetch('/api/search-suggestions?q=' + encodeURIComponent(query));
+        if (!response.ok) throw new Error('Search failed');
+        const equipmentResults = await response.json();
+        if (query === currentQuery) {
+          showSuggestions(equipmentResults, tabResults);
+        }
+      } catch (err) {
+        console.error('Search error:', err);
+        // Still show tab results even if equipment search fails
+        if (tabResults.length > 0) {
+          showSuggestions([], tabResults);
+        } else {
+          hideSuggestions();
+        }
+      }
+    }
+
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      currentQuery = query;
+
+      clearTimeout(debounceTimer);
+      if (query.length < 2) {
+        hideSuggestions();
+        return;
+      }
+
+      debounceTimer = setTimeout(() => fetchSuggestions(query), 300);
+    });
+
+    // Handle Enter key - go to main search
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const query = searchInput.value.trim();
+        if (query) {
+          window.location.href = '/?q=' + encodeURIComponent(query);
+        }
+      } else if (e.key === 'Escape') {
+        hideSuggestions();
+        searchInput.blur();
+      }
+    });
+
+    // Close suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!searchInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
+        hideSuggestions();
+      }
+    });
+
+    // Show suggestions again when focusing
+    searchInput.addEventListener('focus', () => {
+      if (currentQuery.length >= 2) {
+        fetchSuggestions(currentQuery);
+      }
+    });
   })();
 </script>
 </body>

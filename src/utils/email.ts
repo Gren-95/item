@@ -618,13 +618,6 @@ Item Inventory System
       ]
     });
 
-    // Log email HTML for testing
-    console.log(`\n========== EMAIL PREVIEW ==========`);
-    console.log(`To: ${adminEmails.join(", ")}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`\n--- HTML Content ---\n${html}\n`);
-    console.log(`===================================\n`);
-
     await transport.sendMail({
       from: SMTP_FROM,
       to: adminEmails.join(", "),

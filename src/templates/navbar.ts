@@ -21,33 +21,30 @@ export function navbar(
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
               </svg>
             </button>
-            ${navigationMenu(isAdmin, hasPcPwView, hasAuditApprover)}
-            <div class="h-8 w-px bg-gray-300 dark:bg-gray-600"></div>
-            <a href="/" class="text-xl font-semibold text-gray-900 dark:text-white transition-colors hover:text-blue-600 dark:hover:text-blue-400">
-              ITEM
-            </a>
+            ${navigationMenu(isAdmin, hasPcPwView, hasAuditApprover, username)}
           </div>
-          <div class="flex items-center gap-2">
-            <button 
-              id="logout-btn" 
-              class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" 
-              aria-label="Logout" 
-              title="Logout"
-              ${username ? `data-username="${username}"` : ''}
-            >
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-              </svg>
-            </button>
-            <button id="theme-toggle" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Toggle dark mode">
-              <svg id="theme-icon-light" class="w-6 h-6 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-              </svg>
-              <svg id="theme-icon-dark" class="w-6 h-6 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-              </svg>
-            </button>
+          <!-- Global Search Bar -->
+          <div class="flex-1 max-w-md mx-2 sm:mx-4 relative">
+            <div class="relative">
+              <input
+                type="text"
+                id="global-search"
+                placeholder="Search..."
+                autocomplete="off"
+                class="w-full pl-8 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-sm"
+              />
+              <div class="absolute inset-y-0 left-0 pl-2 sm:pl-3 flex items-center pointer-events-none">
+                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+              </div>
+            </div>
+            <div id="search-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+              <!-- Suggestions injected here -->
+            </div>
           </div>
+          <!-- Empty div to balance flex layout on larger screens -->
+          <div class="hidden sm:block w-10"></div>
         </div>
       </div>
     </nav>
@@ -66,10 +63,11 @@ export function navbarScripts(): string {
         const menuToggle = document.getElementById('menu-toggle');
         const navLinks = document.getElementById('nav-links');
         if (menuToggle && navLinks) {
-          menuToggle.addEventListener('click', () => {
+          menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
             navLinks.classList.toggle('hidden');
           });
-          
+
           // Close menu when clicking outside
           document.addEventListener('click', (e) => {
             const target = e.target;
@@ -77,29 +75,76 @@ export function navbarScripts(): string {
               navLinks.classList.add('hidden');
             }
           });
-        }
 
-        // Theme toggle functionality
-        const themeToggle = document.getElementById('theme-toggle');
-        const themeIconLight = document.getElementById('theme-icon-light');
-        const themeIconDark = document.getElementById('theme-icon-dark');
-        
-        if (themeToggle) {
-          themeToggle.addEventListener('click', () => {
-            const html = document.documentElement;
-            const isDark = html.classList.contains('dark');
-            
-            if (isDark) {
-              html.classList.remove('dark');
-              localStorage.setItem('theme', 'light');
-            } else {
-              html.classList.add('dark');
-              localStorage.setItem('theme', 'dark');
+          // Close menu on Escape key
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !navLinks.classList.contains('hidden')) {
+              navLinks.classList.add('hidden');
             }
           });
         }
 
-        // Listen for system theme changes
+        // Three-state theme toggle functionality
+        const themeButtons = document.querySelectorAll('.theme-btn');
+        const ACTIVE_CLASSES = 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm';
+        const INACTIVE_CLASSES = 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200';
+
+        function applyTheme(theme) {
+          const html = document.documentElement;
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+          if (theme === 'system') {
+            localStorage.removeItem('theme');
+            if (prefersDark) {
+              html.classList.add('dark');
+            } else {
+              html.classList.remove('dark');
+            }
+          } else if (theme === 'dark') {
+            localStorage.setItem('theme', 'dark');
+            html.classList.add('dark');
+          } else {
+            localStorage.setItem('theme', 'light');
+            html.classList.remove('dark');
+          }
+        }
+
+        function updateThemeButtons(activeTheme) {
+          themeButtons.forEach(btn => {
+            const btnTheme = btn.getAttribute('data-theme');
+            // Remove all classes first
+            ACTIVE_CLASSES.split(' ').forEach(c => btn.classList.remove(c));
+            INACTIVE_CLASSES.split(' ').forEach(c => btn.classList.remove(c));
+
+            if (btnTheme === activeTheme) {
+              ACTIVE_CLASSES.split(' ').forEach(c => btn.classList.add(c));
+            } else {
+              INACTIVE_CLASSES.split(' ').forEach(c => btn.classList.add(c));
+            }
+          });
+        }
+
+        // Initialize theme buttons state
+        function getCurrentTheme() {
+          const stored = localStorage.getItem('theme');
+          if (stored === 'dark') return 'dark';
+          if (stored === 'light') return 'light';
+          return 'system';
+        }
+
+        if (themeButtons.length > 0) {
+          updateThemeButtons(getCurrentTheme());
+
+          themeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+              const theme = btn.getAttribute('data-theme');
+              applyTheme(theme);
+              updateThemeButtons(theme);
+            });
+          });
+        }
+
+        // Listen for system theme changes (only applies when theme is 'system')
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
           if (!localStorage.getItem('theme')) {
             if (e.matches) {
@@ -115,10 +160,9 @@ export function navbarScripts(): string {
         if (logoutBtn) {
           logoutBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            // Get username from meta tag or data attribute
             const usernameMeta = document.querySelector('meta[name="username"]');
             const username = usernameMeta ? usernameMeta.getAttribute('content') : (this.getAttribute('data-username') || 'user');
-            if (confirm('Are you sure you want to log out, ' + username + '?')) {
+            if (confirm('Are you sure you want to sign out, ' + username + '?')) {
               window.location.href = '/logout';
             }
           });

@@ -74,14 +74,18 @@ test.describe("Authentication", () => {
     }
   });
 
-  test("logout button exists when logged in", async ({ page }) => {
+  test("logout button exists when logged in (in hamburger menu)", async ({ page }) => {
     await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
+    // Open hamburger menu first
+    const menuToggle = page.locator('#menu-toggle');
+    await menuToggle.click();
+
     // If there's a logout button, user is logged in
-    // Check for logout button with ID, aria-label, or text
+    // Check for logout button with ID, aria-label, or text (including "Sign Out")
     const logoutButton = page.locator(
-      '#logout-btn, [aria-label="Logout"], button:has-text("Logout"), a:has-text("Logout"), [data-action="logout"]'
+      '#logout-btn, [aria-label="Logout"], button:has-text("Logout"), a:has-text("Logout"), button:has-text("Sign Out"), [data-action="logout"]'
     );
 
     await expect(logoutButton.first()).toBeVisible();
