@@ -4056,6 +4056,65 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
+    // Equipment History API - Get all log entries for a device
+    if (path === "/api/equipment/history" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      try {
+        const equipmentId = url.searchParams.get("equipment_id");
+        if (!equipmentId) {
+          return new Response(JSON.stringify({ success: false, error: "Equipment ID required" }), {
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        // Get all log entries for this equipment with location and employee details
+        const [logs] = await pool.query<RowDataPacket[]>(`
+          SELECT
+            l.id,
+            l.created,
+            l.assigned_to,
+            emp.name as assigned_to_name,
+            l.equipment_sub_area_id,
+            CONCAT_WS(' - ', p.name, d.name, ar.name, sa.name) as location,
+            l.comment,
+            l.updated_by,
+            upd.name as updated_by_name,
+            l.is_written_off,
+            wor.reason as write_off_reason,
+            ip.inventory_nr
+          FROM it_equipment_log l
+          LEFT JOIN it_employees_list emp ON l.assigned_to = emp.employee_no
+          LEFT JOIN it_employees_list upd ON l.updated_by = upd.employee_no
+          LEFT JOIN it_equipment_sub_area sa ON l.equipment_sub_area_id = sa.id
+          LEFT JOIN it_equipment_area ar ON sa.area_id = ar.id
+          LEFT JOIN it_equipment_department d ON ar.department_id = d.id
+          LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
+          LEFT JOIN it_inventory_period ip ON l.inventory_period_id = ip.id
+          LEFT JOIN it_equipment_write_off_reason wor ON l.is_written_off = wor.id
+          WHERE l.equipment_id = ?
+          ORDER BY l.created DESC
+          LIMIT 50
+        `, [equipmentId]);
+
+        return new Response(JSON.stringify({ success: true, data: logs }), {
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (err) {
+        logger.error("Equipment history fetch failed", err, { traceId });
+        return new Response(JSON.stringify({ success: false, error: "Failed to fetch history" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+    }
+
     // Inventory Audit Review - API (live updates)
     if (path === "/api/inventory-audit/review" && req.method === "GET") {
       const session = getSessionFromRequest(req);

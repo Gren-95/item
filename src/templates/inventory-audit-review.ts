@@ -726,6 +726,84 @@ export function inventoryAuditReviewPage(
           else if (state === 'loading' && auditLoading) auditLoading.classList.remove('hidden');
         }
 
+        function formatDateTime(dateStr) {
+          if (!dateStr) return '-';
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function toggleHistory(equipmentId) {
+          const historySection = document.getElementById('equipment-history-' + equipmentId);
+          if (!historySection) return;
+
+          // Toggle visibility
+          if (!historySection.classList.contains('hidden')) {
+            historySection.classList.add('hidden');
+            return;
+          }
+
+          historySection.classList.remove('hidden');
+
+          const loadingEl = historySection.querySelector('.history-loading');
+          const entriesEl = historySection.querySelector('.history-entries');
+          const emptyEl = historySection.querySelector('.history-empty');
+          const countEl = historySection.querySelector('.history-count');
+
+          // Show loading
+          if (loadingEl) loadingEl.classList.remove('hidden');
+          if (entriesEl) entriesEl.classList.add('hidden');
+          if (emptyEl) emptyEl.classList.add('hidden');
+
+          try {
+            const response = await fetch('/api/equipment/history?equipment_id=' + equipmentId);
+            const result = await response.json();
+
+            if (loadingEl) loadingEl.classList.add('hidden');
+
+            if (result.success && result.data && result.data.length > 0) {
+              if (countEl) countEl.textContent = result.data.length + ' entries';
+              if (entriesEl) {
+                entriesEl.innerHTML = result.data.map(function(log) {
+                  return '<div class="px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30">' +
+                    '<div class="flex items-start justify-between gap-4">' +
+                      '<div class="flex-1 min-w-0">' +
+                        '<div class="flex items-center gap-2 text-sm">' +
+                          '<span class="text-gray-900 dark:text-white font-medium">' + formatDateTime(log.created) + '</span>' +
+                          (log.inventory_nr ? '<span class="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">' + escapeHtml(log.inventory_nr) + '</span>' : '') +
+                          (log.write_off_reason ? '<span class="px-1.5 py-0.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded">Written Off: ' + escapeHtml(log.write_off_reason) + '</span>' : '') +
+                        '</div>' +
+                        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-1 text-sm">' +
+                          '<div class="flex items-center gap-1.5">' +
+                            '<svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>' +
+                            '<span class="text-gray-600 dark:text-gray-400">' + (log.assigned_to_name ? escapeHtml(log.assigned_to + ' - ' + log.assigned_to_name) : (log.assigned_to ? escapeHtml(log.assigned_to) : 'Not assigned')) + '</span>' +
+                          '</div>' +
+                          '<div class="flex items-center gap-1.5">' +
+                            '<svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' +
+                            '<span class="text-gray-600 dark:text-gray-400 truncate">' + escapeHtml(log.location || 'No location') + '</span>' +
+                          '</div>' +
+                        '</div>' +
+                        (log.comment ? '<div class="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">' + escapeHtml(log.comment) + '</div>' : '') +
+                      '</div>' +
+                      (log.updated_by_name ? '<div class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">by ' + escapeHtml(log.updated_by_name) + '</div>' : '') +
+                    '</div>' +
+                  '</div>';
+                }).join('');
+                entriesEl.classList.remove('hidden');
+              }
+            } else {
+              if (emptyEl) emptyEl.classList.remove('hidden');
+              if (countEl) countEl.textContent = '0 entries';
+            }
+          } catch (err) {
+            console.error('Failed to load history:', err);
+            if (loadingEl) loadingEl.classList.add('hidden');
+            if (emptyEl) {
+              emptyEl.textContent = 'Failed to load history';
+              emptyEl.classList.remove('hidden');
+            }
+          }
+        }
+
         function renderEquipment(equipment) {
           const locationStr = [
             equipment.plant_name,
@@ -808,9 +886,9 @@ export function inventoryAuditReviewPage(
                   </div>
                 </div>
               </div>
-              <!-- Actions -->
-              <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex gap-3">
-                <button type="button" class="quick-edit-btn inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              <!-- Actions - Icon buttons in single row -->
+              <div class="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center gap-2">
+                <button type="button" class="quick-edit-btn p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors" title="Quick Edit"
                   data-equipment-id="\${equipment.id}"
                   data-service-tag="\${escapeHtml(equipment.service_tag)}"
                   data-assigned-to="\${escapeHtml(equipment.assigned_to || '')}"
@@ -822,17 +900,42 @@ export function inventoryAuditReviewPage(
                   data-area-id="\${equipment.area_id || ''}"
                   data-equipment-sub-area-id="\${equipment.equipment_sub_area_id || ''}"
                 >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                   </svg>
-                  Edit
                 </button>
-                <a href="/edit/\${equipment.id}" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-colors ml-auto">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <a href="/edit/\${equipment.id}" class="p-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" title="Full Edit">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                   </svg>
-                  Full Edit
                 </a>
+                <button type="button" class="history-toggle-btn p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors" title="View History" data-equipment-id="\${equipment.id}">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </button>
+              </div>
+              <!-- History Log Section (hidden by default) -->
+              <div id="equipment-history-\${equipment.id}" class="hidden border-t border-gray-200 dark:border-gray-700">
+                <div class="px-6 py-3 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Device History
+                  </h3>
+                  <span class="history-count text-xs text-gray-500 dark:text-gray-400"></span>
+                </div>
+                <div class="history-content max-h-64 overflow-y-auto">
+                  <div class="history-loading px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                    <svg class="w-6 h-6 animate-spin mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Loading history...
+                  </div>
+                  <div class="history-entries hidden divide-y divide-gray-100 dark:divide-gray-700"></div>
+                  <div class="history-empty hidden px-6 py-4 text-center text-gray-500 dark:text-gray-400 text-sm">No history records found</div>
+                </div>
               </div>
             </div>
           \`;
@@ -880,6 +983,15 @@ export function inventoryAuditReviewPage(
                 if (quickEditBtn) {
                   quickEditBtn.addEventListener('click', function() {
                     openQuickEditModal(this.dataset);
+                  });
+                }
+
+                // Add event listener for history toggle button
+                const historyToggleBtn = auditResult.querySelector('.history-toggle-btn');
+                if (historyToggleBtn) {
+                  historyToggleBtn.addEventListener('click', function() {
+                    const equipmentId = this.dataset.equipmentId;
+                    toggleHistory(equipmentId);
                   });
                 }
               }
