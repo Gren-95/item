@@ -665,7 +665,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
       const error = url.searchParams.get("error") || null;
       const redirect = url.searchParams.get("redirect") || null;
-      return new Response(loginPage(error, redirect, false, false), {
+      return new Response(loginPage(error, redirect), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -678,17 +678,17 @@ async function handleRequest(req: Request): Promise<Response> {
       const redirect = (formData.get("redirect") || "").toString() || "/";
 
       if (!username || !password) {
-        return new Response(loginPage("Username and password are required", redirect || null, false, false), {
+        return new Response(loginPage("Username and password are required", redirect || null), {
           headers: { "Content-Type": "text/html" },
         });
       }
 
       try {
         const isValid = await verifyCredentials(username, password);
-        
+
         if (!isValid) {
           logger.info("Failed login attempt", { traceId, username });
-          return new Response(loginPage("Invalid username or password", redirect || null, false, false), {
+          return new Response(loginPage("Invalid username or password", redirect || null), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -701,7 +701,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         // Check if user has item_login permission
         const hasPermission = await hasItemLoginPermission(username, pool);
-        
+
         // On first login with no existing permissions, seed full permissions for this user
         // Skip for admin user as they don't need database permissions
         if (!isAdmin) {
@@ -712,19 +712,19 @@ async function handleRequest(req: Request): Promise<Response> {
             await seedFullPermissionsForUser(username, pool);
           }
         }
-        
+
         if (!hasPermission) {
           logger.info("Login denied - missing item_login permission", { traceId, username });
-          return new Response(loginPage("You do not have permission to access this system. Please contact your administrator.", redirect || null, false, false), {
+          return new Response(loginPage("You do not have permission to access this system. Please contact your administrator.", redirect || null), {
             headers: { "Content-Type": "text/html" },
           });
         }
 
         // Create session
         const sessionId = createSession(username);
-        
+
         logger.info("User logged in", { traceId, username, isAdmin });
-        
+
         return new Response(null, {
           status: 302,
           headers: {
@@ -734,7 +734,7 @@ async function handleRequest(req: Request): Promise<Response> {
         });
       } catch (err) {
         logger.error("Login error", err, { traceId, username });
-        return new Response(loginPage("An error occurred during login. Please try again.", redirect || null, false, false), {
+        return new Response(loginPage("An error occurred during login. Please try again.", redirect || null), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -1114,6 +1114,65 @@ async function handleRequest(req: Request): Promise<Response> {
       } catch (error) {
         logger.error("Quick approve failed", error, { traceId });
         return Response.redirect("/approvals?error=" + encodeURIComponent("Failed to process approval"), 303);
+      }
+    }
+
+    // Search suggestions API for global search bar
+    if (path === "/api/search-suggestions" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const query = url.searchParams.get("q") || "";
+      if (query.trim().length < 2) {
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const searchTerm = `%${query.trim()}%`;
+        const [rows] = await pool.query<RowDataPacket[]>(
+          `SELECT DISTINCT
+            e.id,
+            e.service_tag,
+            t.type_name,
+            m.name as model_name,
+            CONCAT(emp.first_name, ' ', emp.last_name) as assigned_to_name
+          FROM it_equipment e
+          LEFT JOIN it_equipment_model m ON e.model_id = m.id
+          LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
+          LEFT JOIN it_equipment_type t ON pl.type_id = t.id
+          LEFT JOIN (
+            SELECT l1.* FROM it_equipment_log l1
+            INNER JOIN (
+              SELECT equipment_id, MAX(created) as max_created
+              FROM it_equipment_log
+              GROUP BY equipment_id
+            ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+          ) log ON e.id = log.equipment_id
+          LEFT JOIN it_employees_list emp ON log.assigned_to = emp.employee_no
+          WHERE
+            e.service_tag LIKE ?
+            OR t.type_name LIKE ?
+            OR m.name LIKE ?
+            OR CONCAT(emp.first_name, ' ', emp.last_name) LIKE ?
+          ORDER BY e.service_tag
+          LIMIT 5`,
+          [searchTerm, searchTerm, searchTerm, searchTerm]
+        );
+
+        return new Response(JSON.stringify(rows), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        logger.error("Search suggestions failed", error, { traceId });
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json" },
+        });
       }
     }
 

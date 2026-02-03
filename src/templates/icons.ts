@@ -61,6 +61,7 @@ export const PRINTER_ICON = iconSvg("M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 
 export const CHECK_ICON = iconSvg("M5 13l4 4L19 7");
 export const ARCHIVE_ICON = iconSvg("M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4");
 export const CLIPBOARD_CHECK_ICON = iconSvg("M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4");
+export const LOGOUT_ICON = iconSvg("M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1");
 
 // Helper function to create icon with custom size
 export function icon(iconName: keyof typeof iconMap, size: string = "w-5 h-5", className: string = ""): string {

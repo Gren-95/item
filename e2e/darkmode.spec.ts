@@ -1,83 +1,119 @@
 import { test, expect } from "@playwright/test";
+import { login, TEST_ADMIN_USER } from "./fixtures";
 
 test.describe("Dark Mode (#29)", () => {
-  test("theme toggle button exists in navigation", async ({ page }) => {
+  test("theme selector exists in hamburger menu", async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
-    const themeToggle = page.locator(
-      '#theme-toggle, button[aria-label*="theme" i], button[aria-label*="dark" i], [data-theme-toggle]'
-    );
-    await expect(themeToggle.first()).toBeVisible();
+    // Open hamburger menu first
+    const menuToggle = page.locator('#menu-toggle');
+    await menuToggle.click();
+
+    // Theme selector should now be visible in the menu
+    const themeSelector = page.locator('#theme-selector');
+    await expect(themeSelector).toBeVisible();
   });
 
-  test("theme toggle has correct aria-label", async ({ page }) => {
+  test("theme selector has three options: Light, Dark, System", async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
-    const themeToggle = page.locator(
-      '#theme-toggle, button[aria-label*="theme" i], button[aria-label*="dark" i]'
-    ).first();
+    // Open hamburger menu
+    const menuToggle = page.locator('#menu-toggle');
+    await menuToggle.click();
 
-    if (await themeToggle.isVisible()) {
-      const ariaLabel = await themeToggle.getAttribute("aria-label");
-      expect(ariaLabel?.toLowerCase()).toContain("dark");
-    }
+    // Check that all three theme buttons exist
+    const lightBtn = page.locator('#theme-light');
+    const darkBtn = page.locator('#theme-dark');
+    const systemBtn = page.locator('#theme-system');
+
+    await expect(lightBtn).toBeVisible();
+    await expect(darkBtn).toBeVisible();
+    await expect(systemBtn).toBeVisible();
   });
 
-  test("theme icons are present (light and dark)", async ({ page }) => {
+  test("theme buttons have correct labels", async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
-    const lightIcon = page.locator('#theme-icon-light, [data-theme-icon="light"], .sun-icon');
-    const darkIcon = page.locator('#theme-icon-dark, [data-theme-icon="dark"], .moon-icon');
+    // Open hamburger menu
+    const menuToggle = page.locator('#menu-toggle');
+    await menuToggle.click();
 
-    // At least one should be visible (the active state)
-    const lightVisible = await lightIcon.first().isVisible().catch(() => false);
-    const darkVisible = await darkIcon.first().isVisible().catch(() => false);
+    const lightBtn = page.locator('#theme-light');
+    const darkBtn = page.locator('#theme-dark');
+    const systemBtn = page.locator('#theme-system');
 
-    expect(lightVisible || darkVisible).toBe(true);
+    await expect(lightBtn).toContainText('Light');
+    await expect(darkBtn).toContainText('Dark');
+    await expect(systemBtn).toContainText('System');
   });
 
-  test("clicking theme toggle changes theme", async ({ page }) => {
+  test("clicking dark theme button enables dark mode", async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
+
+    // Clear any existing theme preference
+    await page.evaluate(() => localStorage.removeItem("theme"));
+    await page.reload();
+
+    // Open hamburger menu
+    const menuToggle = page.locator('#menu-toggle');
+    await menuToggle.click();
+
+    const darkBtn = page.locator('#theme-dark');
+    await darkBtn.click();
+
+    // Wait for theme change
+    await page.waitForTimeout(100);
 
     const html = page.locator("html");
-    const initialDarkClass = await html.getAttribute("class");
-    const wasInitiallyDark = initialDarkClass?.includes("dark") || false;
+    const darkClass = await html.getAttribute("class");
+    expect(darkClass?.includes("dark")).toBe(true);
+  });
 
-    const themeToggle = page.locator(
-      '#theme-toggle, button[aria-label*="theme" i], button[aria-label*="dark" i], [data-theme-toggle]'
-    ).first();
+  test("clicking light theme button enables light mode", async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
+    await page.goto("/");
 
-    if (await themeToggle.isVisible()) {
-      await themeToggle.click();
+    // First set dark mode
+    await page.evaluate(() => localStorage.setItem("theme", "dark"));
+    await page.reload();
 
-      // Wait for theme change
-      await page.waitForTimeout(100);
+    // Open hamburger menu
+    const menuToggle = page.locator('#menu-toggle');
+    await menuToggle.click();
 
-      const newDarkClass = await html.getAttribute("class");
-      const isNowDark = newDarkClass?.includes("dark") || false;
+    const lightBtn = page.locator('#theme-light');
+    await lightBtn.click();
 
-      // Theme should have changed
-      expect(wasInitiallyDark).not.toBe(isNowDark);
-    }
+    // Wait for theme change
+    await page.waitForTimeout(100);
+
+    const html = page.locator("html");
+    const darkClass = await html.getAttribute("class") || "";
+    expect(darkClass.includes("dark")).toBe(false);
   });
 
   test("theme preference is saved to localStorage", async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
-    const themeToggle = page.locator(
-      '#theme-toggle, button[aria-label*="theme" i], button[aria-label*="dark" i], [data-theme-toggle]'
-    ).first();
+    // Open hamburger menu
+    const menuToggle = page.locator('#menu-toggle');
+    await menuToggle.click();
 
-    if (await themeToggle.isVisible()) {
-      await themeToggle.click();
+    const darkBtn = page.locator('#theme-dark');
+    await darkBtn.click();
 
-      // Check localStorage
-      const savedTheme = await page.evaluate(() => localStorage.getItem("theme"));
-      expect(savedTheme).toBeTruthy();
-    }
+    // Check localStorage
+    const savedTheme = await page.evaluate(() => localStorage.getItem("theme"));
+    expect(savedTheme).toBe("dark");
   });
 
   test("theme persists across page reloads", async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
     // Set dark mode
@@ -95,6 +131,7 @@ test.describe("Dark Mode (#29)", () => {
   test("system preference is detected when no saved preference", async ({ page }) => {
     // Clear localStorage and emulate dark mode preference
     await page.emulateMedia({ colorScheme: "dark" });
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
     // Clear any saved preference
@@ -110,6 +147,7 @@ test.describe("Dark Mode (#29)", () => {
 
   test("light mode system preference is detected", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light" });
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
     // Clear any saved preference
@@ -124,6 +162,7 @@ test.describe("Dark Mode (#29)", () => {
   });
 
   test("Tailwind dark mode classes are configured", async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
     // Set dark mode
@@ -138,21 +177,63 @@ test.describe("Dark Mode (#29)", () => {
   });
 });
 
-test.describe("Theme Responsiveness", () => {
-  test("theme toggle is accessible on mobile", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
+test.describe("System Theme Detection", () => {
+  test("system button clears localStorage theme preference", async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
-    const themeToggle = page.locator(
-      '#theme-toggle, button[aria-label*="theme" i], button[aria-label*="dark" i], [data-theme-toggle]'
-    ).first();
+    // First set a manual theme
+    await page.evaluate(() => localStorage.setItem("theme", "dark"));
+    await page.reload();
 
-    // Toggle should still be accessible on mobile
-    await expect(themeToggle).toBeVisible();
+    // Open hamburger menu
+    const menuToggle = page.locator('#menu-toggle');
+    await menuToggle.click();
+
+    // Click system button
+    const systemBtn = page.locator('#theme-system');
+    await systemBtn.click();
+
+    // localStorage should be cleared
+    const savedTheme = await page.evaluate(() => localStorage.getItem("theme"));
+    expect(savedTheme).toBeNull();
+  });
+
+  test("system theme follows browser preference when selected", async ({ page }) => {
+    // Emulate dark mode system preference
+    await page.emulateMedia({ colorScheme: "dark" });
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
+    await page.goto("/");
+
+    // Clear any saved preference to use system
+    await page.evaluate(() => localStorage.removeItem("theme"));
+    await page.reload();
+
+    const html = page.locator("html");
+    const darkClass = await html.getAttribute("class");
+    expect(darkClass?.includes("dark")).toBe(true);
+  });
+});
+
+test.describe("Theme Responsiveness", () => {
+  test("theme selector is accessible on mobile via hamburger menu", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
+    await page.goto("/");
+
+    // Open hamburger menu first
+    const menuToggle = page.locator('#menu-toggle');
+    await menuToggle.click();
+
+    const themeSelector = page.locator('#theme-selector');
+
+    // Selector should be accessible after opening menu on mobile
+    await expect(themeSelector).toBeVisible();
   });
 
   test("dark mode styling works on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
     await page.goto("/");
 
     await page.evaluate(() => localStorage.setItem("theme", "dark"));
