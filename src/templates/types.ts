@@ -64,10 +64,6 @@ export function typesPage(data: TypesData, success = "", error = "", isAdmin: bo
             )
             .join("")}
         </div>
-        <div class="flex items-center gap-2">
-          ${button("←", { variant: "secondary", size: "sm", className: "px-3", ariaLabel: "Previous section", onClick: "document.getElementById('tab-prev')?.click()" })}
-          ${button("→", { variant: "secondary", size: "sm", className: "px-3", ariaLabel: "Next section", onClick: "document.getElementById('tab-next')?.click()" })}
-        </div>
       </div>
 
       <div id="tab-panels" class="space-y-0">
@@ -82,8 +78,6 @@ export function typesPage(data: TypesData, success = "", error = "", isAdmin: bo
         (function() {
           const tabs = Array.from(document.querySelectorAll('.tab-btn'));
           const panels = Array.from(document.querySelectorAll('.tab-panel'));
-          const prev = document.getElementById('tab-prev');
-          const next = document.getElementById('tab-next');
           let active = 0;
 
           function setActive(idx) {
@@ -96,8 +90,6 @@ export function typesPage(data: TypesData, success = "", error = "", isAdmin: bo
           tabs.forEach((tab, i) => {
             tab.addEventListener('click', () => setActive(i));
           });
-          prev?.addEventListener('click', () => setActive(active - 1));
-          next?.addEventListener('click', () => setActive(active + 1));
 
           // simple touch swipe
           let startX = 0;

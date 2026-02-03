@@ -112,16 +112,16 @@ export function inventoryAuditPage(
       ${message ? renderAlert(messageType === "error" ? "" : message, messageType === "error" ? message : "") : ""}
 
       <!-- Main Card -->
-      <div class="bg-gray-800 rounded-xl shadow-xl overflow-hidden">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
         <!-- Header -->
-        <div class="px-6 py-4 border-b border-gray-700 flex items-center gap-3">
-          <div class="text-emerald-400">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+          <div class="text-emerald-500 dark:text-emerald-400">
             ${CLIPBOARD_CHECK_ICON}
           </div>
-          <h1 class="text-xl font-semibold text-white">Inventory Audit</h1>
+          <h1 class="text-xl font-semibold text-gray-900 dark:text-white">Inventory Audit</h1>
           <div class="ml-auto flex items-center gap-3">
             ${inventoryPeriod ? `
-              <span class="text-sm text-gray-400">${escapeHtml(inventoryPeriod.inventory_nr)}</span>
+              <span class="text-sm text-gray-500 dark:text-gray-400">${escapeHtml(inventoryPeriod.inventory_nr)}</span>
             ` : ''}
             ${hasAuditApprover ? `
               <a href="/inventory-audit/review" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
@@ -135,7 +135,7 @@ export function inventoryAuditPage(
         </div>
 
         <!-- Search Bar -->
-        <div class="px-6 py-4 border-b border-gray-700">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <form method="GET" action="/inventory-audit" class="flex gap-2">
             <div class="flex-1 relative">
               <input
@@ -143,12 +143,12 @@ export function inventoryAuditPage(
                 name="search"
                 value="${escapeHtml(searchQuery)}"
                 placeholder="Enter serial number..."
-                class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent pr-10"
+                class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent pr-10"
                 ${!inventoryPeriod ? 'disabled' : ''}
                 autofocus
               />
               ${searchQuery ? `
-                <a href="/inventory-audit" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                <a href="/inventory-audit" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                   </svg>
@@ -170,11 +170,11 @@ export function inventoryAuditPage(
         ${!inventoryPeriod ? `
           <!-- No Period Warning -->
           <div class="px-6 py-8 text-center">
-            <div class="text-yellow-400 mb-3">
+            <div class="text-yellow-500 dark:text-yellow-400 mb-3">
               ${EXCLAMATION_TRIANGLE_ICON}
             </div>
-            <h3 class="text-white font-medium mb-2">No Inventory Period</h3>
-            <p class="text-gray-400 text-sm mb-4">Create an inventory period to start auditing.</p>
+            <h3 class="text-gray-900 dark:text-white font-medium mb-2">No Inventory Period</h3>
+            <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">Create an inventory period to start auditing.</p>
             ${hasAuditApprover ? `
               <div class="flex items-center justify-center">
                 <a href="/inventory-audit/review" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
@@ -188,29 +188,29 @@ export function inventoryAuditPage(
           </div>
         ` : equipment ? `
           <!-- Equipment Info Section -->
-          <div class="bg-emerald-900/40 px-6 py-4">
+          <div class="bg-emerald-50 dark:bg-emerald-900/40 px-6 py-4">
             <div class="grid grid-cols-2 gap-x-8 gap-y-4">
               <!-- Location -->
               <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                 </svg>
                 <div>
-                  <div class="text-xs text-emerald-300/70 uppercase tracking-wide">Location</div>
-                  <div class="text-white font-medium">${escapeHtml(locationStr)}</div>
+                  <div class="text-xs text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wide">Location</div>
+                  <div class="text-gray-900 dark:text-white font-medium">${escapeHtml(locationStr)}</div>
                 </div>
               </div>
 
               <!-- User -->
               <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                 </svg>
                 <div>
-                  <div class="text-xs text-emerald-300/70 uppercase tracking-wide">User</div>
-                  <div class="text-white font-medium">
-                    ${equipment.assigned_to_name 
+                  <div class="text-xs text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wide">User</div>
+                  <div class="text-gray-900 dark:text-white font-medium">
+                    ${equipment.assigned_to_name
                       ? `${equipment.assigned_to} - ${escapeHtml(equipment.assigned_to_name)}`
                       : 'Not assigned'}
                   </div>
@@ -219,13 +219,13 @@ export function inventoryAuditPage(
 
               <!-- Latest Audit -->
               <div class="flex items-start gap-3 col-span-2 sm:col-span-1">
-                <svg class="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
                 <div class="flex-1">
-                  <div class="text-xs text-emerald-300/70 uppercase tracking-wide">Latest Audit</div>
-                  <div class="text-white font-medium">
-                    ${equipment.latest_audit_date 
+                  <div class="text-xs text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wide">Latest Audit</div>
+                  <div class="text-gray-900 dark:text-white font-medium">
+                    ${equipment.latest_audit_date
                       ? formatDateDisplay(equipment.latest_audit_date)
                       : 'Never audited'}
                   </div>
@@ -246,7 +246,7 @@ export function inventoryAuditPage(
 
           ${isOutOfRange ? `
             <!-- Out of Range Warning -->
-            <div class="px-6 py-3 bg-amber-900/30 border-t border-amber-700/50 flex items-center gap-2 text-amber-300 text-sm">
+            <div class="px-6 py-3 bg-amber-100 dark:bg-amber-900/30 border-t border-amber-300 dark:border-amber-700/50 flex items-center gap-2 text-amber-700 dark:text-amber-300 text-sm">
               <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
               </svg>
@@ -255,37 +255,37 @@ export function inventoryAuditPage(
           ` : ''}
 
           <!-- Equipment Details -->
-          <div class="px-6 py-4 border-t border-gray-700">
-            <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4">Equipment Details</h3>
+          <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+            <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-4">Equipment Details</h3>
             <div class="grid grid-cols-2 sm:grid-cols-5 gap-6">
               <!-- Type -->
               <div>
                 <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Type</div>
-                <div class="text-white text-sm">${escapeHtml(typeStr) || '-'}</div>
+                <div class="text-gray-900 dark:text-white text-sm">${escapeHtml(typeStr) || '-'}</div>
               </div>
 
               <!-- Teamviewer -->
               <div>
                 <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Teamviewer</div>
-                <div class="text-white text-sm font-mono">${equipment.teamviewer || '0'}</div>
+                <div class="text-gray-900 dark:text-white text-sm font-mono">${equipment.teamviewer || '0'}</div>
               </div>
 
               <!-- Status -->
               <div>
                 <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</div>
-                <div class="text-white text-sm">${statusLabel}</div>
+                <div class="text-gray-900 dark:text-white text-sm">${statusLabel}</div>
               </div>
 
               <!-- Device Age -->
               <div>
                 <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Device Age</div>
-                <div class="text-white text-sm">${formatDeviceAge(equipment.purchase_date)}</div>
+                <div class="text-gray-900 dark:text-white text-sm">${formatDeviceAge(equipment.purchase_date)}</div>
               </div>
 
               <!-- Warranty -->
               <div>
                 <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Warranty</div>
-                <div class="text-sm ${isWarrantyExpired(equipment.warranty_expiry_date) ? 'text-red-400' : 'text-white'}">
+                <div class="text-sm ${isWarrantyExpired(equipment.warranty_expiry_date) ? 'text-red-500 dark:text-red-400' : 'text-gray-900 dark:text-white'}">
                   ${formatWarrantyInfo(equipment.purchase_date, equipment.warranty_expiry_date)}
                 </div>
               </div>
@@ -293,7 +293,7 @@ export function inventoryAuditPage(
           </div>
 
           <!-- Action Buttons -->
-          <div class="px-6 py-4 border-t border-gray-700 flex gap-3">
+          <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex gap-3">
             <button type="button" id="edit-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -306,7 +306,7 @@ export function inventoryAuditPage(
               </svg>
               Print Tag
             </button>
-            <a href="/edit/${equipment.id}" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 hover:text-white transition-colors ml-auto">
+            <a href="/edit/${equipment.id}" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-colors ml-auto">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
               </svg>
@@ -316,36 +316,36 @@ export function inventoryAuditPage(
         ` : searchQuery ? `
           <!-- Not Found -->
           <div class="px-6 py-12 text-center">
-            <svg class="mx-auto h-12 w-12 text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <h3 class="text-white font-medium mb-1">No equipment found</h3>
-            <p class="text-gray-400 text-sm">Serial number "${escapeHtml(searchQuery)}" not found in system.</p>
+            <h3 class="text-gray-900 dark:text-white font-medium mb-1">No equipment found</h3>
+            <p class="text-gray-500 dark:text-gray-400 text-sm">Serial number "${escapeHtml(searchQuery)}" not found in system.</p>
           </div>
         ` : `
           <!-- Empty State -->
           <div class="px-6 py-12 text-center">
-            <svg class="mx-auto h-12 w-12 text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
-            <h3 class="text-white font-medium mb-1">Search for equipment</h3>
-            <p class="text-gray-400 text-sm">Enter a serial number to start auditing.</p>
+            <h3 class="text-gray-900 dark:text-white font-medium mb-1">Search for equipment</h3>
+            <p class="text-gray-500 dark:text-gray-400 text-sm">Enter a serial number to start auditing.</p>
           </div>
         `}
       </div>
 
       <!-- Edit Modal -->
       ${equipment ? `
-        <div id="editModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50">
-          <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div id="editModal" class="fixed inset-0 bg-black/50 dark:bg-black/70 hidden items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
-              <h3 class="text-lg font-semibold text-white flex items-center gap-2">
-                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg class="w-5 h-5 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                 </svg>
                 Quick Edit - ${escapeHtml(equipment.service_tag)}
               </h3>
-              <button onclick="closeEditModal()" class="text-gray-400 hover:text-white transition-colors">
+              <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -357,8 +357,8 @@ export function inventoryAuditPage(
               <input type="hidden" name="inventory_period_id" value="${inventoryPeriod?.id || ''}">
               
               <!-- Location Section -->
-              <div class="border-b border-gray-700 pb-4">
-                <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+              <div class="border-b border-gray-200 dark:border-gray-700 pb-4">
+                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -367,48 +367,48 @@ export function inventoryAuditPage(
                 </h4>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-xs text-gray-400 mb-1">Region</label>
-                    <select id="edit_region_id" name="region_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Region</label>
+                    <select id="edit_region_id" name="region_id" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="">Select...</option>
                       ${locationData?.regions.map(r => `<option value="${r.id}" ${equipment.region_id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join('') || ''}
                       ${isAdmin ? '<option value="__add_new__" class="text-blue-400 font-medium">+ Add new region...</option>' : ''}
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs text-gray-400 mb-1">Country</label>
-                    <select id="edit_country_id" name="country_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Country</label>
+                    <select id="edit_country_id" name="country_id" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="">Select region first...</option>
                       ${locationData?.countries.map(c => `<option value="${c.id}" data-parent="${c.parent_id}" ${equipment.country_id === c.id ? 'selected' : ''} ${equipment.region_id !== c.parent_id ? 'hidden' : ''}>${escapeHtml(c.name)}</option>`).join('') || ''}
                       ${isAdmin ? `<option value="__add_new__" data-parent="__always__" ${equipment.region_id ? '' : 'hidden'} class="text-blue-400 font-medium">+ Add new country...</option>` : ''}
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs text-gray-400 mb-1">Plant</label>
-                    <select id="edit_plant_id" name="plant_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Plant</label>
+                    <select id="edit_plant_id" name="plant_id" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="">Select country first...</option>
                       ${locationData?.plants.map(p => `<option value="${p.id}" data-parent="${p.parent_id}" ${equipment.plant_id === p.id ? 'selected' : ''} ${equipment.country_id !== p.parent_id ? 'hidden' : ''}>${escapeHtml(p.name)}</option>`).join('') || ''}
                       ${isAdmin ? `<option value="__add_new__" data-parent="__always__" ${equipment.country_id ? '' : 'hidden'} class="text-blue-400 font-medium">+ Add new plant...</option>` : ''}
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs text-gray-400 mb-1">Department</label>
-                    <select id="edit_department_id" name="department_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Department</label>
+                    <select id="edit_department_id" name="department_id" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="">Select plant first...</option>
                       ${locationData?.departments.map(d => `<option value="${d.id}" data-parent="${d.parent_id}" ${equipment.department_id === d.id ? 'selected' : ''} ${equipment.plant_id !== d.parent_id ? 'hidden' : ''}>${escapeHtml(d.name)}</option>`).join('') || ''}
                       ${hasManageLocations ? `<option value="__add_new__" data-parent="__always__" ${equipment.plant_id ? '' : 'hidden'} class="text-blue-400 font-medium">+ Add new department...</option>` : ''}
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs text-gray-400 mb-1">Area</label>
-                    <select id="edit_area_id" name="area_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Area</label>
+                    <select id="edit_area_id" name="area_id" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="">Select department first...</option>
                       ${locationData?.areas.map(a => `<option value="${a.id}" data-parent="${a.parent_id}" ${equipment.area_id === a.id ? 'selected' : ''} ${equipment.department_id !== a.parent_id ? 'hidden' : ''}>${escapeHtml(a.name)}</option>`).join('') || ''}
                       ${hasManageLocations ? `<option value="__add_new__" data-parent="__always__" ${equipment.department_id ? '' : 'hidden'} class="text-blue-400 font-medium">+ Add new area...</option>` : ''}
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs text-gray-400 mb-1">Sub-Area</label>
-                    <select id="edit_sub_area_id" name="equipment_sub_area_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Sub-Area</label>
+                    <select id="edit_sub_area_id" name="equipment_sub_area_id" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="">Select area first...</option>
                       ${locationData?.subAreas.map(s => `<option value="${s.id}" data-parent="${s.parent_id}" ${equipment.equipment_sub_area_id === s.id ? 'selected' : ''} ${equipment.area_id !== s.parent_id ? 'hidden' : ''}>${escapeHtml(s.name)}</option>`).join('') || ''}
                       ${hasManageLocations ? `<option value="__add_new__" data-parent="__always__" ${equipment.area_id ? '' : 'hidden'} class="text-blue-400 font-medium">+ Add new sub area...</option>` : ''}
@@ -419,44 +419,44 @@ export function inventoryAuditPage(
               
               <!-- Assigned To -->
               <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Assigned To (Employee No)</label>
-                <input 
-                  type="text" 
-                  name="assigned_to" 
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assigned To (Employee No)</label>
+                <input
+                  type="text"
+                  name="assigned_to"
                   value="${escapeHtml(equipment.assigned_to || '')}"
                   placeholder="e.g., 438928"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <p class="text-xs text-gray-500 mt-1">Current: ${equipment.assigned_to_name ? escapeHtml(equipment.assigned_to_name) : 'Not assigned'}</p>
               </div>
               
               <!-- TeamViewer -->
               <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">TeamViewer ID</label>
-                <input 
-                  type="text" 
-                  name="teamviewer" 
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TeamViewer ID</label>
+                <input
+                  type="text"
+                  name="teamviewer"
                   value="${equipment.teamviewer || ''}"
                   placeholder="TeamViewer ID"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               
               <!-- Comment -->
               <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Comment</label>
-                <textarea 
-                  name="comment" 
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Comment</label>
+                <textarea
+                  name="comment"
                   rows="2"
                   placeholder="Optional notes..."
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 >${escapeHtml(equipment.comment || '')}</textarea>
               </div>
               
               <div id="edit-error" class="hidden text-red-400 text-sm"></div>
               
               <div class="flex justify-end gap-3 pt-2">
-                <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
                 <button type="submit" id="save-edit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                   Save & Update Audit
                 </button>
@@ -471,16 +471,16 @@ export function inventoryAuditPage(
 
       <!-- Print Modal -->
       ${equipment ? `
-        <div id="printModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50">
-          <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+        <div id="printModal" class="fixed inset-0 bg-black/50 dark:bg-black/70 hidden items-center justify-center z-50">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
             <div class="flex justify-between items-center mb-4">
-              <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                 </svg>
                 Print Label
               </h3>
-              <button onclick="closePrintModal()" class="text-gray-400 hover:text-white transition-colors">
+              <button onclick="closePrintModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -488,22 +488,22 @@ export function inventoryAuditPage(
             </div>
             
             <div class="mb-4">
-              <p class="text-gray-400 text-sm mb-2">Service Tag:</p>
-              <p class="text-white font-mono text-lg">${escapeHtml(equipment.service_tag)}</p>
+              <p class="text-gray-500 dark:text-gray-400 text-sm mb-2">Service Tag:</p>
+              <p class="text-gray-900 dark:text-white font-mono text-lg">${escapeHtml(equipment.service_tag)}</p>
             </div>
             
             <div id="printers-loading" class="text-center py-4">
               <svg class="w-8 h-8 animate-spin text-emerald-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
               </svg>
-              <p class="text-gray-400 mt-2">Loading printers...</p>
+              <p class="text-gray-500 dark:text-gray-400 mt-2">Loading printers...</p>
             </div>
             
             <div id="printers-list" class="space-y-2 hidden max-h-60 overflow-y-auto"></div>
             <div id="printers-error" class="hidden text-red-400 text-sm mb-4"></div>
             
             <div class="flex justify-end gap-3 mt-4">
-              <button onclick="closePrintModal()" class="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+              <button onclick="closePrintModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
               <button id="confirm-print" onclick="confirmPrint()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors hidden">Print</button>
             </div>
           </div>
@@ -569,11 +569,11 @@ export function inventoryAuditPage(
                 const printerIp = escapeHtml(printer.ip || '');
                 const locationText = escapeHtml(location || 'No location');
                 const isFirst = idx === 0;
-                return '<button type="button" class="w-full text-left px-4 py-3 rounded-lg border transition-colors printer-option ' + 
-                       (isFirst ? 'border-emerald-500 bg-emerald-900/30' : 'border-gray-600 bg-gray-700 hover:border-gray-500') + 
+                return '<button type="button" class="w-full text-left px-4 py-3 rounded-lg border transition-colors printer-option ' +
+                       (isFirst ? 'border-emerald-500 bg-emerald-100 dark:bg-emerald-900/30' : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500') +
                        '" data-printer-name="' + printerName + '" data-printer-ip="' + printerIp + '">' +
-                       '<div class="font-medium text-white">' + printerName + '</div>' +
-                       '<div class="text-xs text-gray-400 mt-1">' + locationText + '</div>' +
+                       '<div class="font-medium text-gray-900 dark:text-white">' + printerName + '</div>' +
+                       '<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">' + locationText + '</div>' +
                        '</button>';
               }).join('');
               
@@ -587,11 +587,11 @@ export function inventoryAuditPage(
               document.querySelectorAll('.printer-option').forEach(btn => {
                 btn.addEventListener('click', function() {
                   document.querySelectorAll('.printer-option').forEach(b => {
-                    b.classList.remove('border-emerald-500', 'bg-emerald-900/30');
-                    b.classList.add('border-gray-600', 'bg-gray-700');
+                    b.classList.remove('border-emerald-500', 'bg-emerald-100', 'dark:bg-emerald-900/30');
+                    b.classList.add('border-gray-300', 'dark:border-gray-600', 'bg-gray-100', 'dark:bg-gray-700');
                   });
-                  this.classList.remove('border-gray-600', 'bg-gray-700');
-                  this.classList.add('border-emerald-500', 'bg-emerald-900/30');
+                  this.classList.remove('border-gray-300', 'dark:border-gray-600', 'bg-gray-100', 'dark:bg-gray-700');
+                  this.classList.add('border-emerald-500', 'bg-emerald-100', 'dark:bg-emerald-900/30');
                   selectedPrinter = printers.find(p => p.name === this.dataset.printerName);
                   confirmPrintBtn.classList.remove('hidden');
                 });
