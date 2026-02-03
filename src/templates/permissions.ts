@@ -515,7 +515,7 @@ export function permissionsPage(
                   var rowClass = p.days_until_expiry <= 7 ? 'bg-yellow-50 dark:bg-yellow-900/10' : '';
                   var roleClass = p.role === 'admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
                   var expiryClass = p.days_until_expiry <= 7 ? 'text-yellow-600 dark:text-yellow-400 font-semibold' : '';
-                  return '<tr class="border-b border-gray-200 dark:border-gray-700 ' + rowClass + '">' +
+                  return '<tr class="border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 ' + rowClass + '">' +
                     '<td class="py-2 px-2">' + (p.user_name || p.user_id) + '</td>' +
                     '<td class="py-2 px-2">' + (p.plant_id === 0 ? 'All (global)' : (p.plant_name || 'Unknown')) + '</td>' +
                     '<td class="py-2 px-2 font-mono text-xs">' + p.permission + '</td>' +
@@ -569,15 +569,15 @@ export function permissionsPage(
             '<th class="py-2 px-2">Changed By</th><th class="py-2 px-2">Comment</th></tr></thead><tbody>' +
             data.data.map(function(l) {
               var roleDisplay = l.action === 'delete' ? '<s>' + (l.old_role || '-') + '</s>' : (l.role || '-');
-              return '<tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">' +
-                '<td class="py-2 px-2 text-xs text-gray-500">' + new Date(l.created).toLocaleString() + '</td>' +
+              return '<tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-900 dark:text-gray-100">' +
+                '<td class="py-2 px-2 text-xs text-gray-500 dark:text-gray-400">' + new Date(l.created).toLocaleString() + '</td>' +
                 '<td class="py-2 px-2">' + actionBadge(l.action) + '</td>' +
                 '<td class="py-2 px-2">' + (l.user_name || l.user_id) + '</td>' +
                 '<td class="py-2 px-2">' + (l.plant_id === 0 ? 'All (global)' : (l.plant_name || 'Unknown')) + '</td>' +
                 '<td class="py-2 px-2 font-mono text-xs">' + l.permission + '</td>' +
                 '<td class="py-2 px-2">' + roleDisplay + '</td>' +
                 '<td class="py-2 px-2">' + (l.changed_by_name || l.changed_by) + '</td>' +
-                '<td class="py-2 px-2 text-xs text-gray-500 max-w-xs truncate" title="' + (l.comment || '') + '">' + (l.comment || '-') + '</td></tr>';
+                '<td class="py-2 px-2 text-xs text-gray-500 dark:text-gray-400 max-w-xs truncate" title="' + (l.comment || '') + '">' + (l.comment || '-') + '</td></tr>';
             }).join('') + '</tbody></table></div>';
 
           // Pagination

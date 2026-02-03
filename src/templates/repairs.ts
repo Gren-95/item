@@ -81,10 +81,6 @@ export function repairsPage(data: RepairsData, success = "", error = "", isAdmin
             )
             .join("")}
         </div>
-        <div class="flex items-center gap-2">
-          <button id="tab-prev" class="btn btn-secondary text-sm px-3" aria-label="Previous section">←</button>
-          <button id="tab-next" class="btn btn-secondary text-sm px-3" aria-label="Next section">→</button>
-        </div>
       </div>
 
       <div id="tab-panels" class="space-y-0">
@@ -114,8 +110,6 @@ export function repairsPage(data: RepairsData, success = "", error = "", isAdmin
         (function() {
           const tabs = Array.from(document.querySelectorAll('.tab-btn'));
           const panels = Array.from(document.querySelectorAll('.tab-panel'));
-          const prev = document.getElementById('tab-prev');
-          const next = document.getElementById('tab-next');
           let active = 0;
 
           function setActive(idx) {
@@ -128,8 +122,6 @@ export function repairsPage(data: RepairsData, success = "", error = "", isAdmin
           tabs.forEach((tab, i) => {
             tab.addEventListener('click', () => setActive(i));
           });
-          prev?.addEventListener('click', () => setActive(active - 1));
-          next?.addEventListener('click', () => setActive(active + 1));
 
           // simple touch swipe
           let startX = 0;

@@ -100,14 +100,14 @@ export function inventoryAuditReviewPage(
         <!-- Audit Tab Panel -->
         <div class="tab-panel">
           <!-- Audit Header -->
-          <div class="bg-gray-800 rounded-xl shadow-xl overflow-hidden mb-4 sm:mb-6">
-            <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-700">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden mb-4 sm:mb-6 border border-gray-200 dark:border-gray-700">
+            <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
               <div class="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                <div class="text-emerald-400">
+                <div class="text-emerald-500 dark:text-emerald-400">
                   ${CLIPBOARD_CHECK_ICON}
                 </div>
-                <h1 class="text-lg sm:text-xl font-semibold text-white">Inventory Audit</h1>
-                ${defaultPeriod ? `<span class="ml-auto text-sm text-gray-400">${escapeHtml(defaultPeriod.inventory_nr)}</span>` : ''}
+                <h1 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Inventory Audit</h1>
+                ${defaultPeriod ? `<span class="ml-auto text-sm text-gray-500 dark:text-gray-400">${escapeHtml(defaultPeriod.inventory_nr)}</span>` : ''}
               </div>
               <!-- Search Bar -->
               <form id="audit-search-form" class="flex gap-2">
@@ -116,7 +116,7 @@ export function inventoryAuditReviewPage(
                     type="text"
                     id="audit-search-input"
                     placeholder="Enter serial number..."
-                    class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     ${!defaultPeriod ? 'disabled' : ''}
                     autofocus
                   />
@@ -136,14 +136,14 @@ export function inventoryAuditReviewPage(
 
           ${!defaultPeriod ? `
             <!-- No Period Warning -->
-            <div class="bg-gray-800 rounded-xl shadow-xl p-8 text-center">
-              <div class="text-yellow-400 mb-3">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <div class="text-yellow-500 dark:text-yellow-400 mb-3">
                 <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                 </svg>
               </div>
-              <h3 class="text-white font-medium mb-2">No Active Inventory Period</h3>
-              <p class="text-gray-400 text-sm mb-4">Create an inventory period in the Periods tab to start auditing.</p>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-2">No Active Inventory Period</h3>
+              <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">Create an inventory period in the Periods tab to start auditing.</p>
               ${isAdmin ? `
                 <button onclick="document.querySelector('[data-tab=\\'2\\']').click()" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                   ${PLUS_ICON}
@@ -158,21 +158,21 @@ export function inventoryAuditReviewPage(
             </div>
 
             <!-- Empty State -->
-            <div id="audit-empty" class="bg-gray-800 rounded-xl shadow-xl p-8 text-center">
-              <svg class="mx-auto h-12 w-12 text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div id="audit-empty" class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
               </svg>
-              <h3 class="text-white font-medium mb-1">Search for equipment</h3>
-              <p class="text-gray-400 text-sm">Enter a serial number to start auditing.</p>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-1">Search for equipment</h3>
+              <p class="text-gray-500 dark:text-gray-400 text-sm">Enter a serial number to start auditing.</p>
             </div>
 
             <!-- Not Found State -->
-            <div id="audit-not-found" class="hidden bg-gray-800 rounded-xl shadow-xl p-8 text-center">
-              <svg class="mx-auto h-12 w-12 text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div id="audit-not-found" class="hidden bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
-              <h3 class="text-white font-medium mb-1">No equipment found</h3>
-              <p id="audit-not-found-text" class="text-gray-400 text-sm mb-4">Serial number not found in system.</p>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-1">No equipment found</h3>
+              <p id="audit-not-found-text" class="text-gray-500 dark:text-gray-400 text-sm mb-4">Serial number not found in system.</p>
               <a
                 id="audit-add-equipment-btn"
                 href="/add"
@@ -184,11 +184,11 @@ export function inventoryAuditReviewPage(
             </div>
 
             <!-- Loading State -->
-            <div id="audit-loading" class="hidden bg-gray-800 rounded-xl shadow-xl p-8 text-center">
+            <div id="audit-loading" class="hidden bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
               <svg class="w-10 h-10 animate-spin text-emerald-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
               </svg>
-              <p class="text-gray-400">Searching...</p>
+              <p class="text-gray-500 dark:text-gray-400">Searching...</p>
             </div>
           `}
         </div>
@@ -197,14 +197,14 @@ export function inventoryAuditReviewPage(
         <div class="tab-panel hidden">
           ${hasAuditApprover ? `
           <!-- Header -->
-          <div class="bg-gray-800 rounded-xl shadow-xl overflow-hidden mb-4 sm:mb-6">
-            <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-700">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden mb-4 sm:mb-6 border border-gray-200 dark:border-gray-700">
+            <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 gap-3">
                 <div class="flex items-center gap-2 sm:gap-3">
-                  <div class="text-emerald-400">
+                  <div class="text-emerald-500 dark:text-emerald-400">
                     ${CLIPBOARD_CHECK_ICON}
                   </div>
-                  <h1 class="text-lg sm:text-xl font-semibold text-white">Inventory Audit Review</h1>
+                  <h1 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Inventory Audit Review</h1>
                 </div>
                 <div class="flex flex-wrap items-center gap-2" id="header-action-buttons">
                   <button
@@ -251,10 +251,10 @@ export function inventoryAuditReviewPage(
                 </div>
               </div>
               <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3" id="review-controls">
-                <label class="text-xs sm:text-sm text-gray-400 whitespace-nowrap">Inventory Period:</label>
+                <label class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">Inventory Period:</label>
                 <select
                   id="period-selector"
-                  class="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  class="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="">All Periods</option>
                   ${allPeriods.map(p => `<option value="${p.id}" ${defaultPeriod && defaultPeriod.id === p.id ? 'selected' : ''}>${escapeHtml(p.inventory_nr)}</option>`).join('')}
@@ -264,11 +264,11 @@ export function inventoryAuditReviewPage(
           </div>
 
           <!-- Loading State -->
-      <div id="loading-state" class="bg-gray-800 rounded-xl shadow-xl p-8 sm:p-12 text-center">
+      <div id="loading-state" class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 sm:p-12 text-center border border-gray-200 dark:border-gray-700">
         <svg class="w-10 h-10 sm:w-12 sm:h-12 animate-spin text-emerald-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
         </svg>
-        <p class="text-sm sm:text-base text-gray-400">Loading audit records...</p>
+        <p class="text-sm sm:text-base text-gray-500 dark:text-gray-400">Loading audit records...</p>
       </div>
 
       <!-- Error State -->
@@ -285,28 +285,28 @@ export function inventoryAuditReviewPage(
       </div>
 
       <!-- Table Container -->
-      <div id="table-container" class="hidden bg-gray-800 rounded-xl shadow-xl overflow-hidden">
+      <div id="table-container" class="hidden bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
         <div class="overflow-x-auto -mx-2 sm:mx-0">
           <table class="w-full min-w-[800px]">
-            <thead class="bg-gray-700">
+            <thead class="bg-gray-100 dark:bg-gray-700">
               <tr>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Service Tag</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider hidden sm:table-cell">Type</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Location</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Assigned To</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider hidden md:table-cell">TeamViewer</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider hidden lg:table-cell">Comment</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Updated By / Date</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Service Tag</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider hidden sm:table-cell">Type</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Location</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Assigned To</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider hidden md:table-cell">TeamViewer</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider hidden lg:table-cell">Comment</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Updated By / Date</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody id="audit-table-body" class="bg-gray-800 divide-y divide-gray-700">
+            <tbody id="audit-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               <!-- Data will be populated here -->
             </tbody>
           </table>
         </div>
-        <div id="table-footer" class="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-          <div class="text-xs sm:text-sm text-gray-400">
+        <div id="table-footer" class="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+          <div class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             <span id="record-count">0</span> records
           </div>
           <div class="text-[10px] sm:text-xs text-gray-500">
@@ -316,12 +316,12 @@ export function inventoryAuditReviewPage(
         </div>
           ` : `
             <!-- No Permission Message -->
-            <div class="bg-gray-800 rounded-xl shadow-xl p-8 text-center">
-              <svg class="mx-auto h-12 w-12 text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
               </svg>
-              <h3 class="text-white font-medium mb-1">Permission Required</h3>
-              <p class="text-gray-400 text-sm">You do not have permission to review audit records.</p>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-1">Permission Required</h3>
+              <p class="text-gray-500 dark:text-gray-400 text-sm">You do not have permission to review audit records.</p>
             </div>
           `}
         </div>
@@ -330,13 +330,13 @@ export function inventoryAuditReviewPage(
         <div class="tab-panel hidden">
           ${hasAuditApprover ? `
             <!-- Add New Period Form -->
-            <div class="bg-gray-800 rounded-xl shadow-xl overflow-hidden mb-4 sm:mb-6">
-              <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-700">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden mb-4 sm:mb-6 border border-gray-200 dark:border-gray-700">
+              <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
                 <div class="flex items-center gap-2 sm:gap-3">
-                  <div class="text-emerald-400">
+                  <div class="text-emerald-500 dark:text-emerald-400">
                     ${CLIPBOARD_CHECK_ICON}
                   </div>
-                  <h2 class="text-lg sm:text-xl font-semibold text-white">Inventory Period</h2>
+                  <h2 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Inventory Period</h2>
                 </div>
               </div>
               <div class="px-3 sm:px-6 py-4">
@@ -345,7 +345,7 @@ export function inventoryAuditReviewPage(
                   
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label for="start_date" class="block text-sm font-medium text-gray-300 mb-1">
+                      <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Start Date *
                       </label>
                       <input
@@ -353,13 +353,13 @@ export function inventoryAuditReviewPage(
                         id="start_date"
                         name="start_date"
                         required
-                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         onchange="updatePeriodPreview()"
                       />
                     </div>
-                    
+
                     <div>
-                      <label for="end_date" class="block text-sm font-medium text-gray-300 mb-1">
+                      <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         End Date *
                       </label>
                       <input
@@ -367,12 +367,12 @@ export function inventoryAuditReviewPage(
                         id="end_date"
                         name="end_date"
                         required
-                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       />
                     </div>
-                    
+
                     <div>
-                      <label for="comment" class="block text-sm font-medium text-gray-300 mb-1">
+                      <label for="comment" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Comment
                       </label>
                       <input
@@ -380,15 +380,15 @@ export function inventoryAuditReviewPage(
                         id="comment"
                         name="comment"
                         placeholder="Optional description"
-                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       />
                     </div>
                   </div>
-                  
+
                   <!-- Period Name Preview -->
-                  <div class="bg-gray-700 rounded-lg p-3">
-                    <span class="text-sm text-gray-400">Period name will be generated as: </span>
-                    <span id="periodNamePreview" class="font-medium text-white">INV-YYYY-QX-1</span>
+                  <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-3">
+                    <span class="text-sm text-gray-500 dark:text-gray-400">Period name will be generated as: </span>
+                    <span id="periodNamePreview" class="font-medium text-gray-900 dark:text-white">INV-YYYY-QX-1</span>
                     <span class="text-xs text-gray-500 ml-2">(auto-generated based on start date)</span>
                   </div>
                   
@@ -406,29 +406,29 @@ export function inventoryAuditReviewPage(
             </div>
             
             <!-- Periods List -->
-            <div class="bg-gray-800 rounded-xl shadow-xl overflow-hidden">
-              <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-700">
-                <h2 class="text-lg font-semibold text-white">Existing Periods</h2>
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+              <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Existing Periods</h2>
               </div>
-              
+
               ${allPeriodsForTab.length === 0 ? `
-                <div class="p-8 text-center text-gray-400">
+                <div class="p-8 text-center text-gray-500 dark:text-gray-400">
                   <p>No inventory periods found. Create one above to get started.</p>
                 </div>
               ` : `
                 <div class="overflow-x-auto">
-                  <table class="min-w-full divide-y divide-gray-700">
-                    <thead class="bg-gray-700">
+                  <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-100 dark:bg-gray-700">
                       <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Period</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Start Date</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">End Date</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Comment</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Period</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Start Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">End Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Comment</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
-                    <tbody class="bg-gray-800 divide-y divide-gray-700">
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                       ${allPeriodsForTab.map(period => {
                         const startDateStr = formatDate(period.start_date);
                         const endDateStr = formatDate(period.end_date);
@@ -450,20 +450,20 @@ export function inventoryAuditReviewPage(
                         }
                         
                         return `
-                          <tr class="${isActive ? 'bg-green-900/20' : ''}">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                          <tr class="${isActive ? 'bg-green-50 dark:bg-green-900/20' : ''}">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                               ${escapeHtml(period.inventory_nr)}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
                               ${escapeHtml(startDateStr)}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
                               ${escapeHtml(endDateStr)}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
                               ${statusBadge}
                             </td>
-                            <td class="px-6 py-4 text-sm text-gray-300 max-w-xs truncate">
+                            <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate">
                               ${period.comment ? escapeHtml(period.comment) : '-'}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
@@ -495,12 +495,12 @@ export function inventoryAuditReviewPage(
             </div>
           ` : `
             <!-- No Permission Message -->
-            <div class="bg-gray-800 rounded-xl shadow-xl p-8 text-center">
-              <svg class="mx-auto h-12 w-12 text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
               </svg>
-              <h3 class="text-white font-medium mb-1">Permission Required</h3>
-              <p class="text-gray-400 text-sm">You do not have permission to manage inventory periods.</p>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-1">Permission Required</h3>
+              <p class="text-gray-500 dark:text-gray-400 text-sm">You do not have permission to manage inventory periods.</p>
             </div>
           `}
         </div>
@@ -508,11 +508,11 @@ export function inventoryAuditReviewPage(
     </div>
 
     <!-- Quick Edit Modal -->
-    <div id="quickEditModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50">
-      <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+    <div id="quickEditModal" class="fixed inset-0 bg-black/50 dark:bg-black/70 hidden items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-semibold text-white">Edit Equipment</h3>
-          <button id="closeQuickEditModal" class="text-gray-400 hover:text-white transition-colors">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Edit Equipment</h3>
+          <button id="closeQuickEditModal" class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
@@ -525,11 +525,11 @@ export function inventoryAuditReviewPage(
 
           <!-- User (Employee) -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-1">User (Employee)</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">User (Employee)</label>
             <select
               name="assigned_to"
               id="qe_assigned_to"
-              class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Not assigned</option>
               ${employees.map(e => `<option value="${escapeHtml(e.employee_no)}">${escapeHtml(e.name)} - ${escapeHtml(e.employee_no)}</option>`).join('')}
@@ -537,40 +537,40 @@ export function inventoryAuditReviewPage(
           </div>
 
           <!-- Location Section -->
-          <div class="border-t border-gray-700 pt-4">
-            <label class="block text-sm font-medium text-gray-300 mb-3">Location</label>
+          <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Location</label>
             <div class="space-y-3">
               <div>
-                <label class="block text-xs text-gray-500 mb-1">Country</label>
-                <select id="qe_country_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Country</label>
+                <select id="qe_country_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Select...</option>
                   ${locationData?.countries.map(c => `<option value="${c.id}" data-parent="${c.parent_id}">${escapeHtml(c.name)}</option>`).join('') || ''}
                 </select>
               </div>
               <div>
-                <label class="block text-xs text-gray-500 mb-1">Region</label>
-                <select id="qe_plant_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Region</label>
+                <select id="qe_plant_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Select country first...</option>
                   ${locationData?.plants.map(p => `<option value="${p.id}" data-parent="${p.parent_id}">${escapeHtml(p.name)}</option>`).join('') || ''}
                 </select>
               </div>
               <div>
-                <label class="block text-xs text-gray-500 mb-1">Department</label>
-                <select id="qe_department_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Department</label>
+                <select id="qe_department_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Select region first...</option>
                   ${locationData?.departments.map(d => `<option value="${d.id}" data-parent="${d.parent_id}">${escapeHtml(d.name)}</option>`).join('') || ''}
                 </select>
               </div>
               <div>
-                <label class="block text-xs text-gray-500 mb-1">Area</label>
-                <select id="qe_area_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Area</label>
+                <select id="qe_area_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Select department first...</option>
                   ${locationData?.areas.map(a => `<option value="${a.id}" data-parent="${a.parent_id}">${escapeHtml(a.name)}</option>`).join('') || ''}
                 </select>
               </div>
               <div>
-                <label class="block text-xs text-gray-500 mb-1">Sub-Area</label>
-                <select id="qe_sub_area_id" name="equipment_sub_area_id" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Sub-Area</label>
+                <select id="qe_sub_area_id" name="equipment_sub_area_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Select area first...</option>
                   ${locationData?.subAreas.map(s => `<option value="${s.id}" data-parent="${s.parent_id}">${escapeHtml(s.name)}</option>`).join('') || ''}
                 </select>
@@ -581,21 +581,21 @@ export function inventoryAuditReviewPage(
           </div>
 
           <!-- TeamViewer -->
-          <div class="border-t border-gray-700 pt-4">
-            <label class="block text-sm font-medium text-gray-300 mb-1">Teamviewer</label>
+          <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Teamviewer</label>
             <input
               type="text"
               name="teamviewer"
               id="qe_teamviewer"
               placeholder="Teamviewer ID"
-              class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
           <div id="quickEditError" class="hidden text-red-400 text-sm"></div>
 
           <div class="flex justify-end gap-3 pt-2">
-            <button type="button" id="cancelQuickEdit" class="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+            <button type="button" id="cancelQuickEdit" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
             <button type="submit" id="saveQuickEdit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
               Save
             </button>
@@ -742,36 +742,36 @@ export function inventoryAuditReviewPage(
           ].filter(Boolean).join(' - ') || '-';
 
           return \`
-            <div class="bg-gray-800 rounded-xl shadow-xl overflow-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
               <!-- Equipment Info -->
-              <div class="bg-emerald-900/40 px-6 py-4">
+              <div class="bg-emerald-50 dark:bg-emerald-900/40 px-6 py-4">
                 <div class="grid grid-cols-2 gap-x-8 gap-y-4">
                   <div class="flex items-start gap-3">
-                    <svg class="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
                     <div>
-                      <div class="text-xs text-emerald-300/70 uppercase tracking-wide">Location</div>
-                      <div class="text-white font-medium">\${escapeHtml(locationStr)}</div>
+                      <div class="text-xs text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wide">Location</div>
+                      <div class="text-gray-900 dark:text-white font-medium">\${escapeHtml(locationStr)}</div>
                     </div>
                   </div>
                   <div class="flex items-start gap-3">
-                    <svg class="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                     </svg>
                     <div>
-                      <div class="text-xs text-emerald-300/70 uppercase tracking-wide">User</div>
-                      <div class="text-white font-medium">\${equipment.assigned_to_name ? escapeHtml(equipment.assigned_to + ' - ' + equipment.assigned_to_name) : 'Not assigned'}</div>
+                      <div class="text-xs text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wide">User</div>
+                      <div class="text-gray-900 dark:text-white font-medium">\${equipment.assigned_to_name ? escapeHtml(equipment.assigned_to + ' - ' + equipment.assigned_to_name) : 'Not assigned'}</div>
                     </div>
                   </div>
                   <div class="flex items-start gap-3 col-span-2 sm:col-span-1">
-                    <svg class="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
                     <div class="flex-1">
-                      <div class="text-xs text-emerald-300/70 uppercase tracking-wide">Latest Audit</div>
-                      <div class="text-white font-medium">\${formatDate(equipment.latest_audit_date)}</div>
+                      <div class="text-xs text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wide">Latest Audit</div>
+                      <div class="text-gray-900 dark:text-white font-medium">\${formatDate(equipment.latest_audit_date)}</div>
                     </div>
                     <button type="button" class="update-audit-btn flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors" data-equipment-id="\${equipment.id}">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -783,33 +783,33 @@ export function inventoryAuditReviewPage(
                 </div>
               </div>
               <!-- Details -->
-              <div class="px-6 py-4 border-t border-gray-700">
-                <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4">Equipment Details</h3>
+              <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-4">Equipment Details</h3>
                 <div class="grid grid-cols-2 sm:grid-cols-5 gap-6">
                   <div>
                     <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Type</div>
-                    <div class="text-white text-sm">\${escapeHtml(typeStr)}</div>
+                    <div class="text-gray-900 dark:text-white text-sm">\${escapeHtml(typeStr)}</div>
                   </div>
                   <div>
                     <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Teamviewer</div>
-                    <div class="text-white text-sm font-mono">\${equipment.teamviewer || '0'}</div>
+                    <div class="text-gray-900 dark:text-white text-sm font-mono">\${equipment.teamviewer || '0'}</div>
                   </div>
                   <div>
                     <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</div>
-                    <div class="text-white text-sm">\${equipment.is_written_off ? 'Written Off' : equipment.repair_status ? equipment.repair_status.replace(/_/g, ' ') : 'In Use'}</div>
+                    <div class="text-gray-900 dark:text-white text-sm">\${equipment.is_written_off ? 'Written Off' : equipment.repair_status ? equipment.repair_status.replace(/_/g, ' ') : 'In Use'}</div>
                   </div>
                   <div>
                     <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Device Age</div>
-                    <div class="text-white text-sm">\${formatDeviceAge(equipment.purchase_date)}</div>
+                    <div class="text-gray-900 dark:text-white text-sm">\${formatDeviceAge(equipment.purchase_date)}</div>
                   </div>
                   <div>
                     <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Service Tag</div>
-                    <div class="text-white text-sm font-mono">\${escapeHtml(equipment.service_tag)}</div>
+                    <div class="text-gray-900 dark:text-white text-sm font-mono">\${escapeHtml(equipment.service_tag)}</div>
                   </div>
                 </div>
               </div>
               <!-- Actions -->
-              <div class="px-6 py-4 border-t border-gray-700 flex gap-3">
+              <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex gap-3">
                 <button type="button" class="quick-edit-btn inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   data-equipment-id="\${equipment.id}"
                   data-service-tag="\${escapeHtml(equipment.service_tag)}"
@@ -827,7 +827,7 @@ export function inventoryAuditReviewPage(
                   </svg>
                   Edit
                 </button>
-                <a href="/edit/\${equipment.id}" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 hover:text-white transition-colors ml-auto">
+                <a href="/edit/\${equipment.id}" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-colors ml-auto">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                   </svg>
@@ -1244,37 +1244,37 @@ export function inventoryAuditReviewPage(
             
             if (tableBody) {
               tableBody.innerHTML = records.map(function(record) {
-                return '<tr class="hover:bg-gray-700/50 transition-colors">' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-white">' +
-                    '<a href="/inventory-audit?search=' + encodeURIComponent(record.service_tag) + '" class="text-emerald-400 hover:text-emerald-300">' +
+                return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900 dark:text-white">' +
+                    '<a href="/inventory-audit?search=' + encodeURIComponent(record.service_tag) + '" class="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300">' +
                       escapeHtml(record.service_tag || '') +
                     '</a>' +
-                    '<div class="text-xs text-gray-400 mt-0.5 sm:hidden">' + escapeHtml(record.equipment_type || '-') + '</div>' +
+                    '<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 sm:hidden">' + escapeHtml(record.equipment_type || '-') + '</div>' +
                   '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-300 hidden sm:table-cell">' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-700 dark:text-gray-300 hidden sm:table-cell">' +
                     escapeHtml(record.equipment_type || '-') +
                   '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-300">' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-700 dark:text-gray-300">' +
                     escapeHtml(record.location || 'Not assigned') +
                   '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-300">' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-300">' +
                     '<div class="truncate max-w-[120px] sm:max-w-none">' +
-                      (record.assigned_to_name 
+                      (record.assigned_to_name
                         ? escapeHtml(record.assigned_to || '') + ' - ' + escapeHtml(record.assigned_to_name)
-                        : record.assigned_to 
+                        : record.assigned_to
                           ? escapeHtml(record.assigned_to)
                           : '-') +
                     '</div>' +
                   '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-300 font-mono hidden md:table-cell">' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-300 font-mono hidden md:table-cell">' +
                     (record.teamviewer || '0') +
                   '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-300 max-w-xs truncate hidden lg:table-cell" title="' + escapeHtml(record.comment || '') + '">' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate hidden lg:table-cell" title="' + escapeHtml(record.comment || '') + '">' +
                     escapeHtml(record.comment || '-') +
                   '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-300">' +
-                    '<div class="text-gray-300">' + escapeHtml(record.updated_by || '-') + '</div>' +
-                    '<div class="text-[10px] sm:text-xs text-gray-400 mt-0.5">' + formatDate(record.updated) + '</div>' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-300">' +
+                    '<div class="text-gray-700 dark:text-gray-300">' + escapeHtml(record.updated_by || '-') + '</div>' +
+                    '<div class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">' + formatDate(record.updated) + '</div>' +
                   '</td>' +
                   '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-center">' +
                     '<button data-service-tag="' + escapeHtml(record.service_tag) + '" class="apply-btn px-2 sm:px-3 py-1 sm:py-1.5 bg-blue-600 text-white text-[10px] sm:text-xs rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">' +
