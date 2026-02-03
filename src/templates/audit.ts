@@ -75,7 +75,7 @@ export function auditPage(data: AuditData, success: string | boolean = false, er
   const eq = data.equipment;
   
   const content = `
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="w-full px-4 sm:px-6 lg:px-12 xl:px-16">
       <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
         <a href="/" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors self-start sm:self-center">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,6 +98,10 @@ export function auditPage(data: AuditData, success: string | boolean = false, er
       ${renderAlert(success, error)}
 
       <form id="equipment-edit-form" action="/edit/${eq.id}" method="POST" ${isReadonly ? 'onsubmit="event.preventDefault(); return false;"' : ''}>
+        <!-- Main layout: Form grid + History panel -->
+        <div class="flex flex-col lg:flex-row gap-6 max-w-[1800px] mx-auto">
+          <!-- Left side: Equipment form 2x2 grid -->
+          <div class="flex-1 min-w-0 lg:max-w-[1200px]">
         <!-- Equipment Information and Type -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
           <!-- Equipment Information -->
@@ -373,6 +377,37 @@ export function auditPage(data: AuditData, success: string | boolean = false, er
             </div>
           </div>
         </div>
+          </div>
+          <!-- End of left side form grid -->
+
+          <!-- Right side: Device History Panel -->
+          <div class="w-full lg:w-[360px] xl:w-[400px] flex-shrink-0">
+            <div class="card sticky top-4">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  Device History
+                </h2>
+                <span id="history-count" class="text-xs text-gray-500 dark:text-gray-400"></span>
+              </div>
+
+              <div id="history-container" class="max-h-[600px] overflow-y-auto">
+                <div id="history-loading" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <svg class="w-8 h-8 animate-spin mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  Loading history...
+                </div>
+                <div id="history-entries" class="hidden divide-y divide-gray-100 dark:divide-gray-700"></div>
+                <div id="history-empty" class="hidden text-center py-8 text-gray-500 dark:text-gray-400 text-sm">No history records found</div>
+                <div id="history-error" class="hidden text-center py-8 text-red-500 dark:text-red-400 text-sm">Failed to load history</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- End of main layout flex container -->
 
         <!-- Write-Off Status Modal -->
         <div id="writeOffModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
@@ -828,7 +863,7 @@ export function auditPage(data: AuditData, success: string | boolean = false, er
             // Restrict location selection to user's plant only (server already filters, this is a safety check)
             const userPlantIdValue = ${userPlantId};
             const plantSelect = document.getElementById('plant_id');
-            
+
             // Hide and disable plants that don't match user's plant
             if (plantSelect) {
               const plantOptions = plantSelect.querySelectorAll('option[value]:not([value=""]):not([value="__add_new__"])');
@@ -839,7 +874,7 @@ export function auditPage(data: AuditData, success: string | boolean = false, er
                   opt.style.display = 'none';
                 }
               });
-              
+
               // Prevent selecting other plants
               plantSelect.addEventListener('change', function() {
                 if (this.value && parseInt(this.value) !== userPlantIdValue) {
@@ -850,7 +885,78 @@ export function auditPage(data: AuditData, success: string | boolean = false, er
               });
             }
             ` : ''}
+
+            // Load device history
+            loadDeviceHistory(${eq.id});
           });
+
+          // Device History functions
+          function formatHistoryDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          }
+
+          function escapeHistoryHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+          }
+
+          async function loadDeviceHistory(equipmentId) {
+            const historyLoading = document.getElementById('history-loading');
+            const historyEntries = document.getElementById('history-entries');
+            const historyEmpty = document.getElementById('history-empty');
+            const historyError = document.getElementById('history-error');
+            const historyCount = document.getElementById('history-count');
+
+            try {
+              const response = await fetch('/api/equipment/history?equipment_id=' + equipmentId);
+              const result = await response.json();
+
+              if (historyLoading) historyLoading.classList.add('hidden');
+
+              if (result.success && result.data && result.data.length > 0) {
+                if (historyCount) historyCount.textContent = result.data.length + ' entries';
+                if (historyEntries) {
+                  historyEntries.innerHTML = result.data.map(function(log) {
+                    return '<div class="py-3 first:pt-0">' +
+                      '<div class="flex items-start justify-between gap-2">' +
+                        '<div class="flex-1 min-w-0">' +
+                          '<div class="flex items-center gap-2 flex-wrap">' +
+                            '<span class="text-sm font-medium text-gray-900 dark:text-white">' + formatHistoryDate(log.created) + '</span>' +
+                            (log.inventory_nr ? '<span class="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">' + escapeHistoryHtml(log.inventory_nr) + '</span>' : '') +
+                            (log.write_off_reason ? '<span class="px-1.5 py-0.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded">Written Off</span>' : '') +
+                          '</div>' +
+                          '<div class="mt-1 space-y-0.5">' +
+                            '<div class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">' +
+                              '<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>' +
+                              '<span class="truncate">' + (log.assigned_to_name ? escapeHistoryHtml(log.assigned_to + ' - ' + log.assigned_to_name) : (log.assigned_to ? escapeHistoryHtml(log.assigned_to) : 'Not assigned')) + '</span>' +
+                            '</div>' +
+                            '<div class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">' +
+                              '<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' +
+                              '<span class="truncate">' + escapeHistoryHtml(log.location || 'No location') + '</span>' +
+                            '</div>' +
+                          '</div>' +
+                          (log.comment ? '<div class="mt-1 text-xs text-gray-500 dark:text-gray-400 italic truncate">' + escapeHistoryHtml(log.comment) + '</div>' : '') +
+                        '</div>' +
+                        (log.updated_by_name ? '<div class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">by ' + escapeHistoryHtml(log.updated_by_name) + '</div>' : '') +
+                      '</div>' +
+                    '</div>';
+                  }).join('');
+                  historyEntries.classList.remove('hidden');
+                }
+              } else {
+                if (historyEmpty) historyEmpty.classList.remove('hidden');
+                if (historyCount) historyCount.textContent = '0 entries';
+              }
+            } catch (err) {
+              console.error('Failed to load history:', err);
+              if (historyLoading) historyLoading.classList.add('hidden');
+              if (historyError) historyError.classList.remove('hidden');
+            }
+          }
 
           // Close modals on escape key
           document.addEventListener('keydown', function(e) {
@@ -890,56 +996,38 @@ export function auditPage(data: AuditData, success: string | boolean = false, er
           });
         </script>
 
-        <!-- Submit -->
+        <!-- Submit - Icon buttons in single row -->
         <div class="mt-6">
-          <div class="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4">
-            <a href="/" class="btn btn-secondary w-full sm:w-auto text-center">Cancel</a>
-            <button type="button" id="print-label" class="btn btn-secondary w-full sm:w-auto" data-service-tag="${escapeHtml(eq.service_tag)}" ${isReadonly ? 'disabled' : ''}>
-              <span class="flex items-center justify-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-                </svg>
-                Print Label
-              </span>
+          <div class="flex items-center justify-stretch gap-2 sm:justify-end">
+            <!-- Cancel -->
+            <a href="/" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" title="Cancel">
+              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </a>
+            <!-- Print Label -->
+            <button type="button" id="print-label" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${isReadonly ? 'opacity-50 cursor-not-allowed' : ''}" data-service-tag="${escapeHtml(eq.service_tag)}" title="Print Label" ${isReadonly ? 'disabled' : ''}>
+              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+              </svg>
             </button>
-            <button type="submit" form="equipment-edit-form" class="btn btn-success w-full sm:w-auto" ${isReadonly ? 'disabled' : ''} ${isReadonly ? '' : 'id="save-changes-btn"'}>
-              <span class="flex items-center justify-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
-                ${isReadonly ? 'Read-only Mode' : 'Save Changes'}
-              </span>
+            <!-- Write-Off Status -->
+            <button type="button" onclick="openWriteOffModal()" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 ${eq.is_written_off ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'} rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${isReadonly ? 'opacity-50 cursor-not-allowed' : ''}" title="${eq.is_written_off ? 'Written Off: ' + escapeHtml(eq.write_off_reason || 'Written Off') : 'Set Write-Off Status'}" ${isReadonly ? 'disabled' : ''}>
+              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
             </button>
-          </div>
-          
-          <!-- Write-Off and Repair Status Buttons -->
-          <div class="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 mt-4">
-            <button 
-              type="button" 
-              onclick="openWriteOffModal()"
-              class="btn btn-secondary w-full sm:w-auto"
-              ${isReadonly ? 'disabled' : ''}
-            >
-              <span class="flex items-center justify-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-                ${eq.is_written_off ? `Write-Off: ${escapeHtml(eq.write_off_reason || "Written Off")}` : 'Set Write-Off Status'}
-              </span>
+            <!-- Repair Status -->
+            <button type="button" onclick="openRepairModal()" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 ${eq.repair_status && eq.repair_status !== 'in_backup' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'} rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${isReadonly ? 'opacity-50 cursor-not-allowed' : ''}" title="${eq.repair_status ? (eq.repair_status === 'needs_repair' ? 'Needs Repair' : eq.repair_status === 'at_supplier' ? 'At Supplier' : eq.repair_status === 'returned' ? 'Returned' : eq.repair_status === 'in_backup' ? 'In Use' : 'Set Repair Status') : 'Set Repair Status'}" ${isReadonly ? 'disabled' : ''}>
+              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 11-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z"/>
+              </svg>
             </button>
-            <button 
-              type="button" 
-              onclick="openRepairModal()"
-              class="btn btn-secondary w-full sm:w-auto"
-              ${isReadonly ? 'disabled' : ''}
-            >
-              <span class="flex items-center justify-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-                ${eq.repair_status ? `Repair: ${eq.repair_status === 'needs_repair' ? 'Needs Repair' : eq.repair_status === 'at_supplier' ? 'At Supplier' : eq.repair_status === 'returned' ? 'Returned' : 'In Use'}` : 'Set Repair Status'}
-              </span>
+            <!-- Save Changes -->
+            <button type="submit" form="equipment-edit-form" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors ${isReadonly ? 'opacity-50 cursor-not-allowed' : ''}" title="${isReadonly ? 'Read-only Mode' : 'Save Changes'}" ${isReadonly ? 'disabled' : ''} ${isReadonly ? '' : 'id="save-changes-btn"'}>
+              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
             </button>
           </div>
         </div>

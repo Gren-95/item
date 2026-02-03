@@ -30,7 +30,7 @@ export function minimalLayout(title: string, content: string): string {
   </script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <main class="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     ${content}
   </main>
 
@@ -73,7 +73,7 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
   ${navbar(isAdmin, hasPcPwView, username, hasAuditApprover)}
   
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <main class="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     ${content}
   </main>
   
