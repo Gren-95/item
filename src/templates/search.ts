@@ -106,6 +106,34 @@ export function searchPage(
                   <th class="py-3 px-2 md:px-4 hidden xl:table-cell">Last Update</th>
                   ${results && results.some(r => r.isReadonly) ? '<th class="py-3 px-2 md:px-4">Status</th>' : ''}
                 </tr>
+                <tr id="filter-row" class="border-b border-gray-200 dark:border-gray-700">
+                  <th class="py-2 px-2 md:px-4 sticky left-0 z-10"></th>
+                  <th class="py-2 px-2 md:px-4">
+                    <input type="text" data-filter-col="1" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                  </th>
+                  <th class="py-2 px-2 md:px-4 hidden md:table-cell">
+                    <input type="text" data-filter-col="2" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                  </th>
+                  <th class="py-2 px-2 md:px-4 hidden lg:table-cell">
+                    <input type="text" data-filter-col="3" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                  </th>
+                  <th class="py-2 px-2 md:px-4 hidden lg:table-cell">
+                    <input type="text" data-filter-col="4" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                  </th>
+                  <th class="py-2 px-2 md:px-4 hidden xl:table-cell">
+                    <input type="text" data-filter-col="5" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                  </th>
+                  <th class="py-2 px-2 md:px-4 hidden md:table-cell">
+                    <input type="text" data-filter-col="6" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                  </th>
+                  <th class="py-2 px-2 md:px-4 hidden lg:table-cell">
+                    <input type="text" data-filter-col="7" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                  </th>
+                  <th class="py-2 px-2 md:px-4 hidden xl:table-cell">
+                    <input type="text" data-filter-col="8" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                  </th>
+                  ${results && results.some(r => r.isReadonly) ? '<th class="py-2 px-2 md:px-4"><input type="text" data-filter-col="9" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" /></th>' : ''}
+                </tr>
               </thead>
               <tbody>
                 ${results.map(result => {
@@ -427,6 +455,82 @@ export function searchPage(
         }
       })();
     </script>
+
+    <script>
+      (function() {
+        const filterInputs = document.querySelectorAll('input[data-filter-col]');
+        if (filterInputs.length === 0) return;
+
+        const table = filterInputs[0].closest('table');
+        if (!table) return;
+
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+
+        function applyFilters() {
+          const filters = {};
+          filterInputs.forEach(input => {
+            const col = input.getAttribute('data-filter-col');
+            const value = input.value.toLowerCase().trim();
+            if (value) {
+              filters[col] = value;
+            }
+          });
+
+          let visibleCount = 0;
+          rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            let showRow = true;
+
+            for (const [col, filterValue] of Object.entries(filters)) {
+              const colIndex = parseInt(col);
+              if (cells[colIndex]) {
+                const cellText = cells[colIndex].textContent.toLowerCase();
+                if (!cellText.includes(filterValue)) {
+                  showRow = false;
+                  break;
+                }
+              }
+            }
+
+            row.style.display = showRow ? '' : 'none';
+            if (showRow) visibleCount++;
+          });
+
+          // Update visible count in header
+          const header = document.querySelector('.card h2');
+          if (header) {
+            const totalCount = rows.length;
+            if (Object.keys(filters).length > 0) {
+              header.textContent = 'Search Results (' + visibleCount + ' of ' + totalCount + ')';
+            } else {
+              header.textContent = 'Search Results (' + totalCount + ')';
+            }
+          }
+        }
+
+        filterInputs.forEach(input => {
+          input.addEventListener('input', applyFilters);
+        });
+      })();
+    </script>
+
+    <style>
+      #filter-row {
+        background-color: rgb(249 250 251); /* bg-gray-50 */
+      }
+      #filter-row th:first-child {
+        background-color: rgb(249 250 251); /* bg-gray-50 for sticky column */
+      }
+      .dark #filter-row {
+        background-color: rgb(31 41 55 / 0.5); /* dark:bg-gray-800/50 */
+      }
+      .dark #filter-row th:first-child {
+        background-color: rgb(31 41 55); /* dark:bg-gray-800 for sticky column */
+      }
+    </style>
   `;
 
   return layout("Search", content, isAdmin, hasPcPwView, username, hasAuditApprover);
