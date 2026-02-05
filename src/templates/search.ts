@@ -1,5 +1,5 @@
 import { layout } from "./layout";
-import { SEARCH_ICON } from "./icons";
+import { SEARCH_ICON, EXCLAMATION_CIRCLE_ICON, EMOJI_SAD_ICON, PLUS_ICON, CLIPBOARD_LIST_ICON, X_ICON, QR_SCAN_ICON } from "./icons";
 
 interface SearchResult {
   id: number;
@@ -47,9 +47,7 @@ export function searchPage(
                   focus:ring-2 focus:ring-green-400 focus:outline-none"
                 aria-label="Scan QR code with camera"
               >
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 25 25">
-                  <path d="M4,4h6v6H4V4M20,4v6H14V4h6M14,15h2V13H14V11h2v2h2V11h2v2H18v2h2v3H18v2H16V18H13v2H11V16h3V15m2,0v3h2V15H16M4,20V14h6v6H4M6,6V8H8V6H6M16,6V8h2V6H16M6,16v2H8V16H6M4,11H6v2H4V11m5,0h4v4H11V13H9V11m2-5h2v4H11V6M2,2V6H0V2A2,2,0,0,1,2,0H6V2H2M22,0a2,2,0,0,1,2,2V6H22V2H18V0h4M2,18v4H6v2H2a2,2,0,0,1-2-2V18H2m20,4V18h2v4a2,2,0,0,1-2,2H18V22Z" fill="currentColor"/>
-                </svg>
+                ${QR_SCAN_ICON}
                 <span></span>
               </button>
               <input 
@@ -63,9 +61,7 @@ export function searchPage(
               >
               <button id="search-btn" type="submit" class="btn btn-primary rounded-l-none border-l-0 flex items-center">
                 <span class="flex items-center gap-2">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                  </svg>
+                  ${SEARCH_ICON}
                 </span>
               </button>
             </div>
@@ -76,9 +72,7 @@ export function searchPage(
       ${error ? `
         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
           <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            ${EXCLAMATION_CIRCLE_ICON}
             <span>${escapeHtml(error)}</span>
           </div>
         </div>
@@ -165,23 +159,21 @@ export function searchPage(
       ` : results !== null && results.length === 0 ? `
         <div class="card">
           <div class="text-center py-8">
-            <svg class="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            <div class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600 flex items-center justify-center">
+              ${EMOJI_SAD_ICON.replace('w-5 h-5', 'w-16 h-16')}
+            </div>
             <p class="text-gray-500 dark:text-gray-400 mb-4">No equipment found matching "${escapeHtml(query)}"</p>
             <a href="/add?serial=${encodeURIComponent(query)}" class="btn btn-primary inline-flex items-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-              </svg>
+              ${PLUS_ICON}
               Add New Equipment
             </a>
           </div>
         </div>
       ` : `
         <div class="text-center py-12">
-          <svg class="w-24 h-24 text-gray-200 dark:text-gray-700 mx-auto mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-          </svg>
+          <div class="w-24 h-24 mx-auto mb-6 text-gray-200 dark:text-gray-700 flex items-center justify-center">
+            ${CLIPBOARD_LIST_ICON.replace('w-5 h-5', 'w-24 h-24')}
+          </div>
           <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Start an Equipment Search</h2>
           <p class="text-gray-500 dark:text-gray-400">Search by serial number, user name, device type, model, product line, or location</p>
         </div>
@@ -194,9 +186,7 @@ export function searchPage(
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Scan QR Code</h2>
           <button id="closeQr" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            ${X_ICON.replace('w-5 h-5', 'w-6 h-6')}
           </button>
         </div>
         <div class="space-y-4">

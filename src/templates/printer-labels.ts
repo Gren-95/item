@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { TAG_ICON, SEARCH_ICON, REFRESH_ICON, X_ICON, PRINTER_ICON } from "./icons";
 
 interface _Printer {
   name: string;
@@ -36,9 +37,7 @@ export function printerLabelsPage(
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
         <div class="flex items-center gap-2">
-          <svg class="w-6 h-6 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-          </svg>
+          ${TAG_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Printer Labels</h1>
         </div>
         <p class="text-sm text-gray-500 dark:text-gray-400">Print identification labels for network printers</p>
@@ -63,9 +62,7 @@ export function printerLabelsPage(
               autocomplete="off"
             />
             <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-              </svg>
+              ${SEARCH_ICON.replace('text-current', 'text-gray-400 dark:text-gray-500')}
             </div>
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -75,9 +72,9 @@ export function printerLabelsPage(
           </p>
           <div id="search-results" class="mt-2 max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-lg hidden"></div>
           <div id="loading-indicator" class="hidden text-center py-4">
-            <svg class="w-6 h-6 animate-spin text-purple-500 dark:text-purple-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
+            <div class="w-6 h-6 mx-auto text-purple-500 dark:text-purple-400">
+              ${REFRESH_ICON.replace('w-5 h-5', 'w-6 h-6 animate-spin')}
+            </div>
             <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Loading printers...</p>
           </div>
           <div id="error-message" class="hidden text-red-600 dark:text-red-400 text-sm mt-2"></div>
@@ -91,9 +88,7 @@ export function printerLabelsPage(
               <p id="selected-printer-details" class="text-sm text-purple-600 dark:text-purple-400"></p>
             </div>
             <button onclick="clearSelection()" class="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50" title="Clear selection">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
+              ${X_ICON}
             </button>
           </div>
         </div>
@@ -104,9 +99,7 @@ export function printerLabelsPage(
             class="hidden px-6 py-3 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm"
             onclick="openPrintModal()"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-            </svg>
+            ${PRINTER_ICON}
             Print Label
           </button>
         </div>
@@ -119,16 +112,14 @@ export function printerLabelsPage(
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Select Target Printer</h3>
           <button onclick="closePrintModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
+            ${X_ICON.replace('w-5 h-5', 'w-6 h-6')}
           </button>
         </div>
         <div id="printModalBody">
           <div id="modal-printers-loading" class="text-center py-4">
-            <svg class="w-8 h-8 animate-spin text-purple-500 dark:text-purple-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
+            <div class="w-8 h-8 mx-auto text-purple-500 dark:text-purple-400">
+              ${REFRESH_ICON.replace('w-5 h-5', 'w-8 h-8 animate-spin')}
+            </div>
             <p class="text-gray-600 dark:text-gray-400 mt-2">Loading printers...</p>
           </div>
           <div id="modal-printers-list" class="hidden max-h-96 overflow-y-auto mb-4"></div>

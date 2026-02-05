@@ -1,6 +1,6 @@
 import { layout } from "./layout";
 import { button } from "./buttons";
-import { WRENCH_ICON } from "./icons";
+import { WRENCH_ICON, X_ICON, EDIT_ICON, CHECK_CIRCLE_ICON, CHECK_ICON } from "./icons";
 
 interface RepairItem {
   id: number;
@@ -95,9 +95,7 @@ export function repairsPage(data: RepairsData, success = "", error = "", isAdmin
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Equipment Details</h3>
             <button onclick="closeEquipmentModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
+              ${X_ICON.replace('w-5 h-5', 'w-6 h-6')}
             </button>
           </div>
           <div id="equipmentModalContent" class="space-y-4">
@@ -213,9 +211,7 @@ export function repairsPage(data: RepairsData, success = "", error = "", isAdmin
             <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
               <a href="/edit/\${id}" class="btn btn-primary w-full" onclick="closeEquipmentModal()">
                 <span class="flex items-center justify-center gap-2">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                  </svg>
+                  ${EDIT_ICON}
                   Edit Equipment
                 </span>
               </a>
@@ -356,9 +352,7 @@ function getActionButtons(item: RepairItem, currentType: string): string {
           type: "submit",
           variant: "primary",
           size: "sm",
-          icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>`,
+          icon: CHECK_CIRCLE_ICON.replace('w-5 h-5', 'w-4 h-4'),
           title: "Mark as sent to supplier",
         })}
       </form>
@@ -373,9 +367,7 @@ function getActionButtons(item: RepairItem, currentType: string): string {
           type: "submit",
           variant: "success",
           size: "sm",
-          icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-          </svg>`,
+          icon: CHECK_ICON.replace('w-5 h-5', 'w-4 h-4'),
           title: "Mark as returned",
         })}
       </form>
@@ -390,9 +382,7 @@ function getActionButtons(item: RepairItem, currentType: string): string {
           type: "submit",
           variant: "secondary",
           size: "sm",
-          icon: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-          </svg>`,
+          icon: CHECK_ICON.replace('w-5 h-5', 'w-4 h-4'),
           title: "Mark as in use",
         })}
       </form>

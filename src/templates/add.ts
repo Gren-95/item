@@ -2,7 +2,20 @@ import { layout } from "./layout";
 import { renderAlert } from "./components";
 import { getModalHtml, getScriptsHtml } from "./components";
 import { button } from "./buttons";
-import { PLUS_ICON, ARROW_LEFT_ICON } from "./icons";
+import {
+  PLUS_ICON,
+  ARROW_LEFT_ICON,
+  EXCLAMATION_TRIANGLE_ICON,
+  INFORMATION_CIRCLE_ICON,
+  REFRESH_ICON,
+  CPU_ICON,
+  LOCATION_ICON,
+  CLIPBOARD_LIST_ICON,
+  USER_ICON,
+  PRINTER_ICON,
+  X_ICON,
+  MENU_ALT_ICON
+} from "./icons";
 
 interface SelectOption {
   id: number;
@@ -52,9 +65,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
       <!-- Pre-action approval warning banner -->
       <div id="approval-warning" class="hidden mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
         <div class="flex items-start gap-3">
-          <svg class="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-          </svg>
+          ${EXCLAMATION_TRIANGLE_ICON.replace('w-5 h-5', 'w-6 h-6 flex-shrink-0 mt-0.5').replace('text-current', 'text-yellow-600 dark:text-yellow-400')}
           <div>
             <h3 class="font-semibold text-yellow-800 dark:text-yellow-200">Approval Required</h3>
             <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
@@ -68,9 +79,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
         <!-- Basic Information -->
         <div class="card mb-6">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            ${INFORMATION_CIRCLE_ICON.replace('text-current', 'text-gray-400')}
             Basic Information
           </h2>
           
@@ -99,15 +108,11 @@ export function addPage(data: AddData, success: boolean = false, error: string |
               <div id="dell-warranty-hint" class="hidden mt-2 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <div class="flex items-center justify-between gap-3">
                   <p class="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    ${INFORMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-4 h-4 flex-shrink-0')}
                     <span>Enter the service tag and click <strong>Get Warranty</strong> to auto-fill dates.</span>
                   </p>
                   <button type="button" id="get-warranty-btn" onclick="fetchDellWarranty()" class="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1.5">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
+                    ${REFRESH_ICON.replace('w-5 h-5', 'w-4 h-4')}
                     Get Warranty
                   </button>
                 </div>
@@ -159,9 +164,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
         <!-- Type & Model Selection -->
         <div class="card mb-6">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
-            </svg>
+            ${CPU_ICON.replace('text-current', 'text-gray-400')}
             Equipment Type
           </h2>
           
@@ -202,10 +205,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
         <!-- Location Selection -->
         <div class="card mb-6">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
+            ${LOCATION_ICON.replace('text-current', 'text-gray-400')}
             Location
           </h2>
           
@@ -276,9 +276,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
         <!-- Inventory Period -->
         <div class="card mb-6">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-            </svg>
+            ${CLIPBOARD_LIST_ICON.replace('text-current', 'text-gray-400')}
             Inventory
           </h2>
           
@@ -298,9 +296,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
         <!-- Assignment & TeamViewer -->
         <div class="card mb-6">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-            </svg>
+            ${USER_ICON.replace('text-current', 'text-gray-400')}
             Assignment & Remote Access
           </h2>
           
@@ -330,9 +326,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
         <!-- Additional Info -->
         <div class="card mb-6">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/>
-            </svg>
+            ${MENU_ALT_ICON.replace('text-current', 'text-gray-400')}
             Additional Information
           </h2>
           
@@ -375,17 +369,13 @@ export function addPage(data: AddData, success: boolean = false, error: string |
           <a href="/" class="btn btn-secondary">Cancel</a>
           <button type="button" id="print-label" class="btn btn-secondary hidden" data-service-tag="${escapeHtml(data.serviceTag)}">
             <span class="flex items-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-              </svg>
+              ${PRINTER_ICON}
               Print Label
             </span>
           </button>
           <button type="submit" class="btn btn-success">
             <span class="flex items-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-              </svg>
+              ${PLUS_ICON}
               Add Equipment
             </span>
           </button>
@@ -398,16 +388,12 @@ export function addPage(data: AddData, success: boolean = false, error: string |
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Select Printer</h3>
             <button onclick="closePrintModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
+              ${X_ICON.replace('w-5 h-5', 'w-6 h-6')}
             </button>
           </div>
           <div id="printModalBody">
             <div id="printers-loading" class="text-center py-4">
-              <svg class="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-              </svg>
+              ${REFRESH_ICON.replace('w-5 h-5', 'w-8 h-8 animate-spin text-blue-600 dark:text-blue-400 mx-auto')}
               <p class="text-gray-600 dark:text-gray-400 mt-2">Loading printers...</p>
             </div>
             <div id="printers-list" class="hidden max-h-64 overflow-y-auto mb-4"></div>
@@ -576,7 +562,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
           const btn = document.getElementById('get-warranty-btn');
           const originalHtml = btn.innerHTML;
           btn.disabled = true;
-          btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Loading...';
+          btn.innerHTML = '${REFRESH_ICON.replace('w-5 h-5', 'w-4 h-4 animate-spin')} Loading...';
 
           try {
             const response = await fetch('/api/dell-warranty/' + encodeURIComponent(serviceTag));

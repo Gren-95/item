@@ -1,5 +1,5 @@
 import { layout } from "./layout";
-import { DOCUMENT_TEXT_ICON } from "./icons";
+import { DOCUMENT_TEXT_ICON, EXCLAMATION_CIRCLE_ICON } from "./icons";
 
 interface ApprovalRequest {
   id: number;
@@ -71,9 +71,7 @@ export function approvalsPage(
         <div class="card">
           <div class="text-center py-12">
             <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg class="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
+              ${EXCLAMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-8 h-8').replace('text-current', 'text-red-600 dark:text-red-400')}
             </div>
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Insufficient Permissions</h2>
             <p class="text-gray-600 dark:text-gray-400">You do not have admin permission to access this page.</p>
