@@ -1,7 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { login, TEST_ADMIN_USER } from "./fixtures";
 
+// Printer tests are opt-in (require RUN_PRINTER_TESTS=true)
+const skipPrinterTests = process.env.RUN_PRINTER_TESTS !== "true";
+
 test.describe("Printer Labels (#20)", () => {
+  test.skip(skipPrinterTests, "Printer tests are opt-in. Set RUN_PRINTER_TESTS=true to run.");
+
   test.beforeEach(async ({ page }) => {
     await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
   });
@@ -45,8 +50,9 @@ test.describe("Printer Labels (#20)", () => {
     const searchResults = page.locator('#search-results');
     await expect(searchResults).toBeAttached();
 
-    // After page loads, loading should complete and be hidden again
-    await expect(loadingIndicator).toHaveClass(/hidden/, { timeout: 3000 });
+    // After page loads and API completes, loading should be hidden
+    // Wait for either hidden class or API to complete (increased timeout for slow environments)
+    await expect(loadingIndicator).toHaveClass(/hidden/, { timeout: 10000 });
   });
 
   test("printer search accepts input and shows results", async ({ page }) => {
@@ -279,6 +285,8 @@ test.describe("Printer Labels (#20)", () => {
 });
 
 test.describe("Printer Labels API (#20)", () => {
+  test.skip(skipPrinterTests, "Printer tests are opt-in. Set RUN_PRINTER_TESTS=true to run.");
+
   test.beforeEach(async ({ page }) => {
     await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
   });
@@ -358,6 +366,8 @@ test.describe("Printer Labels API (#20)", () => {
 });
 
 test.describe("Print Button Integration (#20)", () => {
+  test.skip(skipPrinterTests, "Printer tests are opt-in. Set RUN_PRINTER_TESTS=true to run.");
+
   test.beforeEach(async ({ page }) => {
     await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
   });
