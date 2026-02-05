@@ -1,6 +1,6 @@
 import { layout } from "./layout";
 import { button, deleteButton } from "./buttons";
-import { USER_GROUP_ICON } from "./icons";
+import { USER_GROUP_ICON, EXCLAMATION_CIRCLE_ICON, CLOCK_ICON, DOCUMENT_TEXT_ICON } from "./icons";
 
 interface User {
   user_id: string;
@@ -64,9 +64,7 @@ export function permissionsPage(
         <div class="card">
           <div class="text-center py-12">
             <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg class="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
+              ${EXCLAMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-8 h-8').replace('text-current', 'text-red-600 dark:text-red-400')}
             </div>
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Insufficient Permissions</h2>
             <p class="text-gray-600 dark:text-gray-400">You do not have admin permission to access this page.</p>
@@ -422,9 +420,7 @@ export function permissionsPage(
       <div class="card mt-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            ${CLOCK_ICON.replace('text-current', 'text-yellow-500')}
             Expiring & Expired Permissions
           </h2>
           <select id="expiry-days-filter" class="select-field w-auto text-sm" onchange="loadExpiringPermissions()">
@@ -444,9 +440,7 @@ export function permissionsPage(
       <div class="card mt-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
+            ${DOCUMENT_TEXT_ICON.replace('text-current', 'text-blue-500')}
             Permission Audit Log
           </h2>
           <div class="flex items-center gap-2">

@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { LOCK_ICON, EMOJI_SAD_ICON, EXCLAMATION_CIRCLE_ICON, HOME_ICON, ARROW_LEFT_ICON } from "./icons";
 
 /**
  * Error page template for displaying access denied and other errors
@@ -37,14 +38,12 @@ export function errorPage(
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden">
         <div class="px-6 py-12 text-center">
           <div class="w-20 h-20 ${bgColor} rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg class="w-10 h-10 ${iconColor}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              ${statusCode === 403 
-                ? `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>`
-                : statusCode === 404
-                ? `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>`
-                : `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>`
-              }
-            </svg>
+            ${statusCode === 403
+              ? LOCK_ICON.replace('w-5 h-5', 'w-10 h-10').replace('text-current', iconColor)
+              : statusCode === 404
+              ? EMOJI_SAD_ICON.replace('w-5 h-5', 'w-10 h-10').replace('text-current', iconColor)
+              : EXCLAMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-10 h-10').replace('text-current', iconColor)
+            }
           </div>
           
           <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-3">${escapeHtml(pageTitle)}</h1>
@@ -58,22 +57,18 @@ export function errorPage(
           }
           
           <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <a 
-              href="/" 
+            <a
+              href="/"
               class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
             >
-              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-              </svg>
+              <span class="mr-2">${HOME_ICON}</span>
               Go to Home
             </a>
-            <button 
-              onclick="window.history.back()" 
+            <button
+              onclick="window.history.back()"
               class="inline-flex items-center justify-center px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
             >
-              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-              </svg>
+              <span class="mr-2">${ARROW_LEFT_ICON}</span>
               Go Back
             </button>
           </div>

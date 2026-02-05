@@ -1,4 +1,5 @@
 import { navigationMenu } from "./navigation";
+import { BARS_3_ICON, SEARCH_ICON } from "./icons";
 
 /**
  * Unified navbar component
@@ -17,9 +18,7 @@ export function navbar(
         <div class="flex justify-between h-16 items-center">
           <div class="flex items-center space-x-4 relative">
             <button id="menu-toggle" class="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors" aria-label="Toggle navigation">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-              </svg>
+              ${BARS_3_ICON.replace('w-5 h-5', 'w-6 h-6')}
             </button>
             ${navigationMenu(isAdmin, hasPcPwView, hasAuditApprover, username)}
           </div>
@@ -34,9 +33,7 @@ export function navbar(
                 class="w-full pl-8 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-sm"
               />
               <div class="absolute inset-y-0 left-0 pl-2 sm:pl-3 flex items-center pointer-events-none">
-                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
+                ${SEARCH_ICON.replace('w-5 h-5', 'w-4 h-4').replace('text-current', 'text-gray-500 dark:text-gray-400')}
               </div>
             </div>
             <div id="search-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">

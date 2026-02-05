@@ -1,4 +1,5 @@
 import { navbar, navbarScripts } from "./navbar";
+import { EXCLAMATION_CIRCLE_ICON } from "./icons";
 
 /**
  * Minimal layout without navbar - for login page
@@ -82,9 +83,7 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md">
       <div class="flex items-center gap-3 mb-3">
         <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-300">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M12 5a7 7 0 00-7 7v1a7 7 0 007 7 7 7 0 007-7v-1a7 7 0 00-7-7z"/>
-          </svg>
+          ${EXCLAMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-6 h-6')}
         </div>
         <div>
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Connection lost</h2>
@@ -267,7 +266,7 @@ ${navbarScripts()}
     }
 
     function renderEquipmentSuggestion(item) {
-      return '<a href="/audit/' + item.id + '" class="block px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors">' +
+      return '<a href="/edit/' + item.id + '" class="block px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors">' +
         '<div class="flex items-center justify-between">' +
           '<span class="font-mono text-sm font-medium text-gray-900 dark:text-white">' + escapeHtml(item.service_tag) + '</span>' +
           '<span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">' + escapeHtml(item.type_name || 'Unknown') + '</span>' +
