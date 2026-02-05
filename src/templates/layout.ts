@@ -217,6 +217,7 @@ ${navbarScripts()}
       { name: 'Write-Off Reasons', url: '/write-off-reasons', keywords: ['write-off', 'writeoff', 'disposal', 'reasons'], requiresAdmin: false, requiresPcPw: false },
       { name: 'Repair Tracking', url: '/repairs', keywords: ['repair', 'repairs', 'fix', 'maintenance'], requiresAdmin: false, requiresPcPw: false },
       { name: 'Inventory Audit', url: '/inventory-audit', keywords: ['inventory', 'audit', 'stock'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'Printer Labels', url: '/printer-labels', keywords: ['printer', 'labels', 'print', 'tags'], requiresAdmin: false, requiresPcPw: false },
       { name: 'PC Passwords', url: '/pc-pw', keywords: ['pc', 'passwords', 'credentials'], requiresAdmin: false, requiresPcPw: true },
       { name: 'Change Password', url: '/change-password', keywords: ['change', 'password', 'account'], requiresAdmin: false, requiresPcPw: false },
       { name: 'User Permissions', url: '/permissions', keywords: ['permissions', 'users', 'access', 'admin'], requiresAdmin: true, requiresPcPw: false },

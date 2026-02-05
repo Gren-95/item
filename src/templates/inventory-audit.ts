@@ -508,7 +508,7 @@ export function inventoryAuditPage(
             </div>
           </div>
         </div>
-        
+
         <script>
           (function() {
             let printers = [];
@@ -655,14 +655,14 @@ export function inventoryAuditPage(
             };
             
             printBtn?.addEventListener('click', openPrintModal);
-            
+
             // Close modal on backdrop click
             printModal?.addEventListener('click', function(e) {
               if (e.target === this) {
                 closePrintModal();
               }
             });
-            
+
             // Edit Modal functionality
             const editBtn = document.getElementById('edit-btn');
             const editModal = document.getElementById('editModal');

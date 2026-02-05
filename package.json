@@ -9,7 +9,7 @@
     "build:css:watch": "bunx tailwindcss -i ./src/styles/input.css -o ./public/css/style.css --watch",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test": "bunx playwright test",
+    "test": "bunx playwright test --workers=4",
     "test:ui": "bunx playwright test --ui",
     "test:headed": "bunx playwright test --headed",
     "test:debug": "bunx playwright test --debug",
