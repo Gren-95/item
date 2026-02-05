@@ -1161,7 +1161,7 @@ export function auditPage(data: AuditData, success: string | boolean = false, er
             </div>
           </div>
         </div>
-        
+
         <script>
           (function() {
             let printers = [];
@@ -1286,7 +1286,7 @@ export function auditPage(data: AuditData, success: string | boolean = false, er
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
             }
-            
+
             ${isReadonly ? `
             // Disable all form fields in readonly mode
             (function() {

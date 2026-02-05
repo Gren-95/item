@@ -14,6 +14,7 @@ import { changePasswordPage } from "./templates/changePassword";
 import { permissionsPage } from "./templates/permissions";
 import { approvalsPage } from "./templates/approvals";
 import { pcPwPage } from "./templates/pc-pw";
+import { printerLabelsPage } from "./templates/printer-labels";
 import { logger } from "./utils/logger";
 import { getSessionFromRequest, createSession, deleteSession, createSessionCookie, deleteSessionCookie } from "./utils/session";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
@@ -65,6 +66,7 @@ import {
   suppliersActionSchema,
   writeOffReasonsActionSchema,
   printLabelSchema,
+  printPrinterTagSchema,
   changePasswordSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
@@ -442,7 +444,7 @@ async function handleRequest(req: Request): Promise<Response> {
   const traceId = randomUUID();
   const url = new URL(req.url);
   const path = url.pathname;
-  
+
   logger.info("Request received", { traceId, method: req.method, path });
 
   // Static files
@@ -531,11 +533,11 @@ async function handleRequest(req: Request): Promise<Response> {
     logger.info("Checking admin permission", { traceId, username: session.username });
     isAdmin = await hasAdminPermission(session.username, pool);
     logger.info("Admin permission result", { traceId, username: session.username, isAdmin });
-    
+
     // Check PC passwords view permission for navigation menu
     hasPcPwView = await hasPcPwViewPermission(session.username, pool);
     logger.info("PC Passwords view permission", { traceId, username: session.username, hasPcPwView });
-    
+
     // Check audit-approver permission for navigation menu
     const userPlantId = await getUserPlantId(session.username, pool);
     hasAuditApprover = isAdmin || await hasPermission(session.username, pool, "audit-approver", userPlantId, true);
@@ -564,7 +566,7 @@ async function handleRequest(req: Request): Promise<Response> {
             session.username,
             hasAuditApprover
           ),
-          { 
+          {
             status: 403,
             headers: { "Content-Type": "text/html" }
           }
@@ -747,7 +749,7 @@ async function handleRequest(req: Request): Promise<Response> {
         deleteSession(session.sessionId);
         logger.info("User logged out", { traceId, username: session.username });
       }
-      
+
       return new Response(null, {
         status: 302,
         headers: {
@@ -1473,6 +1475,30 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
+    // Printer Labels page - GET
+    if (path === "/printer-labels" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect("/login?redirect=/printer-labels", 302);
+      }
+
+      const success = url.searchParams.get("success") || "";
+      const error = url.searchParams.get("error") || "";
+
+      logger.info("Printer Labels page access", { traceId, username: session.username });
+      const isAdmin = await hasAdminPermission(session.username, pool);
+      const hasPcPwView = await hasPcPwViewPermission(session.username, pool);
+      const userPlantId = await getUserPlantId(session.username, pool);
+      const hasAuditApprover = isAdmin || await hasPermission(session.username, pool, "audit-approver", userPlantId, true);
+
+      return new Response(
+        printerLabelsPage(isAdmin, hasPcPwView, session.username, hasAuditApprover, success, error),
+        {
+          headers: { "Content-Type": "text/html" },
+        }
+      );
+    }
+
     // API endpoint to check if user needs approval for an action
     if (path === "/api/check-permission" && req.method === "GET") {
       const session = getSessionFromRequest(req);
@@ -1796,11 +1822,11 @@ async function handleRequest(req: Request): Promise<Response> {
       // Search permission removed - all logged-in users can search
 
       const query = url.searchParams.get("q") || url.searchParams.get("serial") || "";
-      
+
       if (query && query.trim()) {
         const trimmed = query.trim();
         logger.info("Search request", { traceId, query: trimmed });
-        
+
         // Comprehensive search query covering all fields
         const searchTerm = `%${trimmed}%`;
         const [rows] = await pool.query<RowDataPacket[]>(
@@ -1878,7 +1904,7 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         logger.info("Search results", { traceId, query: trimmed, count: rows.length });
-        
+
         // Mark items as readonly if they're from a different plant (unless user is admin)
         const resultsWithReadonly = rows.map((row: RowDataPacket) => {
           const result = row as SearchResult;
@@ -1886,13 +1912,13 @@ async function handleRequest(req: Request): Promise<Response> {
           // 1. User is not admin
           // 2. Item has a plant_id
           // 3. Item's plant_id doesn't match user's plant_id
-          result.isReadonly = !isAdmin && 
-                             result.plant_id !== null && 
-                             userPlantId !== null && 
-                             result.plant_id !== userPlantId;
+          result.isReadonly = !isAdmin &&
+            result.plant_id !== null &&
+            userPlantId !== null &&
+            result.plant_id !== userPlantId;
           return result;
         });
-        
+
         return new Response(searchPage(trimmed, resultsWithReadonly.length > 0 ? resultsWithReadonly : [], null, isAdmin, hasPcPwView, userPlantId, currentUsername, hasAuditApprover), {
           headers: { "Content-Type": "text/html" },
         });
@@ -1914,7 +1940,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const serial = url.searchParams.get("serial") || "";
       const userPlantId = await getUserPlantId(session.username, pool);
       const addData = await getAddData(serial, userPlantId, isAdmin);
-      
+
       return new Response(addPage(addData as unknown as AddDataType, false, null, isAdmin, hasPcPwView, currentUsername), {
         headers: { "Content-Type": "text/html" },
       });
@@ -1928,7 +1954,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
 
       const formData = await req.formData();
-      
+
       // Extract form data first
       const rawData = {
         service_tag: formData.get("service_tag") as string,
@@ -1953,7 +1979,7 @@ async function handleRequest(req: Request): Promise<Response> {
       if (!hasAdd) {
         const employeeNo = await getEmployeeNo(session.username, pool);
         const clientIp = getClientIp(req);
-        
+
         if (!employeeNo) {
           const addData = await getAddData(rawData.service_tag || "", userPlantId, isAdmin);
           return new Response(
@@ -2005,7 +2031,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
       try {
         const validated = equipmentAddSchema.parse(rawData);
-        
+
         const service_tag = validated.service_tag;
         const vendor_id = validated.vendor_id;
         const supplier_id = validated.supplier_id;
@@ -2095,7 +2121,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
       const id = parseInt(path.split("/")[2]);
       const success = url.searchParams.get("success") === "1";
-      
+
       const auditData = await getAuditData(id, userPlantId, isAdmin);
       if (!auditData) {
         return new Response("Equipment not found", { status: 404 });
@@ -2106,11 +2132,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
       // Check if equipment is from a different plant (readonly mode)
       const equipmentPlantId = auditData.equipment.plant_id as number | null;
-      const isReadonly = !isAdmin && 
-                        equipmentPlantId !== null && 
-                        userPlantId !== null && 
-                        equipmentPlantId !== userPlantId;
-      
+      const isReadonly = !isAdmin &&
+        equipmentPlantId !== null &&
+        userPlantId !== null &&
+        equipmentPlantId !== userPlantId;
+
       if (isReadonly) {
         // Get user's plant hierarchy for location filtering
         let allowedRegionIdReadonly: number | null = null;
@@ -2168,26 +2194,26 @@ async function handleRequest(req: Request): Promise<Response> {
 
       const id = parseInt(path.split("/")[2]);
       const formData = await req.formData();
-      
+
       // Check admin permission for this request
       const isAdminPost = await hasAdminPermission(session.username, pool);
       const hasPcPwViewPost = await hasPcPwViewPermission(session.username, pool);
-      
+
       // Check edit equipment permission
       const userPlantId = await getUserPlantId(session.username, pool);
-      
+
       // Check if equipment is from a different plant (prevent editing)
       const auditData = await getAuditData(id, userPlantId, isAdminPost);
       if (!auditData) {
         return new Response("Equipment not found", { status: 404 });
       }
-      
+
       const equipmentPlantId = auditData.equipment.plant_id as number | null;
-      const isReadonly = !isAdminPost && 
-                        equipmentPlantId !== null && 
-                        userPlantId !== null && 
-                        equipmentPlantId !== userPlantId;
-      
+      const isReadonly = !isAdminPost &&
+        equipmentPlantId !== null &&
+        userPlantId !== null &&
+        equipmentPlantId !== userPlantId;
+
       if (isReadonly) {
         // Get user's plant hierarchy for location filtering
         let allowedRegionIdPost: number | null = null;
@@ -2213,13 +2239,13 @@ async function handleRequest(req: Request): Promise<Response> {
           }
         );
       }
-      
+
       const hasEditPermissionPost = await hasEditEquipmentPermission(session.username, pool, userPlantId);
       const hasManageLocationsPost = isAdminPost || await hasManageLocationsPermission(session.username, pool, userPlantId);
       if (!hasEditPermissionPost) {
         const employeeNo = await getEmployeeNo(session.username, pool);
         const clientIp = getClientIp(req);
-        
+
         if (!employeeNo) {
           const auditData = await getAuditData(id, userPlantId, isAdminPost);
           if (!auditData) {
@@ -2295,7 +2321,7 @@ async function handleRequest(req: Request): Promise<Response> {
           );
         }
       }
-      
+
       // Extract and validate form values
       const action = formData.get("action")?.toString();
       const rawData = {
@@ -2321,7 +2347,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
       try {
         const validated = equipmentEditSchema.parse(rawData);
-        
+
         const model_id = validated.model_id;
         const equipment_sub_area_id = validated.equipment_sub_area_id;
         const assigned_to = validated.assigned_to;
@@ -2340,7 +2366,7 @@ async function handleRequest(req: Request): Promise<Response> {
         const repair_status = rawData.repair_status ? rawData.repair_status.toString() : null;
         const repair_note = rawData.repair_note ? rawData.repair_note.toString().trim() : null;
         const repair_physical_location = rawData.repair_physical_location ? rawData.repair_physical_location.toString().trim() : null;
-        
+
         // Validate: if writing off, comment is required
         if (is_written_off && !write_off_comment) {
           const auditData = await getAuditData(id);
@@ -2355,7 +2381,7 @@ async function handleRequest(req: Request): Promise<Response> {
             headers: { "Content-Type": "text/html" },
           });
         }
-        
+
         // Validate: if registering for repair, note is required
         if (repair_status === "needs_repair" && !repair_note) {
           const auditData = await getAuditData(id);
@@ -2370,7 +2396,7 @@ async function handleRequest(req: Request): Promise<Response> {
             headers: { "Content-Type": "text/html" },
           });
         }
-        
+
         // Get the equipment record for service_tag
         const [equipment] = await pool.query<RowDataPacket[]>(`
           SELECT service_tag FROM it_equipment WHERE id = ?
@@ -2387,7 +2413,7 @@ async function handleRequest(req: Request): Promise<Response> {
         let repairSentDate = null;
         let repairReturnedDate = null;
         let repairMarkedBackupDate = null;
-        
+
         if (repair_status === "needs_repair") {
           // Keep existing sent_date if already set, otherwise null
           const [existing] = await pool.query<RowDataPacket[]>(
@@ -2410,7 +2436,7 @@ async function handleRequest(req: Request): Promise<Response> {
           repairReturnedDate = existing[0]?.repair_returned_date || null;
           repairMarkedBackupDate = existing[0]?.repair_marked_backup_date || null;
         }
-        
+
         await pool.query(`
           UPDATE it_equipment SET
             model_id = ?,
@@ -2490,7 +2516,7 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!hasSendRepair) {
             const employeeNo = await getEmployeeNo(session.username, pool);
             const clientIp = getClientIp(req);
-            
+
             if (!employeeNo) {
               const auditData = await getAuditData(id, userPlantId, isAdminPost);
               if (!auditData) {
@@ -3340,11 +3366,11 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!hasAdd) {
             const employeeNo = await getEmployeeNo(session.username, pool);
             const clientIp = getClientIp(req);
-            
+
             if (!employeeNo) {
               return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
             }
-            
+
             const requestId = await createApprovalRequest(
               employeeNo,
               userPlantId ? `${userPlantId}_write_off_reasons_add` : "write_off_reasons_add",
@@ -3353,7 +3379,7 @@ async function handleRequest(req: Request): Promise<Response> {
               clientIp,
               pool
             );
-            
+
             if (requestId) {
               return Response.redirect("/write-off-reasons?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
             } else {
@@ -3454,14 +3480,14 @@ async function handleRequest(req: Request): Promise<Response> {
       let repairsIsAdmin = false;
       let repairsHasPcPwView = false;
       let repairsHasAuditApprover = false;
-      
+
       if (session) {
         // Calculate permissions for logged-in users (since this is a public route, global vars aren't set)
         repairsIsAdmin = await hasAdminPermission(session.username, pool);
         repairsHasPcPwView = await hasPcPwViewPermission(session.username, pool);
         const userPlantId = await getUserPlantId(session.username, pool);
         repairsHasAuditApprover = repairsIsAdmin || await hasPermission(session.username, pool, "audit-approver", userPlantId, true);
-        
+
         // Check repairs permission for logged-in users
         const hasRepairs = await hasRepairsPermission(session.username, pool, userPlantId);
         if (!hasRepairs) {
@@ -3628,11 +3654,11 @@ async function handleRequest(req: Request): Promise<Response> {
         const form = await req.formData();
         const equipmentId = parseInt(form.get("equipment_id")?.toString() || "0");
         const inventoryPeriodId = parseInt(form.get("inventory_period_id")?.toString() || "0");
-        
+
         if (!equipmentId || !inventoryPeriodId) {
           throw new Error("Missing required fields");
         }
-        
+
         // Get equipment details with latest record from either (log+equipment) or audit table using CTE
         const [equipment] = await pool.query<RowDataPacket[]>(
           `WITH latest_records AS (
@@ -3663,17 +3689,17 @@ async function handleRequest(req: Request): Promise<Response> {
           WHERE e.id = ?`,
           [equipmentId]
         );
-        
+
         if (equipment.length === 0) {
           throw new Error("Equipment not found");
         }
-        
+
         const eq = equipment[0];
-        
+
         // Resolve employee_no for updated_by; use null for admin users (admin doesn't have employee_no)
         const employeeNo = await getEmployeeNo(session.username, pool);
         const updatedBy = isAdminUser(session.username) ? null : (employeeNo || null);
-        
+
         // Insert/update audit record ONLY - do NOT update main equipment table
         await pool.query(
           `INSERT INTO it_equipment_audit (
@@ -3712,7 +3738,7 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         logger.info("Audit record saved", { traceId, equipmentId, inventoryPeriodId, username: session.username });
-        
+
         return Response.redirect(`/inventory-audit?search=${encodeURIComponent(eq.service_tag)}&success=${encodeURIComponent("Audit recorded successfully")}`, 303);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
@@ -3736,11 +3762,11 @@ async function handleRequest(req: Request): Promise<Response> {
         const teamviewer = form.get("teamviewer")?.toString() || null;
         const comment = form.get("comment")?.toString() || null;
         const equipmentSubAreaId = form.get("equipment_sub_area_id")?.toString() || null;
-        
+
         if (!equipmentId || !inventoryPeriodId) {
           throw new Error("Missing required fields");
         }
-        
+
         // Get equipment service_tag and current data with latest from either (log+equipment) or audit table using CTE
         const [equipmentRows] = await pool.query<RowDataPacket[]>(
           `WITH latest_records AS (
@@ -3771,24 +3797,24 @@ async function handleRequest(req: Request): Promise<Response> {
            WHERE e.id = ?`,
           [equipmentId]
         );
-        
+
         if (equipmentRows.length === 0) {
           throw new Error("Equipment not found");
         }
-        
+
         const eq = equipmentRows[0];
         const serviceTag = eq.service_tag;
-        
+
         // Resolve employee_no for updated_by; use null for admin users (admin doesn't have employee_no)
         const employeeNo = await getEmployeeNo(session.username, pool);
         const updatedBy = isAdminUser(session.username) ? null : (employeeNo || null);
-        
+
         // Use form values if provided, otherwise use current values from latest record (log or audit)
         const auditAssignedTo = assignedTo !== null ? assignedTo : eq.assigned_to;
         const auditSubAreaId = equipmentSubAreaId !== null ? (equipmentSubAreaId ? parseInt(equipmentSubAreaId) : null) : eq.equipment_sub_area_id;
         const auditComment = comment !== null ? comment : eq.comment;
         const auditTeamviewer = teamviewer !== null ? (teamviewer ? parseInt(teamviewer) : null) : eq.latest_teamviewer;
-        
+
         // Update ONLY the audit table - do NOT update main equipment table or log table
         await pool.query(
           `INSERT INTO it_equipment_audit (
@@ -3811,9 +3837,9 @@ async function handleRequest(req: Request): Promise<Response> {
             auditComment, updatedBy
           ]
         );
-        
+
         logger.info("Audit quick edit saved", { traceId, equipmentId, username: session.username });
-        
+
         return Response.redirect(`/inventory-audit?search=${encodeURIComponent(serviceTag)}&success=${encodeURIComponent("Audit updated successfully")}`, 303);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
@@ -3836,7 +3862,7 @@ async function handleRequest(req: Request): Promise<Response> {
         let allowedPlantId: number | null = null;
         let allowedCountryId: number | null = null;
         let allowedRegionId: number | null = null;
-        
+
         if (!isAdmin && userPlantId !== null) {
           allowedPlantId = userPlantId;
           const [plantInfo] = await pool.query<RowDataPacket[]>(
@@ -3853,7 +3879,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
 
         const { inventoryAuditReviewPage } = await import("./templates/inventory-audit-review");
-        
+
         // Get inventory periods filtered by plant (only show periods that have audits for equipment in user's plant)
         let periodsQuery = `
           SELECT DISTINCT ip.id, ip.inventory_nr, ip.start_date, ip.end_date, ip.comment
@@ -3863,17 +3889,17 @@ async function handleRequest(req: Request): Promise<Response> {
           INNER JOIN it_equipment_area area ON sa.area_id = area.id
           INNER JOIN it_equipment_department d ON area.department_id = d.id
         `;
-        
+
         const periodsParams: unknown[] = [];
         if (!isAdmin && allowedPlantId !== null) {
           periodsQuery += " WHERE d.plant_id = ?";
           periodsParams.push(allowedPlantId);
         }
-        
+
         periodsQuery += " ORDER BY ip.start_date DESC";
-        
+
         const [allPeriods] = await pool.query<RowDataPacket[]>(periodsQuery, periodsParams);
-        
+
         // Get latest active inventory period (default) - also filtered by plant
         let latestPeriodsQuery = `
           SELECT DISTINCT ip.id, ip.inventory_nr, ip.start_date, ip.end_date, ip.comment
@@ -3884,26 +3910,26 @@ async function handleRequest(req: Request): Promise<Response> {
           INNER JOIN it_equipment_department d ON area.department_id = d.id
           WHERE ip.end_date >= CURDATE()
         `;
-        
+
         const latestPeriodsParams: unknown[] = [];
         if (!isAdmin && allowedPlantId !== null) {
           latestPeriodsQuery += " AND d.plant_id = ?";
           latestPeriodsParams.push(allowedPlantId);
         }
-        
+
         latestPeriodsQuery += " ORDER BY ip.start_date DESC LIMIT 1";
-        
+
         const [latestPeriods] = await pool.query<RowDataPacket[]>(latestPeriodsQuery, latestPeriodsParams);
-        
+
         const defaultPeriod = latestPeriods.length > 0 ? latestPeriods[0] : (allPeriods.length > 0 ? allPeriods[0] : null);
-        
+
         // Get all periods for the periods tab (admin only)
         const [allPeriodsForTab] = await pool.query<RowDataPacket[]>(
           `SELECT id, inventory_nr, start_date, end_date, comment, confirmed_by, created
            FROM it_inventory_period
            ORDER BY start_date DESC`
         );
-        
+
         // Get success/error messages from URL params
         const success = url.searchParams.get("success");
         const error = url.searchParams.get("error");
@@ -4119,7 +4145,7 @@ async function handleRequest(req: Request): Promise<Response> {
     if (path === "/api/inventory-audit/review" && req.method === "GET") {
       const session = getSessionFromRequest(req);
       if (!session) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
           headers: { "Content-Type": "application/json" }
         });
@@ -4127,23 +4153,23 @@ async function handleRequest(req: Request): Promise<Response> {
 
       try {
         const userPlantId = await getUserPlantId(session.username, pool);
-        
+
         if (!hasAuditApprover) {
-          return new Response(JSON.stringify({ error: "Access denied" }), { 
+          return new Response(JSON.stringify({ error: "Access denied" }), {
             status: 403,
             headers: { "Content-Type": "application/json" }
           });
         }
 
         const inventoryPeriodId = url.searchParams.get("period_id");
-        
+
         // Get user's plant for filtering (if not admin)
         let allowedPlantId: number | null = null;
-        
+
         if (!isAdmin && userPlantId !== null) {
           allowedPlantId = userPlantId;
         }
-        
+
         let query = `
           SELECT 
             a.id,
@@ -4187,30 +4213,30 @@ async function handleRequest(req: Request): Promise<Response> {
           LEFT JOIN it_equipment_type t ON pl.type_id = t.id
           LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
         `;
-        
+
         const params: unknown[] = [];
         const whereConditions: string[] = [];
-        
+
         // Filter by plant if not admin
         if (!isAdmin && allowedPlantId !== null) {
           whereConditions.push("d.plant_id = ?");
           params.push(allowedPlantId);
         }
-        
+
         // Filter by inventory period if specified
         if (inventoryPeriodId) {
           whereConditions.push("a.inventory_period_id = ?");
           params.push(parseInt(inventoryPeriodId));
         }
-        
+
         if (whereConditions.length > 0) {
           query += " WHERE " + whereConditions.join(" AND ");
         }
-        
+
         query += " ORDER BY a.updated DESC";
-        
+
         const [auditRecords] = await pool.query<RowDataPacket[]>(query, params);
-        
+
         return new Response(
           JSON.stringify({ success: true, data: auditRecords }),
           { headers: { "Content-Type": "application/json" } }
@@ -4220,7 +4246,7 @@ async function handleRequest(req: Request): Promise<Response> {
         logger.error("Failed to fetch audit review data", err, { traceId });
         return new Response(
           JSON.stringify({ success: false, error: errorMessage }),
-          { 
+          {
             status: 500,
             headers: { "Content-Type": "application/json" }
           }
@@ -4237,7 +4263,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
       try {
         const userPlantId = await getUserPlantId(session.username, pool);
-        
+
         if (!hasAuditApprover) {
           const { errorPage } = await import("./templates/error");
           return new Response(
@@ -4251,7 +4277,7 @@ async function handleRequest(req: Request): Promise<Response> {
               session.username,
               false
             ),
-            { 
+            {
               status: 403,
               headers: { "Content-Type": "text/html" }
             }
@@ -4259,14 +4285,14 @@ async function handleRequest(req: Request): Promise<Response> {
         }
 
         const inventoryPeriodId = url.searchParams.get("period_id");
-        
+
         // Get user's plant for filtering (if not admin)
         let allowedPlantId: number | null = null;
-        
+
         if (!isAdmin && userPlantId !== null) {
           allowedPlantId = userPlantId;
         }
-        
+
         let query = `
           SELECT 
             a.service_tag,
@@ -4307,30 +4333,30 @@ async function handleRequest(req: Request): Promise<Response> {
           LEFT JOIN it_equipment_type t ON pl.type_id = t.id
           LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
         `;
-        
+
         const params: unknown[] = [];
         const whereConditions: string[] = [];
-        
+
         // Filter by plant if not admin
         if (!isAdmin && allowedPlantId !== null) {
           whereConditions.push("d.plant_id = ?");
           params.push(allowedPlantId);
         }
-        
+
         // Filter by inventory period if specified
         if (inventoryPeriodId) {
           whereConditions.push("a.inventory_period_id = ?");
           params.push(parseInt(inventoryPeriodId));
         }
-        
+
         if (whereConditions.length > 0) {
           query += " WHERE " + whereConditions.join(" AND ");
         }
-        
+
         query += " ORDER BY a.updated DESC";
-        
+
         const [auditRecords] = await pool.query<RowDataPacket[]>(query, params);
-        
+
         // Generate CSV
         const headers = [
           "Service Tag",
@@ -4345,7 +4371,7 @@ async function handleRequest(req: Request): Promise<Response> {
           "Updated",
           "Inventory Period"
         ];
-        
+
         const csvRows = [
           headers.join(","),
           ...auditRecords.map(row => [
@@ -4362,10 +4388,10 @@ async function handleRequest(req: Request): Promise<Response> {
             `"${(row.inventory_nr || "").replace(/"/g, '""')}"`
           ].join(","))
         ];
-        
+
         const csv = csvRows.join("\n");
         const timestamp = new Date().toISOString().split('T')[0];
-        
+
         return new Response(csv, {
           headers: {
             "Content-Type": "text/csv",
@@ -4383,7 +4409,7 @@ async function handleRequest(req: Request): Promise<Response> {
     if (path === "/api/inventory-audit/apply" && req.method === "POST") {
       const session = getSessionFromRequest(req);
       if (!session) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
           headers: { "Content-Type": "application/json" }
         });
@@ -4391,9 +4417,9 @@ async function handleRequest(req: Request): Promise<Response> {
 
       try {
         const userPlantId = await getUserPlantId(session.username, pool);
-        
+
         if (!hasAuditApprover) {
-          return new Response(JSON.stringify({ error: "Access denied" }), { 
+          return new Response(JSON.stringify({ error: "Access denied" }), {
             status: 403,
             headers: { "Content-Type": "application/json" }
           });
@@ -4401,9 +4427,9 @@ async function handleRequest(req: Request): Promise<Response> {
 
         const body = await req.json();
         const serviceTag = body.service_tag?.toString();
-        
+
         if (!serviceTag) {
-          return new Response(JSON.stringify({ error: "Service tag is required" }), { 
+          return new Response(JSON.stringify({ error: "Service tag is required" }), {
             status: 400,
             headers: { "Content-Type": "application/json" }
           });
@@ -4421,14 +4447,14 @@ async function handleRequest(req: Request): Promise<Response> {
         );
 
         if (auditEntries.length === 0) {
-          return new Response(JSON.stringify({ error: "No audit entry found for this service tag" }), { 
+          return new Response(JSON.stringify({ error: "No audit entry found for this service tag" }), {
             status: 404,
             headers: { "Content-Type": "application/json" }
           });
         }
 
         const audit = auditEntries[0];
-        
+
         // Resolve employee_no for updated_by; use null for admin users (admin doesn't have employee_no)
         const employeeNo = await getEmployeeNo(session.username, pool);
         const updatedBy = isAdminUser(session.username) ? null : (employeeNo || null);
@@ -4469,7 +4495,7 @@ async function handleRequest(req: Request): Promise<Response> {
         logger.error("Failed to apply audit entry", err, { traceId });
         return new Response(
           JSON.stringify({ success: false, error: errorMessage }),
-          { 
+          {
             status: 500,
             headers: { "Content-Type": "application/json" }
           }
@@ -4481,7 +4507,7 @@ async function handleRequest(req: Request): Promise<Response> {
     if (path === "/api/inventory-audit/apply-all" && req.method === "POST") {
       const session = getSessionFromRequest(req);
       if (!session) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
           headers: { "Content-Type": "application/json" }
         });
@@ -4489,9 +4515,9 @@ async function handleRequest(req: Request): Promise<Response> {
 
       try {
         const userPlantId = await getUserPlantId(session.username, pool);
-        
+
         if (!hasAuditApprover) {
-          return new Response(JSON.stringify({ error: "Access denied" }), { 
+          return new Response(JSON.stringify({ error: "Access denied" }), {
             status: 403,
             headers: { "Content-Type": "application/json" }
           });
@@ -4571,8 +4597,8 @@ async function handleRequest(req: Request): Promise<Response> {
         logger.info("Bulk audit apply completed", { traceId, appliedCount, errorCount, username: session.username });
 
         return new Response(
-          JSON.stringify({ 
-            success: true, 
+          JSON.stringify({
+            success: true,
             message: `Applied ${appliedCount} audit entries${errorCount > 0 ? `, ${errorCount} errors` : ''}`,
             applied: appliedCount,
             errors: errorCount,
@@ -4585,17 +4611,18 @@ async function handleRequest(req: Request): Promise<Response> {
         logger.error("Failed to apply all audit entries", err, { traceId });
         return new Response(
           JSON.stringify({ success: false, error: errorMessage }),
-          { 
+          {
             status: 500,
             headers: { "Content-Type": "application/json" }
           }
         );
       }
     }
-  
-      // Get printers from Bartender
+
+    // Get printers from Bartender
     if (path === "/api/printers" && req.method === "GET") {
       try {
+        logger.info("Fetching printers from Bartender", { traceId });
         const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
         const host = bartenderHost.replace(/\/$/, "");
         const printersUrl = `${host}/integration/getprinters/execute`;
@@ -4608,13 +4635,14 @@ async function handleRequest(req: Request): Promise<Response> {
         });
 
         if (!response.ok) {
+          logger.error("Bartender API error", { traceId, status: response.status });
           throw new Error(`Bartender API returned ${response.status}`);
         }
 
         let responseText = await response.text();
         // Remove BOM if present
         responseText = responseText.replace(/^\uFEFF/, "");
-        
+
         const apiData = JSON.parse(responseText) as Array<{
           Location?: string;
           DriverName?: string;
@@ -4659,8 +4687,8 @@ async function handleRequest(req: Request): Promise<Response> {
             // Clean IP address by removing suffix after underscore
             const cleanIp = (printer.PortName || "").split("_")[0];
 
-            // Only return sticker printers
-            if (type === "sticker-tiny") {
+            // Only return label/sticker printers
+            if (type === "sticker" || type === "sticker-tiny") {
               return {
                 name: printer.Name,
                 ip: cleanIp,
@@ -4682,12 +4710,111 @@ async function handleRequest(req: Request): Promise<Response> {
             type: string;
           }>;
 
+        logger.info("Printers fetched successfully", { traceId, count: result.length });
         return new Response(JSON.stringify({ success: true, data: result }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to fetch printers", err, { traceId });
+        return new Response(
+          JSON.stringify({
+            error: true,
+            message: "Failed to fetch printers. Printer server may be offline or the API may be down.",
+            details: errorMessage,
+          }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
+
+    // Get printers from Bartender
+    if (path === "/api/printers/all" && req.method === "GET") {
+      try {
+        logger.info("Fetching all printers from Bartender", { traceId });
+        const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
+        const host = bartenderHost.replace(/\/$/, "");
+        const printersUrl = `${host}/integration/getprinters/execute`;
+
+        const response = await fetch(printersUrl, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          logger.error("Bartender API error", { traceId, status: response.status });
+          throw new Error(`Bartender API returned ${response.status}`);
+        }
+
+        let responseText = await response.text();
+        // Remove BOM if present
+        responseText = responseText.replace(/^\uFEFF/, "");
+
+        const apiData = JSON.parse(responseText) as Array<{
+          Location?: string;
+          DriverName?: string;
+          PortName?: string;
+          Name?: string;
+        }>;
+
+        // Transform API response
+        const result = apiData
+          .map((printer) => {
+            const location = printer.Location || "";
+            let department = "";
+            let area = "";
+
+            // Split location on dash (-) and trim both parts
+            if (location.includes("-")) {
+              const locationParts = location.split("-", 2);
+              department = locationParts[0].trim();
+              area = (locationParts[1] || "").trim();
+              if (!area) {
+                area = department;
+              }
+            } else {
+              department = location.trim();
+              area = department;
+            }
+
+
+
+
+            // Clean IP address by removing suffix after underscore
+            const cleanIp = (printer.PortName || "").split("_")[0];
+
+            // Only return label/sticker printers
+            return {
+              name: printer.Name,
+              ip: cleanIp,
+              department: department,
+              area: area,
+              driver: printer.DriverName || "",
+            };
+          })
+          .filter((item) => item !== null) as Array<{
+            name: string;
+            ip: string;
+            department: string;
+            area: string;
+            driver: string;
+            type: string;
+          }>;
+
+        logger.info("All printers fetched successfully", { traceId, count: result.length });
+        return new Response(JSON.stringify({ success: true, data: result }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to fetch all printers", err, { traceId });
         return new Response(
           JSON.stringify({
             error: true,
@@ -4705,24 +4832,24 @@ async function handleRequest(req: Request): Promise<Response> {
     // Dell warranty API
     if (path.startsWith("/api/dell-warranty/") && req.method === "GET") {
       const serviceTag = path.replace("/api/dell-warranty/", "");
-      
+
       if (!serviceTag) {
         return new Response(
           JSON.stringify({ success: false, message: "Service tag is required" }),
           { status: 400, headers: { "Content-Type": "application/json" } }
         );
       }
-      
+
       try {
         const { getDellWarrantyInfo, isDellApiConfigured } = await import("./utils/dell");
-        
+
         if (!isDellApiConfigured()) {
           return new Response(
             JSON.stringify({ success: false, message: "Dell API is not configured" }),
             { status: 503, headers: { "Content-Type": "application/json" } }
           );
         }
-        
+
         const result = await getDellWarrantyInfo(serviceTag);
         return new Response(JSON.stringify(result), {
           status: result.success ? 200 : 404,
@@ -4779,6 +4906,58 @@ async function handleRequest(req: Request): Promise<Response> {
         });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        return new Response(JSON.stringify({ error: errorMessage }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Print printer name tag API
+    if (path === "/api/print-printer-tag" && req.method === "POST") {
+      try {
+        const body = await req.json();
+        const validated = printPrinterTagSchema.parse(body);
+        const printer_name = validated.printer_name;
+        const printer = validated.printer;
+        logger.info("Print printer tag request", { traceId, printer_name, printer });
+        const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
+
+        // Remove trailing slash from host if present
+        const host = bartenderHost.replace(/\/$/, "");
+        const printUrl = `${host}/Integration/PrinterTag/Execute`;
+
+        const response = await fetch(printUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            printer_name: printer_name,
+            printer: printer,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          logger.error("Bartender print error", { traceId, printer_name, printer, status: response.status, error: errorText });
+          return new Response(
+            JSON.stringify({ error: `Bartender error: ${errorText}` }),
+            {
+              status: response.status,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        logger.info("Printer tag sent successfully", { traceId, printer_name, printer });
+        return new Response(JSON.stringify({ success: true, message: "Printer name tag sent to printer" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Print printer tag failed", err, { traceId });
         return new Response(JSON.stringify({ error: errorMessage }), {
           status: 500,
           headers: { "Content-Type": "application/json" },

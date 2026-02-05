@@ -162,6 +162,11 @@ export const printLabelSchema = z.object({
   printer: z.string().min(1).optional(),
 });
 
+export const printPrinterTagSchema = z.object({
+  printer_name: z.string().min(1, "Printer name is required"),
+  printer: z.string().min(1, "Target printer is required"),
+});
+
 export const changePasswordSchema = z.object({
   old_password: z.string().min(1),
   new_password: z.string().min(8),
@@ -180,3 +185,4 @@ export type VendorsActionInput = z.infer<typeof vendorsActionSchema>;
 export type SuppliersActionInput = z.infer<typeof suppliersActionSchema>;
 export type WriteOffReasonsActionInput = z.infer<typeof writeOffReasonsActionSchema>;
 export type PrintLabelInput = z.infer<typeof printLabelSchema>;
+export type PrintPrinterTagInput = z.infer<typeof printPrinterTagSchema>;

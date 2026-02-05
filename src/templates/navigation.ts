@@ -1,4 +1,4 @@
-import { SEARCH_ICON, LOCATION_ICON, COG_ICON, SHOPPING_BAG_ICON, X_CIRCLE_ICON, WRENCH_ICON, KEY_ICON, USER_GROUP_ICON, LOCK_CLOSED_ICON, CLIPBOARD_CHECK_ICON, LOGOUT_ICON } from "./icons";
+import { SEARCH_ICON, LOCATION_ICON, COG_ICON, SHOPPING_BAG_ICON, X_CIRCLE_ICON, WRENCH_ICON, KEY_ICON, USER_GROUP_ICON, LOCK_CLOSED_ICON, CLIPBOARD_CHECK_ICON, LOGOUT_ICON, PRINTER_ICON } from "./icons";
 
 const MENU_LINK_CLASSES = "flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium transition-all";
 const MENU_LINK_DISABLED = "flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 dark:text-gray-500 cursor-not-allowed font-medium";
@@ -45,6 +45,10 @@ export function navigationMenu(isAdmin: boolean = false, hasPcPwView: boolean = 
           <a href="/inventory-audit" class="${MENU_LINK_CLASSES}">
             ${menuIcon(CLIPBOARD_CHECK_ICON)}
             Inventory Audit
+          </a>
+          <a href="/printer-labels" class="${MENU_LINK_CLASSES}">
+            ${menuIcon(PRINTER_ICON)}
+            Printer Labels
           </a>
           ${hasPcPwView
             ? `<a href="/pc-pw" class="${MENU_LINK_CLASSES}">${menuIcon(KEY_ICON)}PC Passwords</a>`
