@@ -53,6 +53,7 @@ cp .env.example .env
 | `SMTP_FROM` | From address for notification emails | `item-noreply@example.com` |
 | `BASE_URL` | Base URL for links in emails | `http://localhost:3000` |
 | `APPROVAL_PENDING_THRESHOLD_HOURS` | Hours before sending reminder for pending approvals (0 to disable) | `0` |
+| `RUN_PRINTER_TESTS` | Enable printer-related E2E tests (requires printer infrastructure) | `false` |
 
 
 
@@ -77,7 +78,11 @@ docker compose down
 5. Run Tests
 
 ```bash
+# Run all tests (excludes printer tests by default)
 docker compose exec app bun test
+
+# Run printer tests (requires printer infrastructure)
+docker compose exec app sh -c "RUN_PRINTER_TESTS=true bun test e2e/printer-labels.spec.ts"
 ```
 
 6. Import Mock Data (Optional)
