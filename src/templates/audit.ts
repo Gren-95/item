@@ -1,43 +1,53 @@
 import { layout } from "./layout";
-import { renderAlert } from "./components";
-import { getModalHtml, getScriptsHtml } from "./components";
-import { INFORMATION_CIRCLE_ICON, EDIT_ICON } from "./icons";
+import { escapeHtml, renderAlert } from "./components";
+import { button } from "./buttons";
+import {
+  CLIPBOARD_CHECK_ICON,
+  PLUS_ICON,
+  TRASH_ICON,
+  CHECK_CIRCLE_ICON,
+  SEARCH_ICON,
+  EXCLAMATION_TRIANGLE_ICON,
+  EMOJI_SAD_ICON,
+  REFRESH_ICON,
+  CLIPBOARD_ICON,
+  DOWNLOAD_ICON,
+  EXCLAMATION_CIRCLE_ICON,
+  LOCK_ICON,
+  X_ICON,
+  USER_ICON,
+  LOCATION_ICON,
+  CALENDAR_ICON,
+  EDIT_ICON,
+  EXTERNAL_LINK_ICON,
+  CLOCK_ICON
+} from "./icons";
 
-interface Equipment {
+interface InventoryPeriod {
   id: number;
+  inventory_nr: string;
+  start_date: string | Date;
+  end_date: string | Date;
+  comment: string | null;
+  confirmed_by?: string | null;
+  created?: string | Date;
+}
+
+interface AuditRecord {
+  id: number;
+  equipment_id: number;
+  inventory_period_id: number;
   service_tag: string;
-  model_id: number | null;
-  vendor_id: number | null;
-  supplier_id: number | null;
-  type_id: number | null;
-  product_line_id: number | null;
-  type_name: string | null;
-  product_line_name: string | null;
-  model_name: string | null;
-  vendor_name: string | null;
-  purchase_date: string;
-  warranty_expiry_date: string;
-  teamviewer: string | null;
+  teamviewer: string | number | null;
   assigned_to: string | null;
   assigned_to_name: string | null;
-  equipment_sub_area_id: number | null;
-  region_id: number | null;
-  country_id: number | null;
-  plant_id: number | null;
-  department_id: number | null;
-  area_id: number | null;
-  latest_audit_date: string | null;
+  location: string | null;
+  equipment_type: string | null;
   comment: string | null;
-  inventory_period_id: number | null;
-  inventory_nr: string | null;
-  is_written_off: number | null;
-  write_off_reason: string | null;
-  repair_status: 'needs_repair' | 'at_supplier' | 'returned' | 'in_backup' | null;
-  cerf: number | null;
-  ip: string | null;
-  mac_addresses: string | null;
-  repair_note: string | null;
-  repair_physical_location: string | null;
+  updated_by: string | null;
+  created: string | Date;
+  updated: string | Date;
+  inventory_nr: string;
 }
 
 interface SelectOption {
@@ -46,1315 +56,1441 @@ interface SelectOption {
   parent_id?: number;
 }
 
-interface InventoryPeriod {
-  id: number;
-  name: string;
-  start_date: string;
-  end_date: string;
-}
-
-interface AuditData {
-  equipment: Equipment;
+interface LocationData {
   regions: SelectOption[];
   countries: SelectOption[];
   plants: SelectOption[];
   departments: SelectOption[];
   areas: SelectOption[];
   subAreas: SelectOption[];
-  types: SelectOption[];
-  productLines: SelectOption[];
-  models: SelectOption[];
-  employees: { employee_no: string; name: string }[];
-  inventoryPeriods: InventoryPeriod[];
-  vendors: SelectOption[];
-  suppliers: SelectOption[];
-  writeOffReasons: SelectOption[];
 }
 
-export function auditPage(data: AuditData, success: string | boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, isReadonly: boolean = false, userPlantId: number | null = null, allowedRegionId: number | null = null, allowedCountryId: number | null = null, username: string | null = null, hasAuditApprover: boolean = false, hasManageLocations: boolean = false): string {
-  const eq = data.equipment;
+interface Employee {
+  employee_no: string;
+  name: string;
+}
+
+export function auditPage(
+  allPeriods: InventoryPeriod[] = [],
+  defaultPeriod: InventoryPeriod | null = null,
+  isAdmin: boolean = false,
+  hasPcPwView: boolean = false,
+  username: string | null = null,
+  hasAuditApprover: boolean = false,
+  allPeriodsForTab: InventoryPeriod[] = [],
+  message: string | null = null,
+  messageType: "success" | "error" | "info" = "info",
+  locationData: LocationData | null = null,
+  employees: Employee[] = []
+): string {
+  const title = "Inventory Audit Review";
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+  function formatDate(date: string | Date | null | undefined): string {
+    if (!date) return '';
+    const d = date instanceof Date ? date : new Date(date);
+    return d.toISOString().split('T')[0];
+  }
+
+  const today = new Date().toISOString().split('T')[0];
   
+  const alert = message ? renderAlert(messageType === "error" ? "" : message, messageType === "error" ? message : "") : "";
+
   const content = `
-    <div class="w-full px-4 sm:px-6 lg:px-12 xl:px-16">
-      <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
-        <a href="/" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors self-start sm:self-center">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-          </svg>
-        </a>
-        <div class="flex items-center gap-2">
-          ${isReadonly
-            ? INFORMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-6 h-6 sm:w-7 sm:h-7').replace('text-current', 'text-gray-900 dark:text-white')
-            : EDIT_ICON.replace('w-4 h-4', 'w-6 h-6 sm:w-7 sm:h-7').replace('text-current', 'text-gray-900 dark:text-white')
-          }
-          <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">${isReadonly ? 'View Equipment' : 'Edit Equipment'}</h1>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-mono text-xs sm:text-sm">${escapeHtml(eq.service_tag)}</span>
-          ${isReadonly ? '<span class="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-xs sm:text-sm">Read-only</span>' : ''}
+    <div class="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
+      ${alert}
+
+      <!-- Tabs -->
+      <div class="flex items-center justify-between mb-4" id="tabs-container">
+        <div class="flex flex-wrap gap-2" id="tabs">
+          <button data-tab="0" class="tab-btn tab-active">
+            <span>Audit</span>
+          </button>
+          <button data-tab="1" class="tab-btn ${!hasAuditApprover ? 'tab-disabled' : ''}" ${!hasAuditApprover ? 'disabled title="You do not have permission to access Review"' : ''}>
+            <span>Review</span>
+          </button>
+          <button data-tab="2" class="tab-btn ${!hasAuditApprover ? 'tab-disabled' : ''}" ${!hasAuditApprover ? 'disabled title="You do not have permission to access Periods"' : ''}>
+            <span>Periods</span>
+          </button>
         </div>
       </div>
 
-      ${renderAlert(success, error)}
-
-      <form id="equipment-edit-form" action="/edit/${eq.id}" method="POST" ${isReadonly ? 'onsubmit="event.preventDefault(); return false;"' : ''}>
-        <!-- Main layout: Form grid + History panel -->
-        <div class="flex flex-col lg:flex-row gap-6 max-w-[1800px] mx-auto">
-          <!-- Left side: Equipment form 2x2 grid -->
-          <div class="flex-1 min-w-0 lg:max-w-[1200px]">
-        <!-- Equipment Information and Type -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          <!-- Equipment Information -->
-          <div class="card">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              Equipment Information
-            </h2>
-            
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label for="purchase_date" class="label">Warranty Start</label>
-              <input
-                type="date"
-                id="purchase_date"
-                name="purchase_date"
-                value="${formatDateForInput(eq.purchase_date)}"
-                class="input-field"
-                ${isReadonly ? 'readonly disabled' : ''}
-              >
-            </div>
-            <div>
-              <label for="warranty_expiry_date" class="label">Warranty Expiry</label>
-              <div class="flex items-center gap-2">
-                <input
-                  type="date"
-                  id="warranty_expiry_date"
-                  name="warranty_expiry_date"
-                  value="${formatDateForInput(eq.warranty_expiry_date)}"
-                  class="input-field flex-1 ${isExpired(eq.warranty_expiry_date) ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" : ""}"
-                  ${isReadonly ? 'readonly disabled' : ''}
-                >
+      <!-- Tab Panels -->
+      <div id="tab-panels" class="space-y-0">
+        <!-- Audit Tab Panel -->
+        <div class="tab-panel">
+          <!-- Audit Header -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden mb-4 sm:mb-6 border border-gray-200 dark:border-gray-700">
+            <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
+              <div class="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                <div class="text-emerald-500 dark:text-emerald-400">
+                  ${CLIPBOARD_CHECK_ICON}
+                </div>
+                <h1 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Inventory Audit</h1>
+                ${defaultPeriod ? `<span class="ml-auto text-sm text-gray-500 dark:text-gray-400">${escapeHtml(defaultPeriod.inventory_nr)}</span>` : ''}
+              </div>
+              <!-- Search Bar -->
+              <form id="audit-search-form" class="flex gap-2">
+                <div class="flex-1 relative">
+                  <input
+                    type="text"
+                    id="audit-search-input"
+                    placeholder="Enter serial number..."
+                    class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    ${!defaultPeriod ? 'disabled' : ''}
+                    autofocus
+                  />
+                </div>
                 <button
-                  type="button"
-                  id="check-dell-warranty-btn"
-                  onclick="checkDellWarranty()"
-                  class="btn btn-success text-xs whitespace-nowrap hidden"
-                  title="Fetch warranty info from Dell"
-                  ${isReadonly ? 'disabled' : ''}
+                  type="submit"
+                  class="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+                  ${!defaultPeriod ? 'disabled' : ''}
                 >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                  </svg>
+                  ${SEARCH_ICON}
                 </button>
-              </div>
-            </div>
-            <div>
-              <label for="vendor_id" class="label">Vendor</label>
-              <select id="vendor_id" name="vendor_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'vendors', 'Vendor'); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">Select Vendor...</option>
-                ${data.vendors.map(v => `
-                  <option value="${v.id}" ${eq.vendor_id === v.id ? "selected" : ""}>${escapeHtml(v.name)}</option>
-                `).join("")}
-                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new vendor...</option>
-              </select>
-            </div>
-            <div>
-              <label for="supplier_id" class="label">Supplier</label>
-              <select id="supplier_id" name="supplier_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'suppliers', 'Supplier'); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">Select Supplier...</option>
-                ${data.suppliers.map(s => `
-                  <option value="${s.id}" ${eq.supplier_id === s.id ? "selected" : ""}>${escapeHtml(s.name)}</option>
-                `).join("")}
-                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new supplier...</option>
-              </select>
-            </div>
-            <div>
-              <label class="label">Service Tag</label>
-              <div class="readonly-field font-mono bg-white dark:bg-gray-800">${escapeHtml(eq.service_tag)}</div>
-            </div>
-            <div>
-              <label for="cerf" class="label">CERF</label>
-              <input
-                type="number"
-                id="cerf"
-                name="cerf"
-                value="${eq.cerf || ""}"
-                class="input-field"
-                ${isReadonly ? 'readonly disabled' : ''}
-              >
-            </div>
-            <div>
-              <label for="ip" class="label">IP Address</label>
-              <input
-                type="text"
-                id="ip"
-                name="ip"
-                value="${eq.ip || ""}"
-                class="input-field font-mono"
-                placeholder="e.g., 192.168.1.100"
-                ${isReadonly ? 'readonly disabled' : ''}
-              >
-            </div>
-            <div>
-              <label for="mac_addresses" class="label">MAC Addresses</label>
-              <input
-                type="text"
-                id="mac_addresses"
-                name="mac_addresses"
-                value="${eq.mac_addresses || ""}"
-                class="input-field font-mono"
-                placeholder="Comma-separated MAC addresses"
-                ${isReadonly ? 'readonly disabled' : ''}
-              >
-            </div>
+              </form>
             </div>
           </div>
 
-          <!-- Type & Model Selection -->
-          <div class="card">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
-              </svg>
-              Equipment Type
-            </h2>
-            
-            <div class="grid grid-cols-1 gap-4">
-            <div>
-              <label for="type_id" class="label">Type</label>
-              <select id="type_id" name="type_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'types', 'Type'); } else { loadProductLines(this.value); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">Select Type...</option>
-                ${data.types.map(t => `
-                  <option value="${t.id}" ${eq.type_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>
-                `).join("")}
-                <option value="__add_new__" class="text-blue-600 font-medium">+ Add new type...</option>
-              </select>
+          ${!defaultPeriod ? `
+            <!-- No Period Warning -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <div class="text-yellow-500 dark:text-yellow-400 mb-3 flex justify-center">
+                ${EXCLAMATION_TRIANGLE_ICON.replace('w-5 h-5', 'w-12 h-12')}
+              </div>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-2">No Active Inventory Period</h3>
+              <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">Create an inventory period in the Periods tab to start auditing.</p>
+              ${isAdmin ? `
+                <button onclick="document.querySelector('[data-tab=\\'2\\']').click()" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                  ${PLUS_ICON}
+                  Create Period
+                </button>
+              ` : ''}
             </div>
-            <div>
-              <label for="product_line_id" class="label">Product Line</label>
-              <select id="product_line_id" name="product_line_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'product-lines', 'Product Line', 'type_id'); } else { loadModels(this.value); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">${eq.type_id ? "Select Product Line..." : "Select Type first..."}</option>
-                ${data.productLines.map(pl => `
-                  <option value="${pl.id}" data-parent="${pl.parent_id}" ${eq.product_line_id === pl.id ? "selected" : ""} ${eq.type_id !== pl.parent_id ? "hidden" : ""}>${escapeHtml(pl.name)}</option>
-                `).join("")}
-                <option value="__add_new__" data-parent="__always__" ${eq.type_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new product line...</option>
-              </select>
+          ` : `
+            <!-- Equipment Result Container -->
+            <div id="audit-result" class="hidden">
+              <!-- Will be populated by JavaScript -->
             </div>
-            <div>
-              <label for="model_id" class="label">Model</label>
-              <select id="model_id" name="model_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'models', 'Model', 'product_line_id'); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">${eq.product_line_id ? "Select Model..." : "Select Product Line first..."}</option>
-                ${data.models.map(m => `
-                  <option value="${m.id}" data-parent="${m.parent_id}" ${eq.model_id === m.id ? "selected" : ""} ${eq.product_line_id !== m.parent_id ? "hidden" : ""}>${escapeHtml(m.name)}</option>
-                `).join("")}
-                <option value="__add_new__" data-parent="__always__" ${eq.product_line_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new model...</option>
-              </select>
+
+            <!-- Empty State -->
+            <div id="audit-empty" class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <div class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4 flex items-center justify-center">
+                ${SEARCH_ICON.replace('w-5 h-5', 'w-12 h-12')}
+              </div>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-1">Search for equipment</h3>
+              <p class="text-gray-500 dark:text-gray-400 text-sm">Enter a serial number to start auditing.</p>
             </div>
+
+            <!-- Not Found State -->
+            <div id="audit-not-found" class="hidden bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <div class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4 flex items-center justify-center">
+                ${EMOJI_SAD_ICON.replace('w-5 h-5', 'w-12 h-12')}
+              </div>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-1">No equipment found</h3>
+              <p id="audit-not-found-text" class="text-gray-500 dark:text-gray-400 text-sm mb-4">Serial number not found in system.</p>
+              <a
+                id="audit-add-equipment-btn"
+                href="/add"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
+              >
+                ${PLUS_ICON}
+                Add Equipment
+              </a>
             </div>
-          </div>
+
+            <!-- Loading State -->
+            <div id="audit-loading" class="hidden bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <div class="w-10 h-10 mx-auto mb-4 text-emerald-500">
+                ${REFRESH_ICON.replace('w-5 h-5', 'w-10 h-10 animate-spin')}
+              </div>
+              <p class="text-gray-500 dark:text-gray-400">Searching...</p>
+            </div>
+          `}
         </div>
 
-        <!-- Location and Assignment -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          <!-- Location Selection -->
-          <div class="card">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-              </svg>
-              Location
-            </h2>
-            
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label for="region_id" class="label">Region</label>
-              <select id="region_id" name="region_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'regions', 'Region'); } else { loadCountries(this.value); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">Select Region...</option>
-                ${data.regions.map(r => `
-                  <option value="${r.id}" ${eq.region_id === r.id ? "selected" : ""}>${escapeHtml(r.name)}</option>
-                `).join("")}
-                ${isAdmin ? '<option value="__add_new__" class="text-blue-600 font-medium">+ Add new region...</option>' : ''}
-              </select>
-            </div>
-            <div>
-              <label for="country_id" class="label">Country</label>
-              <select id="country_id" name="country_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'countries', 'Country', 'region_id'); } else { loadPlants(this.value); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">${eq.region_id ? "Select Country..." : "Select Region first..."}</option>
-                ${data.countries.map(c => `
-                  <option value="${c.id}" data-parent="${c.parent_id}" ${eq.country_id === c.id ? "selected" : ""} ${eq.region_id !== c.parent_id ? "hidden" : ""}>${escapeHtml(c.name)}</option>
-                `).join("")}
-                ${isAdmin ? `<option value="__add_new__" data-parent="__always__" ${eq.region_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new country...</option>` : ''}
-              </select>
-            </div>
-            <div>
-              <label for="plant_id" class="label">Plant</label>
-              <select id="plant_id" name="plant_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'plants', 'Plant', 'country_id'); } else { loadDepartments(this.value); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">${eq.country_id ? "Select Plant..." : "Select Country first..."}</option>
-                ${data.plants.map(p => `
-                  <option value="${p.id}" data-parent="${p.parent_id}" ${eq.plant_id === p.id ? "selected" : ""} ${eq.country_id !== p.parent_id ? "hidden" : ""}>${escapeHtml(p.name)}</option>
-                `).join("")}
-                ${isAdmin ? `<option value="__add_new__" data-parent="__always__" ${eq.country_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new plant...</option>` : ''}
-              </select>
-            </div>
-            <div>
-              <label for="department_id" class="label">Department</label>
-              <select id="department_id" name="department_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'departments', 'Department', 'plant_id'); } else { loadAreas(this.value); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">${eq.plant_id ? "Select Department..." : "Select Plant first..."}</option>
-                ${data.departments.map(d => `
-                  <option value="${d.id}" data-parent="${d.parent_id}" ${eq.department_id === d.id ? "selected" : ""} ${eq.plant_id !== d.parent_id ? "hidden" : ""}>${escapeHtml(d.name)}</option>
-                `).join("")}
-                ${hasManageLocations ? `<option value="__add_new__" data-parent="__always__" ${eq.plant_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new department...</option>` : ''}
-              </select>
-            </div>
-            <div>
-              <label for="area_id" class="label">Area</label>
-              <select id="area_id" name="area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'areas', 'Area', 'department_id'); } else { loadSubAreas(this.value); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">${eq.department_id ? "Select Area..." : "Select Department first..."}</option>
-                ${data.areas.map(a => `
-                  <option value="${a.id}" data-parent="${a.parent_id}" ${eq.area_id === a.id ? "selected" : ""} ${eq.department_id !== a.parent_id ? "hidden" : ""}>${escapeHtml(a.name)}</option>
-                `).join("")}
-                ${hasManageLocations ? `<option value="__add_new__" data-parent="__always__" ${eq.department_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new area...</option>` : ''}
-              </select>
-            </div>
-            <div>
-              <label for="equipment_sub_area_id" class="label">Sub Area</label>
-              <select id="equipment_sub_area_id" name="equipment_sub_area_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'sub-areas', 'Sub Area', 'area_id'); }" ${isReadonly ? 'disabled' : ''}>
-                <option value="">${eq.area_id ? "Select Sub Area..." : "Select Area first..."}</option>
-                ${data.subAreas.map(sa => `
-                  <option value="${sa.id}" data-parent="${sa.parent_id}" ${eq.equipment_sub_area_id === sa.id ? "selected" : ""} ${eq.area_id !== sa.parent_id ? "hidden" : ""}>${escapeHtml(sa.name)}</option>
-                `).join("")}
-                ${hasManageLocations ? `<option value="__add_new__" data-parent="__always__" ${eq.area_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new sub area...</option>` : ''}
-              </select>
-            </div>
-            </div>
-          </div>
-
-          <!-- Assignment & TeamViewer -->
-          <div class="card">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-              </svg>
-              Assignment & Remote Access
-            </h2>
-            
-            <div class="grid grid-cols-1 gap-4">
-            <div>
-              <label for="assigned_to" class="label">Assigned To</label>
-              <select id="assigned_to" name="assigned_to" class="select-field" ${isReadonly ? 'disabled' : ''}>
-                <option value="">Unassigned</option>
-                ${data.employees.map(e => `
-                  <option value="${escapeHtml(e.employee_no)}" ${eq.assigned_to === e.employee_no ? "selected" : ""}>${escapeHtml(e.name)} (${escapeHtml(e.employee_no)})</option>
-                `).join("")}
-              </select>
-            </div>
-            <div>
-              <label for="teamviewer" class="label">TeamViewer ID</label>
-              <input 
-                type="text" 
-                id="teamviewer" 
-                name="teamviewer" 
-                value="${eq.teamviewer || ""}"
-                placeholder="Enter TeamViewer ID..."
-                class="input-field"
-                ${isReadonly ? 'readonly disabled' : ''}
-              >
-            </div>
-              <div>
-                <label for="comment" class="label">Comment</label>
-                <textarea 
-                  id="comment" 
-                  name="comment"
-                  rows="3"
-                  placeholder="Add notes about this equipment..."
-                  class="input-field"
-                  ${isReadonly ? 'readonly disabled' : ''}
-                >${eq.comment || ""}</textarea>
-              </div>
-            </div>
-          </div>
-        </div>
-          </div>
-          <!-- End of left side form grid -->
-
-          <!-- Right side: Device History Panel -->
-          <div class="w-full lg:w-[360px] xl:w-[400px] flex-shrink-0">
-            <div class="card sticky top-4">
-              <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                  Device History
-                </h2>
-                <span id="history-count" class="text-xs text-gray-500 dark:text-gray-400"></span>
-              </div>
-
-              <div id="history-container" class="max-h-[600px] overflow-y-auto">
-                <div id="history-loading" class="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <svg class="w-8 h-8 animate-spin mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                  </svg>
-                  Loading history...
-                </div>
-                <div id="history-entries" class="hidden divide-y divide-gray-100 dark:divide-gray-700"></div>
-                <div id="history-empty" class="hidden text-center py-8 text-gray-500 dark:text-gray-400 text-sm">No history records found</div>
-                <div id="history-error" class="hidden text-center py-8 text-red-500 dark:text-red-400 text-sm">Failed to load history</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- End of main layout flex container -->
-
-        <!-- Write-Off Status Modal -->
-        <div id="writeOffModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 transition-colors">
-            <div class="flex justify-between items-center mb-4">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Write-Off Status</h3>
-              <button onclick="closeWriteOffModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-            <form id="write-off-modal-form" onsubmit="return submitWriteOffModal(event)">
-              <div class="space-y-4">
-                <div>
-                  <label for="modal_is_written_off" class="label">Write-Off Reason</label>
-                  <select id="modal_is_written_off" name="is_written_off" class="select-field" onchange="toggleModalWriteOffComment(this.value)" ${isReadonly ? 'disabled' : ''}>
-                    <option value="">Not written off (Active)</option>
-                    ${data.writeOffReasons.map(r => `
-                      <option value="${r.id}" ${eq.is_written_off === r.id ? "selected" : ""}>${escapeHtml(r.name)}</option>
-                    `).join("")}
-                  </select>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    ${eq.is_written_off ? "Select 'Not written off' to restore this equipment to active status." : "Select a reason to write off this equipment."}
-                  </p>
-                </div>
-                <div id="modal-write-off-comment-container" class="${eq.is_written_off ? "" : "hidden"}">
-                  <label for="modal_write_off_comment" class="label">Write-Off Comment <span class="text-red-500">*</span></label>
-                  <textarea 
-                    id="modal_write_off_comment" 
-                    name="write_off_comment"
-                    rows="3"
-                    placeholder="Please provide a comment explaining why this equipment is being written off..."
-                    class="input-field"
-                    ${eq.is_written_off ? "required" : ""}
-                    ${isReadonly ? 'readonly disabled' : ''}
-                  ></textarea>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">A comment is required when writing off equipment.</p>
-                </div>
-              </div>
-              <div class="flex justify-end gap-3 mt-6">
-                <button type="button" onclick="closeWriteOffModal()" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-success" ${isReadonly ? 'disabled' : ''}>Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <!-- Repair Status Modal -->
-        <div id="repairModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 transition-colors">
-            <div class="flex justify-between items-center mb-4">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Repair Status</h3>
-              <button onclick="closeRepairModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-            <form id="repair-modal-form" onsubmit="return submitRepairModal(event)">
-              <div class="space-y-4">
-                <div>
-                  <label for="modal_repair_status" class="label">Repair Status</label>
-                  <select id="modal_repair_status" name="repair_status" class="select-field" onchange="toggleModalRepairFields(this.value)" ${isReadonly ? 'disabled' : ''}>
-                    <option value="">Not in repair (Active)</option>
-                    <option value="needs_repair" ${eq.repair_status === 'needs_repair' ? 'selected' : ''}>Needs Repair</option>
-                    <option value="at_supplier" ${eq.repair_status === 'at_supplier' ? 'selected' : ''}>At Supplier</option>
-                    <option value="returned" ${eq.repair_status === 'returned' ? 'selected' : ''}>Returned</option>
-                    <option value="in_backup" ${eq.repair_status === 'in_backup' ? 'selected' : ''}>In Use</option>
-                  </select>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Select repair status to track equipment sent for repair.
-                  </p>
-                </div>
-                <div id="modal-repair-fields-container" class="${eq.repair_status ? '' : 'hidden'}">
-                  <div>
-                    <label for="modal_repair_note" class="label">Repair Issue Note <span class="text-red-500">*</span></label>
-                    <textarea 
-                      id="modal_repair_note" 
-                      name="repair_note"
-                      rows="3"
-                      placeholder="Describe the repair issue..."
-                      class="input-field"
-                      ${eq.repair_status === 'needs_repair' ? 'required' : ''}
-                      ${isReadonly ? 'readonly disabled' : ''}
-                    >${escapeHtml(eq.repair_note || '')}</textarea>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">A note is required when registering equipment for repair.</p>
+        <!-- Review Tab Panel -->
+        <div class="tab-panel hidden">
+          ${hasAuditApprover ? `
+          <!-- Header -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden mb-4 sm:mb-6 border border-gray-200 dark:border-gray-700">
+            <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 gap-3">
+                <div class="flex items-center gap-2 sm:gap-3">
+                  <div class="text-emerald-500 dark:text-emerald-400">
+                    ${CLIPBOARD_CHECK_ICON}
                   </div>
-                  <div class="mt-4">
-                    <label for="modal_repair_physical_location" class="label">Physical Location</label>
-                    <input
-                      type="text"
-                      id="modal_repair_physical_location"
-                      name="repair_physical_location"
-                      placeholder="e.g., Cupboard, Storage Room A"
-                      value="${escapeHtml(eq.repair_physical_location || '')}"
-                      class="input-field"
-                      maxlength="255"
-                      ${isReadonly ? 'readonly disabled' : ''}
+                  <h1 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Inventory Audit Review</h1>
+                </div>
+                <div class="flex flex-wrap items-center gap-2" id="header-action-buttons">
+                  <button
+                    id="copy-api-btn"
+                    class="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-gray-700 text-white text-xs sm:text-sm rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+                    title="Copy API endpoint URL"
+                  >
+                    ${CLIPBOARD_ICON.replace('w-5 h-5', 'w-3.5 h-3.5 sm:w-4 sm:h-4')}
+                    <span class="hidden sm:inline">Copy API</span>
+                    <span class="sm:hidden">API</span>
+                  </button>
+                  <button
+                    id="export-btn"
+                    class="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-emerald-600 text-white text-xs sm:text-sm rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
+                  >
+                    ${DOWNLOAD_ICON.replace('w-5 h-5', 'w-3.5 h-3.5 sm:w-4 sm:h-4')}
+                    <span class="hidden sm:inline">Export CSV</span>
+                    <span class="sm:hidden">Export</span>
+                  </button>
+                  <button
+                    id="refresh-btn"
+                    class="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  >
+                    ${REFRESH_ICON.replace('w-5 h-5', 'w-3.5 h-3.5 sm:w-4 sm:h-4')}
+                    <span class="hidden sm:inline">Refresh</span>
+                  </button>
+                  <button
+                    id="apply-all-btn"
+                    class="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-purple-600 text-white text-xs sm:text-sm rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
+                    title="Apply latest audit entry for each service tag"
+                  >
+                    ${CHECK_CIRCLE_ICON.replace('w-5 h-5', 'w-3.5 h-3.5 sm:w-4 sm:h-4')}
+                    <span class="hidden sm:inline">Apply All Latest</span>
+                    <span class="sm:hidden">Apply All</span>
+                  </button>
+                </div>
+              </div>
+              <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3" id="review-controls">
+                <label class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">Inventory Period:</label>
+                <select
+                  id="period-selector"
+                  class="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">All Periods</option>
+                  ${allPeriods.map(p => `<option value="${p.id}" ${defaultPeriod && defaultPeriod.id === p.id ? 'selected' : ''}>${escapeHtml(p.inventory_nr)}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+      <div id="loading-state" class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 sm:p-12 text-center border border-gray-200 dark:border-gray-700">
+        <div class="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 text-emerald-500">
+          ${REFRESH_ICON.replace('w-5 h-5', 'w-10 h-10 sm:w-12 sm:h-12 animate-spin')}
+        </div>
+        <p class="text-sm sm:text-base text-gray-500 dark:text-gray-400">Loading audit records...</p>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="hidden bg-red-900/30 border border-red-700 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
+        <div class="flex items-start gap-2 sm:gap-3">
+          ${EXCLAMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 mt-0.5').replace('text-current', 'text-red-400')}
+          <div class="flex-1 min-w-0">
+            <h3 class="text-sm sm:text-base text-red-400 font-medium">Error loading data</h3>
+            <p id="error-message" class="text-xs sm:text-sm text-red-300 mt-1 break-words"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div id="table-container" class="hidden bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div class="overflow-x-auto -mx-2 sm:mx-0">
+          <table class="w-full min-w-[800px]">
+            <thead class="bg-gray-100 dark:bg-gray-700">
+              <tr>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Service Tag</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider hidden sm:table-cell">Type</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Location</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Assigned To</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider hidden md:table-cell">TeamViewer</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider hidden lg:table-cell">Comment</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Updated By / Date</th>
+                <th class="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <!-- Data will be populated here -->
+            </tbody>
+          </table>
+        </div>
+        <div id="table-footer" class="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+          <div class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+            <span id="record-count">0</span> records
+          </div>
+          <div class="text-[10px] sm:text-xs text-gray-500">
+            Last updated: <span id="last-update">Never</span>
+          </div>
+        </div>
+        </div>
+          ` : `
+            <!-- No Permission Message -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <div class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4 flex items-center justify-center">
+                ${LOCK_ICON.replace('w-5 h-5', 'w-12 h-12')}
+              </div>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-1">Permission Required</h3>
+              <p class="text-gray-500 dark:text-gray-400 text-sm">You do not have permission to review audit records.</p>
+            </div>
+          `}
+        </div>
+
+        <!-- Periods Tab Panel -->
+        <div class="tab-panel hidden">
+          ${hasAuditApprover ? `
+            <!-- Add New Period Form -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden mb-4 sm:mb-6 border border-gray-200 dark:border-gray-700">
+              <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center gap-2 sm:gap-3">
+                  <div class="text-emerald-500 dark:text-emerald-400">
+                    ${CLIPBOARD_CHECK_ICON}
+                  </div>
+                  <h2 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Inventory Period</h2>
+                </div>
+              </div>
+              <div class="px-3 sm:px-6 py-4">
+                <form method="POST" action="/inventory-periods" class="space-y-4" id="createPeriodForm">
+                  <input type="hidden" name="action" value="add">
+                  
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label for="start_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Start Date *
+                      </label>
+                      <input
+                        type="date"
+                        id="start_date"
+                        name="start_date"
+                        required
+                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        onchange="updatePeriodPreview()"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="end_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        End Date *
+                      </label>
+                      <input
+                        type="date"
+                        id="end_date"
+                        name="end_date"
+                        required
+                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="comment" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Comment
+                      </label>
+                      <input
+                        type="text"
+                        id="comment"
+                        name="comment"
+                        placeholder="Optional description"
+                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Period Name Preview -->
+                  <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-3">
+                    <span class="text-sm text-gray-500 dark:text-gray-400">Period name will be generated as: </span>
+                    <span id="periodNamePreview" class="font-medium text-gray-900 dark:text-white">INV-YYYY-QX-1</span>
+                    <span class="text-xs text-gray-500 ml-2">(auto-generated based on start date)</span>
+                  </div>
+                  
+                  <div class="flex justify-end">
+                    <button
+                      type="submit"
+                      class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
                     >
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Record where the equipment is physically located.</p>
+                      ${PLUS_ICON}
+                      Create Period
+                    </button>
                   </div>
-                </div>
-              </div>
-              <div class="flex justify-end gap-3 mt-6">
-                <button type="button" onclick="closeRepairModal()" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-success" ${isReadonly ? 'disabled' : ''}>Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <script>
-          function toggleModalWriteOffComment(value) {
-            const container = document.getElementById('modal-write-off-comment-container');
-            const commentField = document.getElementById('modal_write_off_comment');
-            if (value && value !== '') {
-              container.classList.remove('hidden');
-              commentField.setAttribute('required', 'required');
-            } else {
-              container.classList.add('hidden');
-              commentField.removeAttribute('required');
-              commentField.value = '';
-            }
-          }
-
-          function openWriteOffModal() {
-            const modal = document.getElementById('writeOffModal');
-            const writeOffSelect = document.getElementById('modal_is_written_off');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            if (writeOffSelect) {
-              toggleModalWriteOffComment(writeOffSelect.value);
-            }
-          }
-
-          function closeWriteOffModal() {
-            const modal = document.getElementById('writeOffModal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-          }
-
-          function submitWriteOffModal(event) {
-            event.preventDefault();
-            const form = event.target;
-            const formData = new FormData(form);
-            
-            // Get the main form
-            const mainForm = document.querySelector('form[action*="/edit/"]');
-            if (!mainForm) return false;
-            
-            // Update hidden fields in main form or add them
-            const isWrittenOff = formData.get('is_written_off');
-            const writeOffComment = formData.get('write_off_comment');
-            
-            // Remove existing write-off fields
-            const existingWrittenOff = mainForm.querySelector('select[name="is_written_off"], input[name="is_written_off"]');
-            const existingComment = mainForm.querySelector('textarea[name="write_off_comment"], input[name="write_off_comment"]');
-            
-            if (existingWrittenOff) existingWrittenOff.remove();
-            if (existingComment) existingComment.remove();
-            
-            // Add new hidden fields
-            if (isWrittenOff) {
-              const writtenOffInput = document.createElement('input');
-              writtenOffInput.type = 'hidden';
-              writtenOffInput.name = 'is_written_off';
-              writtenOffInput.value = isWrittenOff.toString();
-              mainForm.appendChild(writtenOffInput);
-            }
-            
-            if (writeOffComment) {
-              const commentInput = document.createElement('input');
-              commentInput.type = 'hidden';
-              commentInput.name = 'write_off_comment';
-              commentInput.value = writeOffComment.toString();
-              mainForm.appendChild(commentInput);
-            }
-            
-            // Validate if writing off and no comment
-            if (isWrittenOff && isWrittenOff !== '' && !writeOffComment) {
-              alert('Write-off comment is required when writing off equipment.');
-              return false;
-            }
-            
-            // Close modal and submit main form
-            closeWriteOffModal();
-            mainForm.submit();
-            return false;
-          }
-
-          window.openWriteOffModal = openWriteOffModal;
-          window.closeWriteOffModal = closeWriteOffModal;
-          window.toggleModalWriteOffComment = toggleModalWriteOffComment;
-          window.submitWriteOffModal = submitWriteOffModal;
-          
-          function toggleModalRepairFields(value) {
-            const container = document.getElementById('modal-repair-fields-container');
-            const noteField = document.getElementById('modal_repair_note');
-            
-            if (value && value !== '') {
-              container.classList.remove('hidden');
-              if (value === 'needs_repair') {
-                noteField.setAttribute('required', 'required');
-              } else {
-                noteField.removeAttribute('required');
-              }
-            } else {
-              container.classList.add('hidden');
-              noteField.removeAttribute('required');
-            }
-          }
-
-          function openRepairModal() {
-            const modal = document.getElementById('repairModal');
-            const repairStatus = document.getElementById('modal_repair_status');
-            
-            // Store original value to detect if sending to repair
-            if (repairStatus) {
-              repairStatus.dataset.originalValue = repairStatus.value || '';
-            }
-            
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            if (repairStatus) {
-              toggleModalRepairFields(repairStatus.value);
-            }
-          }
-
-
-          function closeRepairModal() {
-            const modal = document.getElementById('repairModal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-          }
-
-          function submitRepairModal(event) {
-            event.preventDefault();
-            const form = event.target;
-            const formData = new FormData(form);
-            
-            // Get the main form
-            const mainForm = document.querySelector('form[action*="/edit/"]');
-            if (!mainForm) return false;
-            
-            // Update hidden fields in main form or add them
-            const repairStatus = formData.get('repair_status');
-            const repairNote = formData.get('repair_note');
-            const repairLocation = formData.get('repair_physical_location');
-            
-            // Remove existing repair fields
-            const existingStatus = mainForm.querySelector('input[name="repair_status"]');
-            const existingNote = mainForm.querySelector('textarea[name="repair_note"], input[name="repair_note"]');
-            const existingLocation = mainForm.querySelector('input[name="repair_physical_location"]');
-            
-            if (existingStatus) existingStatus.remove();
-            if (existingNote) existingNote.remove();
-            if (existingLocation) existingLocation.remove();
-            
-            // Add new hidden fields
-            if (repairStatus) {
-              const statusInput = document.createElement('input');
-              statusInput.type = 'hidden';
-              statusInput.name = 'repair_status';
-              statusInput.value = repairStatus.toString();
-              mainForm.appendChild(statusInput);
-            }
-            
-            if (repairNote) {
-              const noteInput = document.createElement('input');
-              noteInput.type = 'hidden';
-              noteInput.name = 'repair_note';
-              noteInput.value = repairNote.toString();
-              mainForm.appendChild(noteInput);
-            }
-            
-            if (repairLocation) {
-              const locationInput = document.createElement('input');
-              locationInput.type = 'hidden';
-              locationInput.name = 'repair_physical_location';
-              locationInput.value = repairLocation.toString();
-              mainForm.appendChild(locationInput);
-            }
-            
-            // Validate if needs_repair and no note
-            if (repairStatus === 'needs_repair' && !repairNote) {
-              alert('Repair note is required when registering equipment for repair.');
-              return false;
-            }
-            
-            // Close modal and submit main form
-            closeRepairModal();
-            mainForm.submit();
-            return false;
-          }
-
-          window.openRepairModal = openRepairModal;
-          window.closeRepairModal = closeRepairModal;
-          window.toggleModalRepairFields = toggleModalRepairFields;
-          window.submitRepairModal = submitRepairModal;
-          
-          // Dell Warranty Integration
-          let dellWarrantyData = null;
-          
-          function isDellVendor() {
-            const vendorSelect = document.getElementById('vendor_id');
-            if (!vendorSelect) return false;
-            const selectedOption = vendorSelect.options[vendorSelect.selectedIndex];
-            if (!selectedOption || !selectedOption.text) return false;
-            return selectedOption.text.toLowerCase().includes('dell');
-          }
-          
-          function updateDellWarrantyButtonVisibility() {
-            const btn = document.getElementById('check-dell-warranty-btn');
-            if (!btn) return;
-            if (isDellVendor()) {
-              btn.classList.remove('hidden');
-            } else {
-              btn.classList.add('hidden');
-            }
-          }
-          
-          window.checkDellWarranty = async function() {
-            const modal = document.getElementById('dellWarrantyModal');
-            const loading = document.getElementById('dellWarrantyLoading');
-            const error = document.getElementById('dellWarrantyError');
-            const errorMsg = document.getElementById('dellWarrantyErrorMessage');
-            const content = document.getElementById('dellWarrantyContent');
-            const applyBtn = document.getElementById('apply-dell-warranty-btn');
-            
-            // Show modal with loading state
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            loading.classList.remove('hidden');
-            error.classList.add('hidden');
-            content.classList.add('hidden');
-            applyBtn.classList.add('hidden');
-            
-            const serviceTag = '${escapeHtml(eq.service_tag)}';
-            
-            try {
-              const response = await fetch('/api/dell-warranty/' + encodeURIComponent(serviceTag));
-              const result = await response.json();
-              
-              loading.classList.add('hidden');
-              
-              if (!result.success) {
-                error.classList.remove('hidden');
-                errorMsg.textContent = result.message || 'Failed to fetch warranty information';
-                return;
-              }
-              
-              dellWarrantyData = result.data;
-              
-              // Populate device info
-              document.getElementById('dell-service-tag').textContent = dellWarrantyData.serviceTag || '-';
-              document.getElementById('dell-model').textContent = dellWarrantyData.model || '-';
-              document.getElementById('dell-product-line').textContent = dellWarrantyData.productLine || '-';
-              document.getElementById('dell-ship-date').textContent = dellWarrantyData.shipDate || '-';
-              
-              // Populate warranty dates
-              document.getElementById('dell-warranty-start').textContent = dellWarrantyData.warrantyStart || '-';
-              document.getElementById('dell-warranty-end').textContent = dellWarrantyData.warrantyEnd || '-';
-              
-              // Populate new date inputs
-              document.getElementById('dell-new-start').value = dellWarrantyData.warrantyStart || '';
-              document.getElementById('dell-new-end').value = dellWarrantyData.warrantyEnd || '';
-              
-              // Populate entitlements
-              const entContainer = document.getElementById('dell-entitlements-container');
-              const entList = document.getElementById('dell-entitlements');
-              
-              if (dellWarrantyData.entitlements && dellWarrantyData.entitlements.length > 0) {
-                entContainer.classList.remove('hidden');
-                entList.innerHTML = dellWarrantyData.entitlements.map(ent => \`
-                  <div class="bg-gray-50 dark:bg-gray-700/50 rounded p-2 text-sm">
-                    <div class="font-medium text-gray-900 dark:text-white">\${(ent.serviceLevel || 'Unknown Service').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
-                    <div class="text-gray-500 dark:text-gray-400 text-xs">\${ent.startDate || ''} - \${ent.endDate || ''}</div>
-                  </div>
-                \`).join('');
-              } else {
-                entContainer.classList.add('hidden');
-              }
-              
-              content.classList.remove('hidden');
-              applyBtn.classList.remove('hidden');
-              
-            } catch (err) {
-              loading.classList.add('hidden');
-              error.classList.remove('hidden');
-              errorMsg.textContent = 'Error: ' + (err.message || 'Unknown error');
-            }
-          };
-          
-          window.closeDellWarrantyModal = function() {
-            const modal = document.getElementById('dellWarrantyModal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-            dellWarrantyData = null;
-          };
-          
-          window.applyDellWarranty = function() {
-            if (!dellWarrantyData) return;
-            
-            const purchaseDateInput = document.getElementById('purchase_date');
-            const warrantyExpiryInput = document.getElementById('warranty_expiry_date');
-            
-            if (dellWarrantyData.warrantyStart && purchaseDateInput) {
-              purchaseDateInput.value = dellWarrantyData.warrantyStart;
-            }
-            
-            if (dellWarrantyData.warrantyEnd && warrantyExpiryInput) {
-              warrantyExpiryInput.value = dellWarrantyData.warrantyEnd;
-              // Update styling for expired/valid warranty
-              const today = new Date();
-              const expiryDate = new Date(dellWarrantyData.warrantyEnd);
-              if (expiryDate < today) {
-                warrantyExpiryInput.classList.add('text-red-600', 'dark:text-red-400', 'bg-red-50', 'dark:bg-red-900/20', 'border-red-200', 'dark:border-red-800');
-              } else {
-                warrantyExpiryInput.classList.remove('text-red-600', 'dark:text-red-400', 'bg-red-50', 'dark:bg-red-900/20', 'border-red-200', 'dark:border-red-800');
-              }
-            }
-            
-            closeDellWarrantyModal();
-          };
-          
-          // Initialize on page load
-          document.addEventListener('DOMContentLoaded', function() {
-            // Update Dell warranty button visibility on page load
-            updateDellWarrantyButtonVisibility();
-            
-            // Update Dell warranty button visibility when vendor changes
-            const vendorSelect = document.getElementById('vendor_id');
-            if (vendorSelect) {
-              vendorSelect.addEventListener('change', updateDellWarrantyButtonVisibility);
-            }
-            // Modals are opened on button click, no initialization needed
-            
-            // Initialize sub-area filtering based on selected area
-            const areaSelect = document.getElementById('area_id');
-            const subAreaSelect = document.getElementById('equipment_sub_area_id');
-            if (areaSelect && subAreaSelect) {
-              const selectedAreaId = areaSelect.value;
-              if (selectedAreaId) {
-                loadSubAreas(selectedAreaId);
-              } else {
-                // If no area selected, hide all sub-areas
-                loadSubAreas('');
-              }
-            }
-            
-            ${!isAdmin && userPlantId !== null ? `
-            // Restrict location selection to user's plant only (server already filters, this is a safety check)
-            const userPlantIdValue = ${userPlantId};
-            const plantSelect = document.getElementById('plant_id');
-
-            // Hide and disable plants that don't match user's plant
-            if (plantSelect) {
-              const plantOptions = plantSelect.querySelectorAll('option[value]:not([value=""]):not([value="__add_new__"])');
-              plantOptions.forEach(opt => {
-                const plantId = parseInt(opt.value);
-                if (plantId !== userPlantIdValue) {
-                  opt.disabled = true;
-                  opt.style.display = 'none';
-                }
-              });
-
-              // Prevent selecting other plants
-              plantSelect.addEventListener('change', function() {
-                if (this.value && parseInt(this.value) !== userPlantIdValue) {
-                  alert('You can only select locations from your assigned plant. Resetting to your plant.');
-                  this.value = userPlantIdValue.toString();
-                  this.dispatchEvent(new Event('change'));
-                }
-              });
-            }
-            ` : ''}
-
-            // Load device history
-            loadDeviceHistory(${eq.id});
-          });
-
-          // Device History functions
-          function formatHistoryDate(dateStr) {
-            if (!dateStr) return '-';
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-          }
-
-          function escapeHistoryHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-          }
-
-          async function loadDeviceHistory(equipmentId) {
-            const historyLoading = document.getElementById('history-loading');
-            const historyEntries = document.getElementById('history-entries');
-            const historyEmpty = document.getElementById('history-empty');
-            const historyError = document.getElementById('history-error');
-            const historyCount = document.getElementById('history-count');
-
-            try {
-              const response = await fetch('/api/equipment/history?equipment_id=' + equipmentId);
-              const result = await response.json();
-
-              if (historyLoading) historyLoading.classList.add('hidden');
-
-              if (result.success && result.data && result.data.length > 0) {
-                if (historyCount) historyCount.textContent = result.data.length + ' entries';
-                if (historyEntries) {
-                  historyEntries.innerHTML = result.data.map(function(log) {
-                    return '<div class="py-3 first:pt-0">' +
-                      '<div class="flex items-start justify-between gap-2">' +
-                        '<div class="flex-1 min-w-0">' +
-                          '<div class="flex items-center gap-2 flex-wrap">' +
-                            '<span class="text-sm font-medium text-gray-900 dark:text-white">' + formatHistoryDate(log.created) + '</span>' +
-                            (log.inventory_nr ? '<span class="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">' + escapeHistoryHtml(log.inventory_nr) + '</span>' : '') +
-                            (log.write_off_reason ? '<span class="px-1.5 py-0.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded">Written Off</span>' : '') +
-                          '</div>' +
-                          '<div class="mt-1 space-y-0.5">' +
-                            '<div class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">' +
-                              '<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>' +
-                              '<span class="truncate">' + (log.assigned_to_name ? escapeHistoryHtml(log.assigned_to + ' - ' + log.assigned_to_name) : (log.assigned_to ? escapeHistoryHtml(log.assigned_to) : 'Not assigned')) + '</span>' +
-                            '</div>' +
-                            '<div class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">' +
-                              '<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' +
-                              '<span class="truncate">' + escapeHistoryHtml(log.location || 'No location') + '</span>' +
-                            '</div>' +
-                          '</div>' +
-                          (log.comment ? '<div class="mt-1 text-xs text-gray-500 dark:text-gray-400 italic truncate">' + escapeHistoryHtml(log.comment) + '</div>' : '') +
-                        '</div>' +
-                        (log.updated_by_name ? '<div class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">by ' + escapeHistoryHtml(log.updated_by_name) + '</div>' : '') +
-                      '</div>' +
-                    '</div>';
-                  }).join('');
-                  historyEntries.classList.remove('hidden');
-                }
-              } else {
-                if (historyEmpty) historyEmpty.classList.remove('hidden');
-                if (historyCount) historyCount.textContent = '0 entries';
-              }
-            } catch (err) {
-              console.error('Failed to load history:', err);
-              if (historyLoading) historyLoading.classList.add('hidden');
-              if (historyError) historyError.classList.remove('hidden');
-            }
-          }
-
-          // Close modals on escape key
-          document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-              const repairModal = document.getElementById('repairModal');
-              const writeOffModal = document.getElementById('writeOffModal');
-              const dellWarrantyModal = document.getElementById('dellWarrantyModal');
-              if (repairModal && !repairModal.classList.contains('hidden')) {
-                closeRepairModal();
-              }
-              if (writeOffModal && !writeOffModal.classList.contains('hidden')) {
-                closeWriteOffModal();
-              }
-              if (dellWarrantyModal && !dellWarrantyModal.classList.contains('hidden')) {
-                closeDellWarrantyModal();
-              }
-            }
-          });
-
-          // Close modals on background click
-          document.getElementById('repairModal')?.addEventListener('click', function(e) {
-            if (e.target === this) {
-              closeRepairModal();
-            }
-          });
-
-          document.getElementById('writeOffModal')?.addEventListener('click', function(e) {
-            if (e.target === this) {
-              closeWriteOffModal();
-            }
-          });
-
-          document.getElementById('dellWarrantyModal')?.addEventListener('click', function(e) {
-            if (e.target === this) {
-              closeDellWarrantyModal();
-            }
-          });
-        </script>
-
-        <!-- Submit - Icon buttons in single row -->
-        <div class="mt-6">
-          <div class="flex items-center justify-stretch gap-2 sm:justify-end">
-            <!-- Cancel -->
-            <a href="/" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" title="Cancel">
-              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </a>
-            <!-- Print Label -->
-            <button type="button" id="print-label" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${isReadonly ? 'opacity-50 cursor-not-allowed' : ''}" data-service-tag="${escapeHtml(eq.service_tag)}" title="Print Label" ${isReadonly ? 'disabled' : ''}>
-              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-              </svg>
-            </button>
-            <!-- Write-Off Status -->
-            <button type="button" onclick="openWriteOffModal()" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 ${eq.is_written_off ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'} rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${isReadonly ? 'opacity-50 cursor-not-allowed' : ''}" title="${eq.is_written_off ? 'Written Off: ' + escapeHtml(eq.write_off_reason || 'Written Off') : 'Set Write-Off Status'}" ${isReadonly ? 'disabled' : ''}>
-              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-              </svg>
-            </button>
-            <!-- Repair Status -->
-            <button type="button" onclick="openRepairModal()" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 ${eq.repair_status && eq.repair_status !== 'in_backup' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'} rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${isReadonly ? 'opacity-50 cursor-not-allowed' : ''}" title="${eq.repair_status ? (eq.repair_status === 'needs_repair' ? 'Needs Repair' : eq.repair_status === 'at_supplier' ? 'At Supplier' : eq.repair_status === 'returned' ? 'Returned' : eq.repair_status === 'in_backup' ? 'In Use' : 'Set Repair Status') : 'Set Repair Status'}" ${isReadonly ? 'disabled' : ''}>
-              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 11-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z"/>
-              </svg>
-            </button>
-            <!-- Save Changes -->
-            <button type="submit" form="equipment-edit-form" class="flex-1 sm:flex-none flex items-center justify-center p-3 sm:p-2.5 lg:p-3.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors ${isReadonly ? 'opacity-50 cursor-not-allowed' : ''}" title="${isReadonly ? 'Read-only Mode' : 'Save Changes'}" ${isReadonly ? 'disabled' : ''} ${isReadonly ? '' : 'id="save-changes-btn"'}>
-              <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-        
-        <!-- Dell Warranty Modal -->
-        <div id="dellWarrantyModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 transition-colors max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                </svg>
-                Dell Warranty Information
-              </h3>
-              <button onclick="closeDellWarrantyModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-            
-            <div id="dellWarrantyLoading" class="text-center py-8">
-              <svg class="w-10 h-10 animate-spin text-blue-600 dark:text-blue-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-              </svg>
-              <p class="text-gray-600 dark:text-gray-400 mt-3">Fetching warranty info from Dell...</p>
-            </div>
-            
-            <div id="dellWarrantyError" class="hidden text-center py-8">
-              <svg class="w-10 h-10 text-red-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              <p id="dellWarrantyErrorMessage" class="text-red-600 dark:text-red-400"></p>
-            </div>
-            
-            <div id="dellWarrantyContent" class="hidden">
-              <div class="space-y-4">
-                <!-- Device Info -->
-                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                  <h4 class="font-medium text-gray-900 dark:text-white mb-2">Device Information</h4>
-                  <dl class="grid grid-cols-2 gap-2 text-sm">
-                    <dt class="text-gray-500 dark:text-gray-400">Service Tag:</dt>
-                    <dd id="dell-service-tag" class="font-mono text-gray-900 dark:text-white"></dd>
-                    <dt class="text-gray-500 dark:text-gray-400">Model:</dt>
-                    <dd id="dell-model" class="text-gray-900 dark:text-white"></dd>
-                    <dt class="text-gray-500 dark:text-gray-400">Product Line:</dt>
-                    <dd id="dell-product-line" class="text-gray-900 dark:text-white"></dd>
-                    <dt class="text-gray-500 dark:text-gray-400">Ship Date:</dt>
-                    <dd id="dell-ship-date" class="text-gray-900 dark:text-white"></dd>
-                  </dl>
-                </div>
-                
-                <!-- Warranty Dates -->
-                <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                  <h4 class="font-medium text-blue-900 dark:text-blue-200 mb-2">Warranty Period</h4>
-                  <dl class="grid grid-cols-2 gap-2 text-sm">
-                    <dt class="text-blue-600 dark:text-blue-400">Warranty Start:</dt>
-                    <dd id="dell-warranty-start" class="font-semibold text-blue-900 dark:text-blue-200"></dd>
-                    <dt class="text-blue-600 dark:text-blue-400">Warranty End:</dt>
-                    <dd id="dell-warranty-end" class="font-semibold text-blue-900 dark:text-blue-200"></dd>
-                  </dl>
-                </div>
-                
-                <!-- Entitlements List -->
-                <div id="dell-entitlements-container" class="hidden">
-                  <h4 class="font-medium text-gray-900 dark:text-white mb-2">Service Entitlements</h4>
-                  <div id="dell-entitlements" class="space-y-2 max-h-40 overflow-y-auto"></div>
-                </div>
-                
-                <!-- Update Preview -->
-                <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <h4 class="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    Apply Changes
-                  </h4>
-                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">The following warranty dates will be updated:</p>
-                  <div class="grid grid-cols-2 gap-4">
-                    <div>
-                      <label class="label text-xs">New Warranty Start</label>
-                      <input type="date" id="dell-new-start" class="input-field text-sm" readonly>
-                    </div>
-                    <div>
-                      <label class="label text-xs">New Warranty End</label>
-                      <input type="date" id="dell-new-end" class="input-field text-sm" readonly>
-                    </div>
-                  </div>
-                </div>
+                </form>
               </div>
             </div>
             
-            <div class="flex justify-end gap-3 mt-6">
-              <button onclick="closeDellWarrantyModal()" class="btn btn-secondary">Cancel</button>
-              <button id="apply-dell-warranty-btn" onclick="applyDellWarranty()" class="btn btn-primary hidden">
-                <span class="flex items-center gap-2">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                  </svg>
-                  Apply Warranty Dates
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Print Modal -->
-        <div id="printModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 transition-colors">
-            <div class="flex justify-between items-center mb-4">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Select Printer</h3>
-              <button onclick="closePrintModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-            <div id="printModalBody">
-              <div id="printers-loading" class="text-center py-4">
-                <svg class="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-                <p class="text-gray-600 dark:text-gray-400 mt-2">Loading printers...</p>
+            <!-- Periods List -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+              <div class="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Existing Periods</h2>
               </div>
-              <div id="printers-list" class="hidden max-h-64 overflow-y-auto mb-4"></div>
-              <div id="printers-error" class="hidden text-red-600 dark:text-red-400 text-sm mb-4"></div>
+
+              ${allPeriodsForTab.length === 0 ? `
+                <div class="p-8 text-center text-gray-500 dark:text-gray-400">
+                  <p>No inventory periods found. Create one above to get started.</p>
+                </div>
+              ` : `
+                <div class="overflow-x-auto">
+                  <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-100 dark:bg-gray-700">
+                      <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Period</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Start Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">End Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Comment</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      ${allPeriodsForTab.map(period => {
+                        const startDateStr = formatDate(period.start_date);
+                        const endDateStr = formatDate(period.end_date);
+                        const isActive = endDateStr >= today && startDateStr <= today;
+                        const isPast = endDateStr < today;
+                        const isFuture = startDateStr > today;
+                        
+                        let statusBadge = '';
+                        if (isActive) {
+                          statusBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Active</span>';
+                        } else if (isPast) {
+                          statusBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">Completed</span>';
+                        } else if (isFuture) {
+                          statusBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">Upcoming</span>';
+                        }
+                        
+                        if (period.confirmed_by) {
+                          statusBadge += ' <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">Confirmed</span>';
+                        }
+                        
+                        return `
+                          <tr class="${isActive ? 'bg-green-50 dark:bg-green-900/20' : ''}">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                              ${escapeHtml(period.inventory_nr)}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                              ${escapeHtml(startDateStr)}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                              ${escapeHtml(endDateStr)}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                              ${statusBadge}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate">
+                              ${period.comment ? escapeHtml(period.comment) : '-'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                              ${!period.confirmed_by ? `
+                                <form method="POST" action="/inventory-periods" class="inline">
+                                  <input type="hidden" name="action" value="delete">
+                                  <input type="hidden" name="id" value="${period.id}">
+                                  <button
+                                    type="submit"
+                                    class="text-red-400 hover:text-red-300"
+                                    onclick="return confirm('Are you sure you want to delete this period?')"
+                                  >
+                                    ${TRASH_ICON}
+                                  </button>
+                                </form>
+                              ` : `
+                                <span class="text-gray-500" title="Cannot delete confirmed periods">
+                                  ${CHECK_CIRCLE_ICON}
+                                </span>
+                              `}
+                            </td>
+                          </tr>
+                        `;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `}
             </div>
-            <div class="flex justify-end gap-3">
-              <button onclick="closePrintModal()" class="btn btn-secondary">Cancel</button>
-              <button id="confirm-print" onclick="confirmPrint()" class="btn btn-primary hidden">Print</button>
+          ` : `
+            <!-- No Permission Message -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+              <div class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4 flex items-center justify-center">
+                ${LOCK_ICON.replace('w-5 h-5', 'w-12 h-12')}
+              </div>
+              <h3 class="text-gray-900 dark:text-white font-medium mb-1">Permission Required</h3>
+              <p class="text-gray-500 dark:text-gray-400 text-sm">You do not have permission to manage inventory periods.</p>
             </div>
-          </div>
+          `}
         </div>
-
-        <script>
-          (function() {
-            let printers = [];
-            let selectedPrinter = null;
-            const serviceTag = '${escapeHtml(eq.service_tag)}';
-            
-            const printBtn = document.getElementById('print-label');
-            const printModal = document.getElementById('printModal');
-            const printersLoading = document.getElementById('printers-loading');
-            const printersList = document.getElementById('printers-list');
-            const printersError = document.getElementById('printers-error');
-            const confirmPrintBtn = document.getElementById('confirm-print');
-            
-            async function loadPrinters() {
-              try {
-                const response = await fetch('/api/printers');
-                const result = await response.json();
-                
-                if (result.success && result.data) {
-                  printers = result.data;
-                  renderPrinters();
-                } else {
-                  showError(result.message || 'Failed to load printers');
-                }
-              } catch (err) {
-                showError('Error loading printers: ' + err.message);
-              } finally {
-                printersLoading.classList.add('hidden');
-              }
-            }
-            
-            function renderPrinters() {
-              if (printers.length === 0) {
-                printersList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-4">No printers available</p>';
-                printersList.classList.remove('hidden');
-                return;
-              }
-              
-              printersList.innerHTML = printers.map((p, idx) => \`
-                <label class="flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg mb-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                  <input type="radio" name="printer" value="\${p.name}" class="mr-3" onchange="selectPrinter('\${p.name}')">
-                  <div class="flex-1">
-                    <div class="font-medium text-gray-900 dark:text-white">\${escapeHtml(p.name)}</div>
-                    <div class="text-sm text-gray-500 dark:text-gray-400">
-                      \${escapeHtml(p.department)} - \${escapeHtml(p.area)} | \${escapeHtml(p.ip)}
-                    </div>
-                  </div>
-                </label>
-              \`).join('');
-              printersList.classList.remove('hidden');
-            }
-            
-            function showError(msg) {
-              printersError.textContent = msg;
-              printersError.classList.remove('hidden');
-            }
-            
-            window.selectPrinter = function(name) {
-              selectedPrinter = name;
-              confirmPrintBtn.classList.remove('hidden');
-            };
-            
-            window.closePrintModal = function() {
-              printModal.classList.add('hidden');
-              printModal.classList.remove('flex');
-              selectedPrinter = null;
-              confirmPrintBtn.classList.add('hidden');
-            };
-            
-            window.confirmPrint = async function() {
-              if (!selectedPrinter) return;
-              
-              const btn = confirmPrintBtn;
-              const originalText = btn.innerHTML;
-              btn.disabled = true;
-              btn.innerHTML = 'Printing...';
-              
-              try {
-                const response = await fetch('/api/print', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    service_tag: serviceTag,
-                    printer: selectedPrinter
-                  })
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                  alert('Label sent to printer successfully!');
-                  closePrintModal();
-                } else {
-                  alert('Error printing label: ' + (result.error || 'Unknown error'));
-                }
-              } catch (err) {
-                alert('Error printing label: ' + err.message);
-              } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-              }
-            };
-            
-            if (printBtn) {
-              printBtn.addEventListener('click', function() {
-                printModal.classList.remove('hidden');
-                printModal.classList.add('flex');
-                printersLoading.classList.remove('hidden');
-                printersList.classList.add('hidden');
-                printersError.classList.add('hidden');
-                confirmPrintBtn.classList.add('hidden');
-                loadPrinters();
-              });
-            }
-            
-            
-            function escapeHtml(str) {
-              return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-            }
-
-            ${isReadonly ? `
-            // Disable all form fields in readonly mode
-            (function() {
-              const form = document.querySelector('form[action*="/edit/"]');
-              if (form) {
-                const inputs = form.querySelectorAll('input:not([type="hidden"]), select, textarea, button[type="submit"], button[type="button"]');
-                inputs.forEach(el => {
-                  if (el.tagName === 'INPUT' && el.type !== 'hidden') {
-                    el.setAttribute('readonly', 'readonly');
-                    el.setAttribute('disabled', 'disabled');
-                  } else if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.tagName === 'BUTTON') {
-                    el.setAttribute('disabled', 'disabled');
-                  }
-                });
-              }
-            })();
-            ` : ''}
-          })();
-        </script>
-      </form>
+      </div>
     </div>
 
-    ${getModalHtml()}
-    ${getScriptsHtml()}
+    <!-- Quick Edit Modal -->
+    <div id="quickEditModal" class="fixed inset-0 bg-black/50 dark:bg-black/70 hidden items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Edit Equipment</h3>
+          <button id="closeQuickEditModal" class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
+            ${X_ICON.replace('w-5 h-5', 'w-6 h-6')}
+          </button>
+        </div>
+
+        <form id="quickEditForm" class="space-y-4">
+          <input type="hidden" name="equipment_id" id="qe_equipment_id">
+          <input type="hidden" name="inventory_period_id" value="${defaultPeriod?.id || ''}">
+
+          <!-- User (Employee) -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">User (Employee)</label>
+            <select
+              name="assigned_to"
+              id="qe_assigned_to"
+              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Not assigned</option>
+              ${employees.map(e => `<option value="${escapeHtml(e.employee_no)}">${escapeHtml(e.name)} - ${escapeHtml(e.employee_no)}</option>`).join('')}
+            </select>
+          </div>
+
+          <!-- Location Section -->
+          <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Location</label>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Country</label>
+                <select id="qe_country_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select...</option>
+                  ${locationData?.countries.map(c => `<option value="${c.id}" data-parent="${c.parent_id}">${escapeHtml(c.name)}</option>`).join('') || ''}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Region</label>
+                <select id="qe_plant_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select country first...</option>
+                  ${locationData?.plants.map(p => `<option value="${p.id}" data-parent="${p.parent_id}">${escapeHtml(p.name)}</option>`).join('') || ''}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Department</label>
+                <select id="qe_department_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select region first...</option>
+                  ${locationData?.departments.map(d => `<option value="${d.id}" data-parent="${d.parent_id}">${escapeHtml(d.name)}</option>`).join('') || ''}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Area</label>
+                <select id="qe_area_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select department first...</option>
+                  ${locationData?.areas.map(a => `<option value="${a.id}" data-parent="${a.parent_id}">${escapeHtml(a.name)}</option>`).join('') || ''}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Sub-Area</label>
+                <select id="qe_sub_area_id" name="equipment_sub_area_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select area first...</option>
+                  ${locationData?.subAreas.map(s => `<option value="${s.id}" data-parent="${s.parent_id}">${escapeHtml(s.name)}</option>`).join('') || ''}
+                </select>
+              </div>
+            </div>
+            <!-- Hidden field for region (auto-derived from country) -->
+            <input type="hidden" id="qe_region_id" />
+          </div>
+
+          <!-- TeamViewer -->
+          <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Teamviewer</label>
+            <input
+              type="text"
+              name="teamviewer"
+              id="qe_teamviewer"
+              placeholder="Teamviewer ID"
+              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div id="quickEditError" class="hidden text-red-400 text-sm"></div>
+
+          <div class="flex justify-end gap-3 pt-2">
+            <button type="button" id="cancelQuickEdit" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
+            <button type="submit" id="saveQuickEdit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      (function() {
+        // Tab switching functionality
+        const tabs = Array.from(document.querySelectorAll('.tab-btn'));
+        const panels = Array.from(document.querySelectorAll('.tab-panel'));
+        let activeTab = 0;
+
+        function setActiveTab(idx) {
+          if (idx < 0 || idx >= tabs.length) return;
+          if (idx >= panels.length) {
+            console.error('Tab index', idx, 'exceeds panel count', panels.length);
+            return;
+          }
+          // Don't switch to disabled tabs
+          if (tabs[idx] && tabs[idx].disabled) return;
+
+          activeTab = idx;
+          tabs.forEach((t, i) => t.classList.toggle('tab-active', i === activeTab && !t.disabled));
+          panels.forEach((p, i) => {
+            if (i === activeTab) {
+              p.classList.remove('hidden');
+            } else {
+              p.classList.add('hidden');
+            }
+          });
+
+        }
+
+        tabs.forEach((tab, i) => {
+          tab.addEventListener('click', () => {
+            if (!tab.disabled) setActiveTab(i);
+          });
+        });
+
+        // Switch to tab based on URL hash
+        if (window.location.hash === '#periods' && tabs.length > 2) {
+          setActiveTab(2);
+        } else if (window.location.hash === '#review') {
+          setActiveTab(1);
+        }
+
+        // Period preview function
+        function updatePeriodPreview() {
+          const startDate = document.getElementById('start_date');
+          const preview = document.getElementById('periodNamePreview');
+          
+          if (startDate && preview && startDate.value) {
+            const date = new Date(startDate.value);
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1;
+            const quarter = Math.ceil(month / 3);
+            preview.textContent = 'INV-' + year + '-Q' + quarter + '-1';
+          } else if (preview) {
+            preview.textContent = 'INV-YYYY-QX-1';
+          }
+        }
+        
+        window.updatePeriodPreview = updatePeriodPreview;
+        
+        // Handle period form submission
+        const createPeriodForm = document.getElementById('createPeriodForm');
+        if (createPeriodForm) {
+          createPeriodForm.addEventListener('submit', function(e) {
+            // Form will submit normally, but we ensure we're on the periods tab
+            // The redirect will handle showing the success message
+          });
+        }
+      })();
+
+      // Audit Tab functionality
+      (function() {
+        const searchForm = document.getElementById('audit-search-form');
+        const searchInput = document.getElementById('audit-search-input');
+        const auditResult = document.getElementById('audit-result');
+        const auditEmpty = document.getElementById('audit-empty');
+        const auditNotFound = document.getElementById('audit-not-found');
+        const auditNotFoundText = document.getElementById('audit-not-found-text');
+        const auditAddEquipmentBtn = document.getElementById('audit-add-equipment-btn');
+        const auditLoading = document.getElementById('audit-loading');
+        const defaultPeriodId = ${defaultPeriod && defaultPeriod.id ? defaultPeriod.id : 'null'};
+
+        function escapeHtml(text) {
+          if (!text) return '';
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
+        }
+
+        function formatDate(dateStr) {
+          if (!dateStr) return 'Never';
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function formatDeviceAge(purchaseDate) {
+          if (!purchaseDate) return '-';
+          const purchase = new Date(purchaseDate);
+          const now = new Date();
+          const diffTime = now.getTime() - purchase.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          const diffYears = diffDays / 365.25;
+          if (diffYears >= 1) {
+            return diffYears.toFixed(1) + ' years';
+          } else if (diffDays >= 30) {
+            const months = diffDays / 30.44;
+            return months.toFixed(1) + ' months';
+          }
+          return diffDays + ' day' + (diffDays !== 1 ? 's' : '');
+        }
+
+        function showState(state) {
+          if (auditResult) auditResult.classList.add('hidden');
+          if (auditEmpty) auditEmpty.classList.add('hidden');
+          if (auditNotFound) auditNotFound.classList.add('hidden');
+          if (auditLoading) auditLoading.classList.add('hidden');
+
+          if (state === 'result' && auditResult) auditResult.classList.remove('hidden');
+          else if (state === 'empty' && auditEmpty) auditEmpty.classList.remove('hidden');
+          else if (state === 'not-found' && auditNotFound) auditNotFound.classList.remove('hidden');
+          else if (state === 'loading' && auditLoading) auditLoading.classList.remove('hidden');
+        }
+
+        function formatDateTime(dateStr) {
+          if (!dateStr) return '-';
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function toggleHistory(equipmentId) {
+          const historySection = document.getElementById('equipment-history-' + equipmentId);
+          if (!historySection) return;
+
+          // Toggle visibility
+          if (!historySection.classList.contains('hidden')) {
+            historySection.classList.add('hidden');
+            return;
+          }
+
+          historySection.classList.remove('hidden');
+
+          const loadingEl = historySection.querySelector('.history-loading');
+          const entriesEl = historySection.querySelector('.history-entries');
+          const emptyEl = historySection.querySelector('.history-empty');
+          const countEl = historySection.querySelector('.history-count');
+
+          // Show loading
+          if (loadingEl) loadingEl.classList.remove('hidden');
+          if (entriesEl) entriesEl.classList.add('hidden');
+          if (emptyEl) emptyEl.classList.add('hidden');
+
+          try {
+            const response = await fetch('/api/equipment/history?equipment_id=' + equipmentId);
+            const result = await response.json();
+
+            if (loadingEl) loadingEl.classList.add('hidden');
+
+            if (result.success && result.data && result.data.length > 0) {
+              if (countEl) countEl.textContent = result.data.length + ' entries';
+              if (entriesEl) {
+                entriesEl.innerHTML = result.data.map(function(log) {
+                  return '<div class="px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30">' +
+                    '<div class="flex items-start justify-between gap-4">' +
+                      '<div class="flex-1 min-w-0">' +
+                        '<div class="flex items-center gap-2 text-sm">' +
+                          '<span class="text-gray-900 dark:text-white font-medium">' + formatDateTime(log.created) + '</span>' +
+                          (log.inventory_nr ? '<span class="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">' + escapeHtml(log.inventory_nr) + '</span>' : '') +
+                          (log.write_off_reason ? '<span class="px-1.5 py-0.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded">Written Off: ' + escapeHtml(log.write_off_reason) + '</span>' : '') +
+                        '</div>' +
+                        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-1 text-sm">' +
+                          '<div class="flex items-center gap-1.5">' +
+                            '${USER_ICON.replace('w-5 h-5', 'w-3.5 h-3.5').replace('text-current', 'text-gray-400')}' +
+                            '<span class="text-gray-600 dark:text-gray-400">' + (log.assigned_to_name ? escapeHtml(log.assigned_to + ' - ' + log.assigned_to_name) : (log.assigned_to ? escapeHtml(log.assigned_to) : 'Not assigned')) + '</span>' +
+                          '</div>' +
+                          '<div class="flex items-center gap-1.5">' +
+                            '${LOCATION_ICON.replace('w-5 h-5', 'w-3.5 h-3.5').replace('text-current', 'text-gray-400')}' +
+                            '<span class="text-gray-600 dark:text-gray-400 truncate">' + escapeHtml(log.location || 'No location') + '</span>' +
+                          '</div>' +
+                        '</div>' +
+                        (log.comment ? '<div class="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">' + escapeHtml(log.comment) + '</div>' : '') +
+                      '</div>' +
+                      (log.updated_by_name ? '<div class="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">by ' + escapeHtml(log.updated_by_name) + '</div>' : '') +
+                    '</div>' +
+                  '</div>';
+                }).join('');
+                entriesEl.classList.remove('hidden');
+              }
+            } else {
+              if (emptyEl) emptyEl.classList.remove('hidden');
+              if (countEl) countEl.textContent = '0 entries';
+            }
+          } catch (err) {
+            console.error('Failed to load history:', err);
+            if (loadingEl) loadingEl.classList.add('hidden');
+            if (emptyEl) {
+              emptyEl.textContent = 'Failed to load history';
+              emptyEl.classList.remove('hidden');
+            }
+          }
+        }
+
+        function renderEquipment(equipment) {
+          const locationStr = [
+            equipment.plant_name,
+            equipment.department_name,
+            equipment.area_name,
+            equipment.sub_area_name
+          ].filter(Boolean).join(' - ') || 'Not assigned';
+
+          const typeStr = [
+            equipment.vendor_name,
+            equipment.type_name,
+            equipment.product_line_name,
+            equipment.model_name
+          ].filter(Boolean).join(' - ') || '-';
+
+          return \`
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+              <!-- Equipment Info -->
+              <div class="bg-emerald-50 dark:bg-emerald-900/40 px-6 py-4">
+                <div class="grid grid-cols-2 gap-x-8 gap-y-4">
+                  <div class="flex items-start gap-3">
+                    ${LOCATION_ICON.replace('w-5 h-5', 'w-5 h-5 mt-0.5 flex-shrink-0').replace('text-current', 'text-emerald-600 dark:text-emerald-400')}
+                    <div>
+                      <div class="text-xs text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wide">Location</div>
+                      <div class="text-gray-900 dark:text-white font-medium">\${escapeHtml(locationStr)}</div>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    ${USER_ICON.replace('w-5 h-5', 'w-5 h-5 mt-0.5 flex-shrink-0').replace('text-current', 'text-emerald-600 dark:text-emerald-400')}
+                    <div>
+                      <div class="text-xs text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wide">User</div>
+                      <div class="text-gray-900 dark:text-white font-medium">\${equipment.assigned_to_name ? escapeHtml(equipment.assigned_to + ' - ' + equipment.assigned_to_name) : 'Not assigned'}</div>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3 col-span-2 sm:col-span-1">
+                    ${CALENDAR_ICON.replace('w-5 h-5', 'w-5 h-5 mt-0.5 flex-shrink-0').replace('text-current', 'text-emerald-600 dark:text-emerald-400')}
+                    <div class="flex-1">
+                      <div class="text-xs text-emerald-600/70 dark:text-emerald-300/70 uppercase tracking-wide">Latest Audit</div>
+                      <div class="text-gray-900 dark:text-white font-medium">\${formatDate(equipment.latest_audit_date)}</div>
+                    </div>
+                    <button type="button" class="update-audit-btn flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors" data-equipment-id="\${equipment.id}">
+                      ${REFRESH_ICON.replace('w-5 h-5', 'w-4 h-4')}
+                      Update
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <!-- Details -->
+              <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-4">Equipment Details</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-6">
+                  <div>
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Type</div>
+                    <div class="text-gray-900 dark:text-white text-sm">\${escapeHtml(typeStr)}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Teamviewer</div>
+                    <div class="text-gray-900 dark:text-white text-sm font-mono">\${equipment.teamviewer || '0'}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</div>
+                    <div class="text-gray-900 dark:text-white text-sm">\${equipment.is_written_off ? 'Written Off' : equipment.repair_status ? equipment.repair_status.replace(/_/g, ' ') : 'In Use'}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Device Age</div>
+                    <div class="text-gray-900 dark:text-white text-sm">\${formatDeviceAge(equipment.purchase_date)}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Service Tag</div>
+                    <div class="text-gray-900 dark:text-white text-sm font-mono">\${escapeHtml(equipment.service_tag)}</div>
+                  </div>
+                </div>
+              </div>
+              <!-- Actions - Icon buttons in single row -->
+              <div class="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center gap-2">
+                <button type="button" class="quick-edit-btn p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors" title="Quick Edit"
+                  data-equipment-id="\${equipment.id}"
+                  data-service-tag="\${escapeHtml(equipment.service_tag)}"
+                  data-assigned-to="\${escapeHtml(equipment.assigned_to || '')}"
+                  data-teamviewer="\${equipment.teamviewer || ''}"
+                  data-region-id="\${equipment.region_id || ''}"
+                  data-country-id="\${equipment.country_id || ''}"
+                  data-plant-id="\${equipment.plant_id || ''}"
+                  data-department-id="\${equipment.department_id || ''}"
+                  data-area-id="\${equipment.area_id || ''}"
+                  data-equipment-sub-area-id="\${equipment.equipment_sub_area_id || ''}"
+                >
+                  ${EDIT_ICON}
+                </button>
+                <a href="/edit/\${equipment.id}" class="p-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" title="Full Edit">
+                  ${EXTERNAL_LINK_ICON}
+                </a>
+                <button type="button" class="history-toggle-btn p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors" title="View History" data-equipment-id="\${equipment.id}">
+                  ${CLOCK_ICON}
+                </button>
+              </div>
+              <!-- History Log Section (hidden by default) -->
+              <div id="equipment-history-\${equipment.id}" class="hidden border-t border-gray-200 dark:border-gray-700">
+                <div class="px-6 py-3 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between">
+                  <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide flex items-center gap-2">
+                    ${CLOCK_ICON.replace('w-5 h-5', 'w-4 h-4')}
+                    Device History
+                  </h3>
+                  <span class="history-count text-xs text-gray-500 dark:text-gray-400"></span>
+                </div>
+                <div class="history-content max-h-64 overflow-y-auto">
+                  <div class="history-loading px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                    ${REFRESH_ICON.replace('w-5 h-5', 'w-6 h-6 animate-spin mx-auto mb-2')}
+                    Loading history...
+                  </div>
+                  <div class="history-entries hidden divide-y divide-gray-100 dark:divide-gray-700"></div>
+                  <div class="history-empty hidden px-6 py-4 text-center text-gray-500 dark:text-gray-400 text-sm">No history records found</div>
+                </div>
+              </div>
+            </div>
+          \`;
+        }
+
+        async function searchEquipment(query) {
+          if (!query || !defaultPeriodId) return;
+
+          showState('loading');
+
+          try {
+            const response = await fetch('/api/inventory-audit/search?q=' + encodeURIComponent(query) + '&period_id=' + defaultPeriodId);
+            const result = await response.json();
+
+            if (result.success && result.data) {
+              if (auditResult) {
+                auditResult.innerHTML = renderEquipment(result.data);
+                // Add event listener for update button
+                const updateBtn = auditResult.querySelector('.update-audit-btn');
+                if (updateBtn) {
+                  updateBtn.addEventListener('click', async function() {
+                    const equipmentId = this.dataset.equipmentId;
+                    this.disabled = true;
+                    this.textContent = 'Updating...';
+                    try {
+                      const updateResponse = await fetch('/inventory-audit/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'equipment_id=' + equipmentId + '&inventory_period_id=' + defaultPeriodId
+                      });
+                      if (updateResponse.ok) {
+                        // Re-search to show updated date
+                        searchEquipment(query);
+                      }
+                    } catch (err) {
+                      console.error('Update failed:', err);
+                    }
+                    this.disabled = false;
+                    this.innerHTML = '${REFRESH_ICON.replace('w-5 h-5', 'w-4 h-4')} Update';
+                  });
+                }
+
+                // Add event listener for quick edit button
+                const quickEditBtn = auditResult.querySelector('.quick-edit-btn');
+                if (quickEditBtn) {
+                  quickEditBtn.addEventListener('click', function() {
+                    openQuickEditModal(this.dataset);
+                  });
+                }
+
+                // Add event listener for history toggle button
+                const historyToggleBtn = auditResult.querySelector('.history-toggle-btn');
+                if (historyToggleBtn) {
+                  historyToggleBtn.addEventListener('click', function() {
+                    const equipmentId = this.dataset.equipmentId;
+                    toggleHistory(equipmentId);
+                  });
+                }
+              }
+              showState('result');
+            } else {
+              if (auditNotFoundText) {
+                auditNotFoundText.textContent = 'Serial number "' + query + '" not found in system.';
+              }
+              if (auditAddEquipmentBtn) {
+                auditAddEquipmentBtn.href = '/add?serial=' + encodeURIComponent(query);
+              }
+              showState('not-found');
+            }
+          } catch (err) {
+            console.error('Search failed:', err);
+            if (auditNotFoundText) {
+              auditNotFoundText.textContent = 'Search failed. Please try again.';
+            }
+            showState('not-found');
+          }
+        }
+
+        if (searchForm) {
+          searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const query = searchInput?.value?.trim();
+            if (query) {
+              searchEquipment(query);
+            }
+          });
+        }
+
+        // Focus search input when Audit tab is shown
+        document.querySelector('[data-tab="0"]')?.addEventListener('click', function() {
+          setTimeout(() => searchInput?.focus(), 100);
+        });
+
+        // Quick Edit Modal functionality
+        const quickEditModal = document.getElementById('quickEditModal');
+        const quickEditForm = document.getElementById('quickEditForm');
+        const quickEditError = document.getElementById('quickEditError');
+        const saveQuickEditBtn = document.getElementById('saveQuickEdit');
+        let currentSearchQuery = '';
+
+        // Cascading location select elements
+        const qeCountry = document.getElementById('qe_country_id');
+        const qePlant = document.getElementById('qe_plant_id');
+        const qeDepartment = document.getElementById('qe_department_id');
+        const qeArea = document.getElementById('qe_area_id');
+        const qeSubArea = document.getElementById('qe_sub_area_id');
+
+        // Filter options based on parent selection
+        function filterOptions(selectEl, parentId) {
+          if (!selectEl) return;
+          const options = selectEl.querySelectorAll('option');
+          options.forEach(opt => {
+            if (opt.value === '') return; // Keep the placeholder
+            const optParent = opt.getAttribute('data-parent');
+            if (parentId && optParent === String(parentId)) {
+              opt.style.display = '';
+            } else if (!parentId) {
+              opt.style.display = 'none'; // Hide all until parent selected
+            } else {
+              opt.style.display = 'none';
+            }
+          });
+        }
+
+        // Show all options (for initial select like Country)
+        function showAllOptions(selectEl) {
+          if (!selectEl) return;
+          const options = selectEl.querySelectorAll('option');
+          options.forEach(opt => {
+            opt.style.display = '';
+          });
+        }
+
+        // Cascading handlers
+        qeCountry?.addEventListener('change', function() {
+          const countryId = this.value;
+          filterOptions(qePlant, countryId);
+          if (qePlant) qePlant.value = '';
+          if (qeDepartment) qeDepartment.value = '';
+          if (qeArea) qeArea.value = '';
+          if (qeSubArea) qeSubArea.value = '';
+          filterOptions(qeDepartment, null);
+          filterOptions(qeArea, null);
+          filterOptions(qeSubArea, null);
+        });
+
+        qePlant?.addEventListener('change', function() {
+          const plantId = this.value;
+          filterOptions(qeDepartment, plantId);
+          if (qeDepartment) qeDepartment.value = '';
+          if (qeArea) qeArea.value = '';
+          if (qeSubArea) qeSubArea.value = '';
+          filterOptions(qeArea, null);
+          filterOptions(qeSubArea, null);
+        });
+
+        qeDepartment?.addEventListener('change', function() {
+          const deptId = this.value;
+          filterOptions(qeArea, deptId);
+          if (qeArea) qeArea.value = '';
+          if (qeSubArea) qeSubArea.value = '';
+          filterOptions(qeSubArea, null);
+        });
+
+        qeArea?.addEventListener('change', function() {
+          const areaId = this.value;
+          filterOptions(qeSubArea, areaId);
+          if (qeSubArea) qeSubArea.value = '';
+        });
+
+        function openQuickEditModal(data) {
+          if (!quickEditModal) return;
+
+          // Store current search query for re-searching after save
+          currentSearchQuery = searchInput?.value?.trim() || '';
+
+          // Populate form fields
+          document.getElementById('qe_equipment_id').value = data.equipmentId || '';
+          document.getElementById('qe_assigned_to').value = data.assignedTo || '';
+          document.getElementById('qe_teamviewer').value = data.teamviewer || '';
+
+          // Set location selects with cascading filtering
+          // Country (show all)
+          showAllOptions(qeCountry);
+          if (qeCountry) qeCountry.value = data.countryId || '';
+
+          // Plant (filter by country)
+          filterOptions(qePlant, data.countryId);
+          if (qePlant) qePlant.value = data.plantId || '';
+
+          // Department (filter by plant)
+          filterOptions(qeDepartment, data.plantId);
+          if (qeDepartment) qeDepartment.value = data.departmentId || '';
+
+          // Area (filter by department)
+          filterOptions(qeArea, data.departmentId);
+          if (qeArea) qeArea.value = data.areaId || '';
+
+          // Sub-Area (filter by area)
+          filterOptions(qeSubArea, data.areaId);
+          if (qeSubArea) qeSubArea.value = data.equipmentSubAreaId || '';
+
+          // Clear any previous errors
+          if (quickEditError) quickEditError.classList.add('hidden');
+
+          // Show modal
+          quickEditModal.classList.remove('hidden');
+          quickEditModal.classList.add('flex');
+        }
+
+        function closeQuickEditModal() {
+          if (!quickEditModal) return;
+          quickEditModal.classList.add('hidden');
+          quickEditModal.classList.remove('flex');
+        }
+
+        // Close modal handlers
+        document.getElementById('closeQuickEditModal')?.addEventListener('click', closeQuickEditModal);
+        document.getElementById('cancelQuickEdit')?.addEventListener('click', closeQuickEditModal);
+        quickEditModal?.addEventListener('click', function(e) {
+          if (e.target === this) closeQuickEditModal();
+        });
+
+        // Form submission
+        quickEditForm?.addEventListener('submit', async function(e) {
+          e.preventDefault();
+
+          if (saveQuickEditBtn) {
+            saveQuickEditBtn.disabled = true;
+            saveQuickEditBtn.textContent = 'Saving...';
+          }
+          if (quickEditError) quickEditError.classList.add('hidden');
+
+          const formData = new FormData(quickEditForm);
+
+          try {
+            const response = await fetch('/inventory-audit/quick-edit', {
+              method: 'POST',
+              body: formData
+            });
+
+            if (response.redirected || response.ok) {
+              closeQuickEditModal();
+              // Re-search to show updated data
+              if (currentSearchQuery) {
+                searchEquipment(currentSearchQuery);
+              }
+            } else {
+              const text = await response.text();
+              if (quickEditError) {
+                quickEditError.textContent = 'Failed to save changes';
+                quickEditError.classList.remove('hidden');
+              }
+            }
+          } catch (err) {
+            console.error('Quick edit failed:', err);
+            if (quickEditError) {
+              quickEditError.textContent = 'Failed to save changes';
+              quickEditError.classList.remove('hidden');
+            }
+          } finally {
+            if (saveQuickEditBtn) {
+              saveQuickEditBtn.disabled = false;
+              saveQuickEditBtn.textContent = 'Save';
+            }
+          }
+        });
+      })();
+
+      (function() {
+        let autoRefreshInterval = null;
+        const defaultPeriodId = ${defaultPeriod && defaultPeriod.id ? defaultPeriod.id : 'null'};
+        
+        const loadingState = document.getElementById('loading-state');
+        const errorState = document.getElementById('error-state');
+        const errorMessage = document.getElementById('error-message');
+        const tableContainer = document.getElementById('table-container');
+        const tableBody = document.getElementById('audit-table-body');
+        const recordCount = document.getElementById('record-count');
+        const lastUpdate = document.getElementById('last-update');
+        const exportBtn = document.getElementById('export-btn');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const copyApiBtn = document.getElementById('copy-api-btn');
+        const applyAllBtn = document.getElementById('apply-all-btn');
+        const periodSelector = document.getElementById('period-selector');
+        
+        function getSelectedPeriodId() {
+          if (!periodSelector) return null;
+          const value = periodSelector.value;
+          return value === '' ? null : parseInt(value);
+        }
+        
+        function getApiUrl() {
+          const periodId = getSelectedPeriodId();
+          const baseUrl = window.location.origin + '/api/inventory-audit/review';
+          return periodId ? baseUrl + '?period_id=' + periodId : baseUrl;
+        }
+        
+        function formatDate(dateStr) {
+          if (!dateStr) return '';
+          const date = dateStr instanceof Date ? dateStr : new Date(dateStr);
+          return date.toLocaleString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        }
+        
+        function escapeHtml(text) {
+          if (!text) return '';
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
+        }
+        
+        async function applyAuditEntry(serviceTag, button) {
+          if (!confirm('Apply this audit entry to the main equipment table? This will update the equipment record and create a new log entry.')) {
+            return;
+          }
+          
+          const originalText = button.textContent;
+          button.disabled = true;
+          button.textContent = 'Applying...';
+          
+          try {
+            const response = await fetch('/api/inventory-audit/apply', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ service_tag: serviceTag })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              alert('Audit entry applied successfully!');
+              loadAuditData();
+            } else {
+              alert('Failed to apply: ' + (result.error || 'Unknown error'));
+            }
+          } catch (err) {
+            alert('Failed to apply: ' + (err instanceof Error ? err.message : 'Unknown error'));
+          } finally {
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+        }
+        
+        async function applyAllLatest() {
+          const periodId = getSelectedPeriodId();
+          const periodText = periodSelector && periodSelector.options[periodSelector.selectedIndex] 
+            ? periodSelector.options[periodSelector.selectedIndex].text 
+            : 'all periods';
+          
+          if (!confirm('Apply the latest audit entry for each unique service tag to the main equipment table?\\n\\nThis will update equipment records and create new log entries for all service tags in ' + periodText + '.\\n\\nThis action cannot be undone.')) {
+            return;
+          }
+          
+          if (!applyAllBtn) return;
+          
+          const originalText = applyAllBtn.textContent;
+          applyAllBtn.disabled = true;
+          applyAllBtn.textContent = 'Applying...';
+          
+          try {
+            const response = await fetch('/api/inventory-audit/apply-all', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ period_id: periodId })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              let message = 'Applied ' + result.applied + ' audit entries';
+              if (result.errors > 0) {
+                message += '\\n\\n' + result.errors + ' errors occurred:';
+                if (result.errorDetails && result.errorDetails.length > 0) {
+                  message += '\\n' + result.errorDetails.slice(0, 10).join('\\n');
+                  if (result.errorDetails.length > 10) {
+                    message += '\\n... and ' + (result.errorDetails.length - 10) + ' more';
+                  }
+                }
+              }
+              alert(message);
+              loadAuditData();
+            } else {
+              alert('Failed to apply: ' + (result.error || 'Unknown error'));
+            }
+          } catch (err) {
+            alert('Failed to apply: ' + (err instanceof Error ? err.message : 'Unknown error'));
+          } finally {
+            applyAllBtn.disabled = false;
+            applyAllBtn.textContent = originalText;
+          }
+        }
+        
+        async function loadAuditData() {
+          try {
+            if (loadingState) loadingState.classList.remove('hidden');
+            if (errorState) errorState.classList.add('hidden');
+            if (tableContainer) tableContainer.classList.add('hidden');
+            
+            const periodId = getSelectedPeriodId();
+            const url = periodId 
+              ? '/api/inventory-audit/review?period_id=' + periodId
+              : '/api/inventory-audit/review';
+            
+            const response = await fetch(url);
+            const result = await response.json();
+            
+            if (!result.success) {
+              throw new Error(result.error || 'Failed to load data');
+            }
+            
+            const records = result.data || [];
+            
+            if (tableBody) {
+              tableBody.innerHTML = records.map(function(record) {
+                return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900 dark:text-white">' +
+                    '<a href="/inventory-audit?search=' + encodeURIComponent(record.service_tag) + '" class="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300">' +
+                      escapeHtml(record.service_tag || '') +
+                    '</a>' +
+                    '<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 sm:hidden">' + escapeHtml(record.equipment_type || '-') + '</div>' +
+                  '</td>' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-700 dark:text-gray-300 hidden sm:table-cell">' +
+                    escapeHtml(record.equipment_type || '-') +
+                  '</td>' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-700 dark:text-gray-300">' +
+                    escapeHtml(record.location || 'Not assigned') +
+                  '</td>' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-300">' +
+                    '<div class="truncate max-w-[120px] sm:max-w-none">' +
+                      (record.assigned_to_name
+                        ? escapeHtml(record.assigned_to || '') + ' - ' + escapeHtml(record.assigned_to_name)
+                        : record.assigned_to
+                          ? escapeHtml(record.assigned_to)
+                          : '-') +
+                    '</div>' +
+                  '</td>' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-300 font-mono hidden md:table-cell">' +
+                    (record.teamviewer || '0') +
+                  '</td>' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate hidden lg:table-cell" title="' + escapeHtml(record.comment || '') + '">' +
+                    escapeHtml(record.comment || '-') +
+                  '</td>' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-300">' +
+                    '<div class="text-gray-700 dark:text-gray-300">' + escapeHtml(record.updated_by || '-') + '</div>' +
+                    '<div class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">' + formatDate(record.updated) + '</div>' +
+                  '</td>' +
+                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-center">' +
+                    '<button data-service-tag="' + escapeHtml(record.service_tag) + '" class="apply-btn px-2 sm:px-3 py-1 sm:py-1.5 bg-blue-600 text-white text-[10px] sm:text-xs rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">' +
+                      'Apply' +
+                    '</button>' +
+                  '</td>' +
+                '</tr>';
+              }).join('');
+              
+              // Add event listeners to apply buttons
+              tableBody.querySelectorAll('.apply-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                  const serviceTag = this.getAttribute('data-service-tag');
+                  if (serviceTag) {
+                    applyAuditEntry(serviceTag, this);
+                  }
+                });
+              });
+            }
+            
+            if (recordCount) {
+              recordCount.textContent = records.length.toString();
+            }
+            
+            if (lastUpdate) {
+              lastUpdate.textContent = new Date().toLocaleTimeString();
+            }
+            
+            if (loadingState) loadingState.classList.add('hidden');
+            if (tableContainer) tableContainer.classList.remove('hidden');
+            
+          } catch (err) {
+            console.error('Failed to load audit data:', err);
+            if (loadingState) loadingState.classList.add('hidden');
+            if (errorState) errorState.classList.remove('hidden');
+            if (errorMessage) {
+              errorMessage.textContent = err instanceof Error ? err.message : 'Unknown error occurred';
+            }
+          }
+        }
+        
+        function startAutoRefresh() {
+          if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+          }
+          autoRefreshInterval = window.setInterval(loadAuditData, 30000);
+        }
+        
+        function stopAutoRefresh() {
+          if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+          }
+        }
+        
+        if (copyApiBtn) {
+          copyApiBtn.addEventListener('click', function() {
+            const apiUrl = getApiUrl();
+            navigator.clipboard.writeText(apiUrl).then(function() {
+              const originalText = copyApiBtn.textContent;
+              copyApiBtn.textContent = 'Copied!';
+              copyApiBtn.classList.remove('bg-gray-700');
+              copyApiBtn.classList.add('bg-green-600');
+              setTimeout(function() {
+                copyApiBtn.textContent = originalText;
+                copyApiBtn.classList.remove('bg-green-600');
+                copyApiBtn.classList.add('bg-gray-700');
+              }, 2000);
+            }).catch(function(err) {
+              alert('Failed to copy: ' + (err instanceof Error ? err.message : 'Unknown error'));
+            });
+          });
+        }
+        
+        if (exportBtn) {
+          exportBtn.addEventListener('click', function() {
+            const periodId = getSelectedPeriodId();
+            const url = periodId 
+              ? '/inventory-audit/review/export?period_id=' + periodId
+              : '/inventory-audit/review/export';
+            window.location.href = url;
+          });
+        }
+        
+        if (refreshBtn) {
+          refreshBtn.addEventListener('click', loadAuditData);
+        }
+        
+        if (applyAllBtn) {
+          applyAllBtn.addEventListener('click', applyAllLatest);
+        }
+        
+        if (periodSelector) {
+          periodSelector.addEventListener('change', function() {
+            loadAuditData();
+          });
+        }
+
+        // Only load review data if user has audit-approver permission
+        const hasAuditApproverPermission = ${hasAuditApprover};
+        if (hasAuditApproverPermission) {
+          loadAuditData();
+          startAutoRefresh();
+
+          document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+              stopAutoRefresh();
+            } else {
+              startAutoRefresh();
+              loadAuditData();
+            }
+          });
+
+          window.addEventListener('beforeunload', stopAutoRefresh);
+        }
+      })();
+    </script>
   `;
 
-  return layout(`ITEM - ${eq.service_tag}`, content, isAdmin, hasPcPwView, username, hasAuditApprover);
+  return layout(title, content, isAdmin, hasPcPwView, username, hasAuditApprover);
 }
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return "-";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
-function isExpired(dateStr: string): boolean {
-  if (!dateStr) return false;
-  return new Date(dateStr) < new Date();
-}
-
-function formatDateForInput(dateStr: string | Date | null | undefined): string {
-  if (!dateStr) return "";
-  // MySQL DATE format is already YYYY-MM-DD, but handle Date objects or other formats
-  if (typeof dateStr === 'object' && dateStr instanceof Date) {
-    return dateStr.toISOString().split('T')[0];
-  }
-  // If it's already in YYYY-MM-DD format, return as is
-  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr;
-  }
-  // Try to parse and format
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return "";
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return year + "-" + month + "-" + day;
-  } catch {
-    return "";
-  }
-}
