@@ -2,15 +2,15 @@ import { serve, file } from "bun";
 import path from "path";
 import pool from "./db";
 import { searchPage } from "./templates/search";
-import { auditPage } from "./templates/audit";
+import { editPage } from "./templates/edit";
 import { addPage } from "./templates/add";
 import { locationsPage } from "./templates/locations";
 import { typesPage } from "./templates/types";
 import { vendorsPage } from "./templates/vendors";
-import { writeOffReasonsPage } from "./templates/writeOffReasons";
+import { writeOffPage } from "./templates/write-off";
 import { repairsPage } from "./templates/repairs";
 import { loginPage } from "./templates/login";
-import { changePasswordPage } from "./templates/changePassword";
+import { changePasswordPage } from "./templates/change-password";
 import { permissionsPage } from "./templates/permissions";
 import { approvalsPage } from "./templates/approvals";
 import { pcPwPage } from "./templates/pc-pw";
@@ -74,7 +74,7 @@ import { randomUUID } from "crypto";
 import { runMigrations } from "./migrations/migrate";
 
 type AddDataType = Parameters<typeof addPage>[0];
-type AuditDataType = Parameters<typeof auditPage>[0];
+type EditDataType = Parameters<typeof editPage>[0];
 type LocationsDataType = Parameters<typeof locationsPage>[0];
 interface SearchResult {
   id: number;
@@ -2112,7 +2112,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
         const hasManageLocations = isAdmin || await hasManageLocationsPermission(session.username, pool, userPlantId);
         return new Response(
-          auditPage(auditData as unknown as AuditDataType, false, "You do not have permission to edit equipment. Please contact your administrator.", isAdmin, hasPcPwView, false, userPlantId, null, null, currentUsername, hasAuditApprover, hasManageLocations),
+          editPage(auditData as unknown as EditDataType, false, "You do not have permission to edit equipment. Please contact your administrator.", isAdmin, hasPcPwView, false, userPlantId, null, null, currentUsername, hasAuditApprover, hasManageLocations),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -2155,7 +2155,7 @@ async function handleRequest(req: Request): Promise<Response> {
           }
         }
         return new Response(
-          auditPage(auditData as unknown as AuditDataType, success, "Read-only: This equipment belongs to another plant. You can view but not edit.", isAdmin, hasPcPwView, true, userPlantId, allowedRegionIdReadonly, allowedCountryIdReadonly, currentUsername, hasAuditApprover, hasManageLocations),
+          editPage(auditData as unknown as EditDataType, success, "Read-only: This equipment belongs to another plant. You can view but not edit.", isAdmin, hasPcPwView, true, userPlantId, allowedRegionIdReadonly, allowedCountryIdReadonly, currentUsername, hasAuditApprover, hasManageLocations),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -2179,7 +2179,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
       }
 
-      return new Response(auditPage(auditData as unknown as AuditDataType, success, null, isAdmin, hasPcPwView, false, userPlantId, allowedRegionId, allowedCountryId, currentUsername, hasAuditApprover, hasManageLocations), {
+      return new Response(editPage(auditData as unknown as EditDataType, success, null, isAdmin, hasPcPwView, false, userPlantId, allowedRegionId, allowedCountryId, currentUsername, hasAuditApprover, hasManageLocations), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -2233,7 +2233,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
         const hasManageLocationsPost = isAdminPost || await hasManageLocationsPermission(session.username, pool, userPlantId);
         return new Response(
-          auditPage(auditData as unknown as AuditDataType, false, "Cannot edit: This equipment belongs to another plant. You can only view it.", isAdminPost, hasPcPwViewPost, true, userPlantId, allowedRegionIdPost, allowedCountryIdPost, session.username, hasAuditApprover, hasManageLocationsPost),
+          editPage(auditData as unknown as EditDataType, false, "Cannot edit: This equipment belongs to another plant. You can only view it.", isAdminPost, hasPcPwViewPost, true, userPlantId, allowedRegionIdPost, allowedCountryIdPost, session.username, hasAuditApprover, hasManageLocationsPost),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -2252,7 +2252,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData as unknown as AuditDataType, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
+            editPage(auditData as unknown as EditDataType, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -2303,7 +2303,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData as unknown as AuditDataType, `Approval request created (ID: ${requestId})`, null, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
+            editPage(auditData as unknown as EditDataType, `Approval request created (ID: ${requestId})`, null, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -2314,7 +2314,7 @@ async function handleRequest(req: Request): Promise<Response> {
             return new Response("Equipment not found", { status: 404 });
           }
           return new Response(
-            auditPage(auditData as unknown as AuditDataType, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
+            editPage(auditData as unknown as EditDataType, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
             {
               headers: { "Content-Type": "text/html" },
             }
@@ -2377,7 +2377,7 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditDataForValidation) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditDataForValidation as unknown as AuditDataType, false, "Write-off comment is required when writing off equipment.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost), {
+          return new Response(editPage(auditDataForValidation as unknown as EditDataType, false, "Write-off comment is required when writing off equipment.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -2392,7 +2392,7 @@ async function handleRequest(req: Request): Promise<Response> {
           if (!auditDataForRepairValidation) {
             return new Response("Equipment not found", { status: 404 });
           }
-          return new Response(auditPage(auditDataForRepairValidation as unknown as AuditDataType, false, "Repair note is required when registering equipment for repair.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost), {
+          return new Response(editPage(auditDataForRepairValidation as unknown as EditDataType, false, "Repair note is required when registering equipment for repair.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost), {
             headers: { "Content-Type": "text/html" },
           });
         }
@@ -2523,7 +2523,7 @@ async function handleRequest(req: Request): Promise<Response> {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
+                editPage(auditData, false, "Unable to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -2546,7 +2546,7 @@ async function handleRequest(req: Request): Promise<Response> {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
+                editPage(auditData, false, `Approval request created (ID: ${requestId})`, isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -2557,7 +2557,7 @@ async function handleRequest(req: Request): Promise<Response> {
                 return new Response("Equipment not found", { status: 404 });
               }
               return new Response(
-                auditPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
+                editPage(auditData, false, "Failed to create approval request. Please contact your administrator.", isAdminPost, hasPcPwViewPost, false, userPlantId, null, null, session.username, hasAuditApprover, hasManageLocationsPost),
                 {
                   headers: { "Content-Type": "text/html" },
                 }
@@ -2579,7 +2579,7 @@ async function handleRequest(req: Request): Promise<Response> {
         if (!auditData) {
           return new Response("Equipment not found", { status: 404 });
         }
-        return new Response(auditPage(auditData, false, errorMessage, isAdminError, hasPcPwViewError, false, userPlantIdError, null, null, session.username, hasAuditApprover, hasManageLocationsError), {
+        return new Response(editPage(auditData, false, errorMessage, isAdminError, hasPcPwViewError, false, userPlantIdError, null, null, session.username, hasAuditApprover, hasManageLocationsError), {
           headers: { "Content-Type": "text/html" },
         });
       }
@@ -3325,7 +3325,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const hasView = await hasWriteOffReasonsViewPermission(session.username, pool, userPlantId);
       if (!hasView) {
         return new Response(
-          writeOffReasonsPage(await getWriteOffReasonsData(), "", "Actions require approval.", isAdmin, hasPcPwView, session.username, hasAuditApprover),
+          writeOffPage(await getWriteOffReasonsData(), "", "Actions require approval.", isAdmin, hasPcPwView, session.username, hasAuditApprover),
           {
             headers: { "Content-Type": "text/html" },
           }
@@ -3335,7 +3335,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const success = url.searchParams.get("success") || "";
       const error = url.searchParams.get("error") || "";
       const data = await getWriteOffReasonsData();
-      return new Response(writeOffReasonsPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
+      return new Response(writeOffPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
         headers: { "Content-Type": "text/html" },
       });
     }
@@ -3878,7 +3878,7 @@ async function handleRequest(req: Request): Promise<Response> {
           }
         }
 
-        const { inventoryAuditReviewPage } = await import("./templates/inventory-audit-review");
+        const { auditPage } = await import("./templates/audit");
 
         // Get inventory periods filtered by plant (only show periods that have audits for equipment in user's plant)
         let periodsQuery = `
@@ -3958,18 +3958,18 @@ async function handleRequest(req: Request): Promise<Response> {
         const locationData = { regions, countries, plants, departments, areas, subAreas };
 
         return new Response(
-          inventoryAuditReviewPage(
-            allPeriods as Parameters<typeof inventoryAuditReviewPage>[0],
-            defaultPeriod as Parameters<typeof inventoryAuditReviewPage>[1],
+          auditPage(
+            allPeriods as Parameters<typeof auditPage>[0],
+            defaultPeriod as Parameters<typeof auditPage>[1],
             isAdmin,
             hasPcPwView,
             session.username,
             hasAuditApprover,
-            allPeriodsForTab as Parameters<typeof inventoryAuditReviewPage>[6],
+            allPeriodsForTab as Parameters<typeof auditPage>[6],
             message,
             messageType,
-            locationData as Parameters<typeof inventoryAuditReviewPage>[9],
-            employees as Parameters<typeof inventoryAuditReviewPage>[10]
+            locationData as Parameters<typeof auditPage>[9],
+            employees as Parameters<typeof auditPage>[10]
           ),
           { headers: { "Content-Type": "text/html" } }
         );
@@ -5170,7 +5170,7 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 }
 
-async function getAuditData(id: number, userPlantId: number | null = null, isAdmin: boolean = false): Promise<AuditDataType | null> {
+async function getAuditData(id: number, userPlantId: number | null = null, isAdmin: boolean = false): Promise<EditDataType | null> {
   // Get equipment with latest log entry joined
   const [equipment] = await pool.query<RowDataPacket[]>(`
     SELECT 
@@ -5310,7 +5310,7 @@ async function getAuditData(id: number, userPlantId: number | null = null, isAdm
     vendors,
     suppliers,
     writeOffReasons
-  } as unknown as AuditDataType;
+  } as unknown as EditDataType;
 }
 
 async function getAddData(serviceTag: string, userPlantId: number | null = null, isAdmin: boolean = false): Promise<AddDataType> {

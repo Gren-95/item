@@ -13,7 +13,7 @@ interface WriteOffReasonsData {
   writeOffReasons: WriteOffReasonItem[];
 }
 
-export function writeOffReasonsPage(data: WriteOffReasonsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
+export function writeOffPage(data: WriteOffReasonsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
   const alert = renderAlert(success, error);
 
   const content = `

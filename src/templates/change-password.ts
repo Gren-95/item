@@ -1,4 +1,5 @@
 import { layout } from "./layout";
+import { KEY_ICON } from "./icons";
 
 export function changePasswordPage(success: string | null = null, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
   const successAlert = success
@@ -14,9 +15,7 @@ export function changePasswordPage(success: string | null = null, error: string 
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
         <div class="flex items-center gap-3 mb-6">
           <div class="w-12 h-12 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
-            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-            </svg>
+            ${KEY_ICON.replace('w-5 h-5', 'w-7 h-7').replace('text-current', 'text-white')}
           </div>
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Change Password</h1>
         </div>
