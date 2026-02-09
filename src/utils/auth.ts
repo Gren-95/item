@@ -1,12 +1,5 @@
-const AUTH_ENDPOINT = process.env.AUTH_ENDPOINT || "http://localhost/auth/";
-const CHANGE_PASSWORD_ENDPOINT = process.env.CHANGE_PASSWORD_ENDPOINT || (() => {
-  // If PMS_DB_HOST is set, construct the URL like PHP does
-  const host = process.env.PMS_DB_HOST;
-  if (host) {
-    return `http://${host}/lswkpi/ajax/t6nu/changePass.php`;
-  }
-  return "http://rakintra/lswkpi/ajax/t6nu/changePass.php";
-})();
+const AUTH_ENDPOINT = process.env.AUTH_ENDPOINT || "";
+const CHANGE_PASSWORD_ENDPOINT = process.env.CHANGE_PASSWORD_ENDPOINT || "";
 
 // General admin user credentials from environment variables
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
