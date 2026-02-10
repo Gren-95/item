@@ -64,3 +64,6 @@ tmp/db-exports/*.sql
 tmp/db-exports/*.sql.gz
 
 .claude/
+
+# Generated version file
+VERSION

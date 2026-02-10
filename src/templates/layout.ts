@@ -1,5 +1,6 @@
 import { navbar, navbarScripts } from "./navbar";
 import { EXCLAMATION_CIRCLE_ICON } from "./icons";
+import { APP_VERSION } from "../utils/version";
 
 /**
  * Minimal layout without navbar - for login page
@@ -37,7 +38,7 @@ export function minimalLayout(title: string, content: string): string {
 
   <footer class="border-t border-gray-200 dark:border-gray-700 mt-auto transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-      <p class="text-center text-gray-500 dark:text-gray-400 text-sm transition-colors">ITEM - IT Equipment Management</p>
+      <p class="text-center text-gray-500 dark:text-gray-400 text-sm transition-colors">ITEM - IT Equipment Management <span class="text-gray-400 dark:text-gray-500">v${APP_VERSION}</span></p>
     </div>
   </footer>
 </body>
@@ -99,7 +100,7 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
 
   <footer class="border-t border-gray-200 dark:border-gray-700 mt-auto transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-      <p class="text-center text-gray-500 dark:text-gray-400 text-sm transition-colors">ITEM - IT Equipment Management</p>
+      <p class="text-center text-gray-500 dark:text-gray-400 text-sm transition-colors">ITEM - IT Equipment Management <span class="text-gray-400 dark:text-gray-500">v${APP_VERSION}</span></p>
     </div>
   </footer>
 

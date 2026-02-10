@@ -20,6 +20,7 @@ import { getSessionFromRequest, createSession, deleteSession, createSessionCooki
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification, sendApprovalDecisionNotification, verifyApprovalToken } from "./utils/email";
 import { startScheduler } from "./utils/scheduler";
+import { APP_VERSION } from "./utils/version";
 import {
   verifyCredentials,
   changePassword,
@@ -512,8 +513,22 @@ async function handleRequest(req: Request): Promise<Response> {
     }
   }
 
+  // Version endpoint (public, curlable)
+  if (path === "/api/version" && req.method === "GET") {
+    return new Response(
+      JSON.stringify({
+        version: APP_VERSION,
+        timestamp: new Date().toISOString(),
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+
   // Public routes that don't require authentication
-  const publicRoutes = ["/login", "/logout", "/repairs", "/health"];
+  const publicRoutes = ["/login", "/logout", "/repairs", "/health", "/api/version"];
   const isPublicRoute = publicRoutes.includes(path) || path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/icons/") || path === "/manifest.webmanifest" || path === "/favicon.ico";
 
   // Check authentication for protected routes and get admin status

@@ -44,6 +44,8 @@ services:
       - ./playwright.config.ts:/app/playwright.config.ts
       # Allow writing generated certs from inside the container when running the cert script
       - ./certs:/app/certs
+      # Git directory for version detection in dev
+      - ./.git:/app/.git:ro
       # Database exports directory - mounted to /tmp/db-exports in container
       - ./tmp/db-exports:/tmp/db-exports
     restart: unless-stopped
