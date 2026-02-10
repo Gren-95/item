@@ -4269,6 +4269,184 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
+    // Inventory Audit Review - Comparison view (latest unique service tags with current equipment data)
+    if (path === "/api/inventory-audit/review-compare" && req.method === "GET") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      try {
+        const userPlantId = await getUserPlantId(session.username, pool);
+
+        if (!hasAuditApprover) {
+          return new Response(JSON.stringify({ error: "Access denied" }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        const inventoryPeriodId = url.searchParams.get("period_id");
+
+        let allowedPlantId: number | null = null;
+        if (!isAdmin && userPlantId !== null) {
+          allowedPlantId = userPlantId;
+        }
+
+        // Get latest audit entry per unique service tag, joined with current equipment data
+        let query = `
+          SELECT
+            a.id,
+            a.equipment_id,
+            a.service_tag,
+            a.updated,
+            a.updated_by,
+            ip.inventory_nr,
+            CONCAT_WS(' - ', v.name, t.type_name, pl.name, m.name) as equipment_type,
+            /* --- Audit entry values --- */
+            a.assigned_to as audit_assigned_to,
+            CONCAT(a_emp.first_name, ' ', a_emp.last_name) as audit_assigned_to_name,
+            CONCAT_WS(' - ', a_r.name, a_c.name, a_p.name, a_d.name, a_area.name, a_sa.name) as audit_location,
+            a.teamviewer as audit_teamviewer,
+            a.comment as audit_comment,
+            a.is_written_off as audit_is_written_off,
+            a_wor.reason as audit_write_off_reason,
+            /* --- Current equipment values --- */
+            log.assigned_to as equip_assigned_to,
+            CONCAT(e_emp.first_name, ' ', e_emp.last_name) as equip_assigned_to_name,
+            CONCAT_WS(' - ', e_r.name, e_c.name, e_p.name, e_d.name, e_area.name, e_sa.name) as equip_location,
+            e.teamviewer as equip_teamviewer,
+            log.comment as equip_comment,
+            e.is_written_off as equip_is_written_off,
+            e_wor.reason as equip_write_off_reason
+          FROM it_equipment_audit a
+          INNER JOIN (
+            SELECT service_tag, MAX(updated) as max_updated
+            FROM it_equipment_audit
+            GROUP BY service_tag
+          ) latest ON a.service_tag = latest.service_tag AND a.updated = latest.max_updated
+          LEFT JOIN it_inventory_period ip ON a.inventory_period_id = ip.id
+          /* Audit location chain */
+          LEFT JOIN it_employees_list a_emp ON a.assigned_to = a_emp.employee_no
+          LEFT JOIN it_equipment_sub_area a_sa ON a.equipment_sub_area_id = a_sa.id
+          LEFT JOIN it_equipment_area a_area ON a_sa.area_id = a_area.id
+          LEFT JOIN it_equipment_department a_d ON a_area.department_id = a_d.id
+          LEFT JOIN it_equipment_plant a_p ON a_d.plant_id = a_p.id
+          LEFT JOIN it_equipment_country a_c ON a_p.country_id = a_c.id
+          LEFT JOIN it_equipment_region a_r ON a_c.region_id = a_r.id
+          LEFT JOIN it_equipment_write_off_reason a_wor ON a.is_written_off = a_wor.id
+          /* Equipment + latest log */
+          LEFT JOIN it_equipment e ON a.equipment_id = e.id
+          LEFT JOIN it_equipment_model m ON e.model_id = m.id
+          LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
+          LEFT JOIN it_equipment_type t ON pl.type_id = t.id
+          LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
+          LEFT JOIN (
+            SELECT l1.* FROM it_equipment_log l1
+            INNER JOIN (
+              SELECT equipment_id, MAX(created) as max_created
+              FROM it_equipment_log
+              GROUP BY equipment_id
+            ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
+          ) log ON e.id = log.equipment_id
+          LEFT JOIN it_employees_list e_emp ON log.assigned_to = e_emp.employee_no
+          LEFT JOIN it_equipment_sub_area e_sa ON log.equipment_sub_area_id = e_sa.id
+          LEFT JOIN it_equipment_area e_area ON e_sa.area_id = e_area.id
+          LEFT JOIN it_equipment_department e_d ON e_area.department_id = e_d.id
+          LEFT JOIN it_equipment_plant e_p ON e_d.plant_id = e_p.id
+          LEFT JOIN it_equipment_country e_c ON e_p.country_id = e_c.id
+          LEFT JOIN it_equipment_region e_r ON e_c.region_id = e_r.id
+          LEFT JOIN it_equipment_write_off_reason e_wor ON e.is_written_off = e_wor.id
+        `;
+
+        const params: unknown[] = [];
+        const whereConditions: string[] = [];
+
+        if (!isAdmin && allowedPlantId !== null) {
+          whereConditions.push("a_d.plant_id = ?");
+          params.push(allowedPlantId);
+        }
+
+        if (inventoryPeriodId) {
+          whereConditions.push("a.inventory_period_id = ?");
+          params.push(parseInt(inventoryPeriodId));
+        }
+
+        if (whereConditions.length > 0) {
+          query += " WHERE " + whereConditions.join(" AND ");
+        }
+
+        query += " ORDER BY a.updated DESC";
+
+        const [rows] = await pool.query<RowDataPacket[]>(query, params);
+
+        // Build comparison data per row
+        const data = rows.map(r => {
+          const auditAssigned = r.audit_assigned_to
+            ? r.audit_assigned_to + (r.audit_assigned_to_name ? ' - ' + r.audit_assigned_to_name : '')
+            : null;
+          const equipAssigned = r.equip_assigned_to
+            ? r.equip_assigned_to + (r.equip_assigned_to_name ? ' - ' + r.equip_assigned_to_name : '')
+            : null;
+          const auditTv = r.audit_teamviewer != null ? String(r.audit_teamviewer) : null;
+          const equipTv = r.equip_teamviewer != null ? String(r.equip_teamviewer) : null;
+          const auditWo = r.audit_is_written_off ? (r.audit_write_off_reason || 'Yes') : 'No';
+          const equipWo = r.equip_is_written_off ? (r.equip_write_off_reason || 'Yes') : 'No';
+
+          const diffs = {
+            assigned_to: (auditAssigned || '') !== (equipAssigned || ''),
+            location: (r.audit_location || '') !== (r.equip_location || ''),
+            teamviewer: (auditTv || '') !== (equipTv || ''),
+            comment: (r.audit_comment || '') !== (r.equip_comment || ''),
+            is_written_off: auditWo !== equipWo,
+          };
+
+          const hasChanges = Object.values(diffs).some(Boolean);
+
+          return {
+            id: r.id,
+            equipment_id: r.equipment_id,
+            service_tag: r.service_tag,
+            updated: r.updated,
+            updated_by: r.updated_by,
+            inventory_nr: r.inventory_nr,
+            equipment_type: r.equipment_type,
+            hasChanges,
+            diffs,
+            audit: {
+              assigned_to: auditAssigned,
+              location: r.audit_location || null,
+              teamviewer: auditTv,
+              comment: r.audit_comment || null,
+              is_written_off: auditWo,
+            },
+            equipment: {
+              assigned_to: equipAssigned,
+              location: r.equip_location || null,
+              teamviewer: equipTv,
+              comment: r.equip_comment || null,
+              is_written_off: equipWo,
+            },
+          };
+        });
+
+        return new Response(
+          JSON.stringify({ success: true, data }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to fetch audit review comparison data", err, { traceId });
+        return new Response(
+          JSON.stringify({ success: false, error: errorMessage }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Inventory Audit Review - CSV Export
     if (path === "/inventory-audit/review/export" && req.method === "GET") {
       const session = getSessionFromRequest(req);
