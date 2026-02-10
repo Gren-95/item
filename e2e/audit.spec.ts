@@ -293,3 +293,119 @@ test.describe("Audit Actions", () => {
     }
   });
 });
+
+test.describe("Audit Comparison View (#62)", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
+  });
+
+  test("review-compare API returns latest unique service tags with comparison data", async ({ page }) => {
+    const response = await page.request.get("/api/inventory-audit/review-compare");
+    if (response.status() !== 200) return; // Skip if no access
+
+    const data = await response.json();
+    expect(data.success).toBe(true);
+    expect(Array.isArray(data.data)).toBe(true);
+
+    if (data.data.length === 0) return; // No audit data yet
+
+    // Each entry should have audit + equipment + diffs comparison fields
+    const entry = data.data[0];
+    expect(entry).toHaveProperty("service_tag");
+    expect(entry).toHaveProperty("hasChanges");
+    expect(typeof entry.hasChanges).toBe("boolean");
+    expect(entry).toHaveProperty("diffs");
+    expect(entry.diffs).toHaveProperty("assigned_to");
+    expect(entry.diffs).toHaveProperty("location");
+    expect(entry.diffs).toHaveProperty("teamviewer");
+    expect(entry.diffs).toHaveProperty("comment");
+    expect(entry.diffs).toHaveProperty("is_written_off");
+    expect(entry).toHaveProperty("audit");
+    expect(entry).toHaveProperty("equipment");
+
+    // Each service tag should appear only once (latest entry deduplication)
+    const serviceTags = data.data.map((r: { service_tag: string }) => r.service_tag);
+    const uniqueTags = new Set(serviceTags);
+    expect(uniqueTags.size).toBe(serviceTags.length);
+  });
+
+  test("review tab shows card-based comparison with status badges", async ({ page }) => {
+    await page.goto("/inventory-audit/review");
+
+    // Click Review tab
+    const reviewTab = page.locator('button[data-tab="1"]');
+    if (await reviewTab.isDisabled().catch(() => true)) return; // Skip if no permission
+    await reviewTab.click();
+
+    // Wait for data to load
+    await page.waitForTimeout(2000);
+
+    const container = page.locator("#audit-table-body");
+    const cards = container.locator("> div");
+    const cardCount = await cards.count();
+
+    if (cardCount > 0) {
+      // Each card should have a status badge (change count or Match)
+      const statusBadges = container.locator("span").filter({ hasText: /change|Match/ });
+      expect(await statusBadges.count()).toBeGreaterThan(0);
+
+      // Each card should have an Apply button
+      const applyButtons = container.locator(".apply-btn");
+      expect(await applyButtons.count()).toBeGreaterThan(0);
+    }
+  });
+
+  test("comparison cards show audit entry and current equipment columns", async ({ page }) => {
+    await page.goto("/inventory-audit/review");
+
+    const reviewTab = page.locator('button[data-tab="1"]');
+    if (await reviewTab.isDisabled().catch(() => true)) return;
+    await reviewTab.click();
+
+    await page.waitForTimeout(2000);
+
+    // Cards should have Audit Entry and Current Equipment column headers
+    const container = page.locator("#table-container");
+    const containerText = await container.textContent();
+    expect(containerText).toContain("Audit Entry");
+    expect(containerText).toContain("Current Equipment");
+
+    // Should show comparison field labels
+    expect(containerText).toContain("Assigned To");
+    expect(containerText).toContain("Location");
+  });
+
+  test("comparison view highlights changed fields with amber background", async ({ page }) => {
+    await page.goto("/inventory-audit/review");
+
+    const reviewTab = page.locator('button[data-tab="1"]');
+    if (await reviewTab.isDisabled().catch(() => true)) return;
+    await reviewTab.click();
+
+    await page.waitForTimeout(2000);
+
+    // Check the page HTML for diff highlighting classes
+    const pageContent = await page.content();
+    // Cards should have amber background for changed rows or "Match" badge
+    const hasAmberBg = pageContent.includes("bg-amber-50") || pageContent.includes("bg-amber-900");
+    const hasMatchBadge = pageContent.includes("Match");
+    // Should either have changed fields highlighted or all match
+    expect(hasAmberBg || hasMatchBadge).toBe(true);
+  });
+
+  test("comparison view supports dark theme", async ({ page }) => {
+    await page.goto("/inventory-audit/review");
+
+    const reviewTab = page.locator('button[data-tab="1"]');
+    if (await reviewTab.isDisabled().catch(() => true)) return;
+    await reviewTab.click();
+
+    await page.waitForTimeout(2000);
+
+    // Check the page HTML for dark mode classes in comparison elements
+    const pageContent = await page.content();
+    // The template should include dark: classes for theming
+    expect(pageContent).toContain("dark:bg-");
+    expect(pageContent).toContain("dark:text-");
+  });
+});

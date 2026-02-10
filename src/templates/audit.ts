@@ -290,36 +290,20 @@ export function auditPage(
         </div>
       </div>
 
-      <!-- Table Container -->
-      <div id="table-container" class="hidden bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div class="overflow-x-auto -mx-2 sm:mx-0">
-          <table class="w-full min-w-[800px]">
-            <thead class="bg-gray-100 dark:bg-gray-700">
-              <tr>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Service Tag</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider hidden sm:table-cell">Type</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Location</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Assigned To</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider hidden md:table-cell">TeamViewer</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider hidden lg:table-cell">Comment</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Updated By / Date</th>
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="audit-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              <!-- Data will be populated here -->
-            </tbody>
-          </table>
+      <!-- Cards Container -->
+      <div id="table-container" class="hidden">
+        <div id="audit-table-body" class="grid gap-4">
+          <!-- Cards will be populated here -->
         </div>
-        <div id="table-footer" class="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+        <div id="table-footer" class="mt-4 px-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
           <div class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-            <span id="record-count">0</span> records
+            <span id="record-count">0</span> unique service tags
           </div>
           <div class="text-[10px] sm:text-xs text-gray-500">
             Last updated: <span id="last-update">Never</span>
           </div>
         </div>
-        </div>
+      </div>
           ` : `
             <!-- No Permission Message -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center border border-gray-200 dark:border-gray-700">
@@ -1319,6 +1303,25 @@ export function auditPage(
           }
         }
         
+        function diffRow(label, auditVal, equipVal, changed) {
+          var empty = '<span class="text-gray-400 dark:text-gray-500 italic">—</span>';
+          var highlightBg = changed ? ' bg-amber-50/80 dark:bg-amber-900/20' : '';
+          var indicatorDot = changed
+            ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0 mt-1.5"></span>'
+            : '<span class="w-1.5 h-1.5 rounded-full bg-transparent flex-shrink-0 mt-1.5"></span>';
+          return '<tr class="' + highlightBg + '">' +
+            '<td class="py-2 px-3 text-xs font-medium text-gray-500 dark:text-gray-400 w-[110px] whitespace-nowrap align-top">' +
+              '<div class="flex items-start gap-1.5">' + indicatorDot + label + '</div>' +
+            '</td>' +
+            '<td class="py-2 px-3 text-sm text-gray-900 dark:text-white break-words align-top">' +
+              (auditVal ? escapeHtml(auditVal) : empty) +
+            '</td>' +
+            '<td class="py-2 px-3 text-sm text-gray-900 dark:text-white break-words align-top">' +
+              (equipVal ? escapeHtml(equipVal) : empty) +
+            '</td>' +
+          '</tr>';
+        }
+
         async function loadAuditData() {
           try {
             if (loadingState) loadingState.classList.remove('hidden');
@@ -1327,8 +1330,8 @@ export function auditPage(
             
             const periodId = getSelectedPeriodId();
             const url = periodId 
-              ? '/api/inventory-audit/review?period_id=' + periodId
-              : '/api/inventory-audit/review';
+              ? '/api/inventory-audit/review-compare?period_id=' + periodId
+              : '/api/inventory-audit/review-compare';
             
             const response = await fetch(url);
             const result = await response.json();
@@ -1341,44 +1344,65 @@ export function auditPage(
             
             if (tableBody) {
               tableBody.innerHTML = records.map(function(record) {
-                return '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900 dark:text-white">' +
-                    '<a href="/inventory-audit?search=' + encodeURIComponent(record.service_tag) + '" class="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300">' +
-                      escapeHtml(record.service_tag || '') +
-                    '</a>' +
-                    '<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 sm:hidden">' + escapeHtml(record.equipment_type || '-') + '</div>' +
-                  '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-700 dark:text-gray-300 hidden sm:table-cell">' +
-                    escapeHtml(record.equipment_type || '-') +
-                  '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-700 dark:text-gray-300">' +
-                    escapeHtml(record.location || 'Not assigned') +
-                  '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-300">' +
-                    '<div class="truncate max-w-[120px] sm:max-w-none">' +
-                      (record.assigned_to_name
-                        ? escapeHtml(record.assigned_to || '') + ' - ' + escapeHtml(record.assigned_to_name)
-                        : record.assigned_to
-                          ? escapeHtml(record.assigned_to)
-                          : '-') +
+                var d = record.diffs || {};
+                var a = record.audit || {};
+                var eq = record.equipment || {};
+
+                var changedCount = Object.values(d).filter(Boolean).length;
+
+                var statusBadge = record.hasChanges
+                  ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">' +
+                      '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>' +
+                      changedCount + ' change' + (changedCount > 1 ? 's' : '') +
+                    '</span>'
+                  : '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">' +
+                      '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
+                      'Match' +
+                    '</span>';
+
+                var borderColor = record.hasChanges
+                  ? 'border-amber-300 dark:border-amber-700'
+                  : 'border-gray-200 dark:border-gray-700';
+
+                return '<div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border ' + borderColor + ' overflow-hidden transition-shadow hover:shadow-md">' +
+                  /* ---- Card Header ---- */
+                  '<div class="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-700/60 bg-gray-50/50 dark:bg-gray-800/80">' +
+                    '<div class="flex items-center gap-3">' +
+                      '<a href="/inventory-audit?search=' + encodeURIComponent(record.service_tag) + '" class="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300 font-mono tracking-wide">' +
+                        escapeHtml(record.service_tag || '') +
+                      '</a>' +
+                      statusBadge +
                     '</div>' +
-                  '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-300 font-mono hidden md:table-cell">' +
-                    (record.teamviewer || '0') +
-                  '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 text-xs sm:text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate hidden lg:table-cell" title="' + escapeHtml(record.comment || '') + '">' +
-                    escapeHtml(record.comment || '-') +
-                  '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-300">' +
-                    '<div class="text-gray-700 dark:text-gray-300">' + escapeHtml(record.updated_by || '-') + '</div>' +
-                    '<div class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">' + formatDate(record.updated) + '</div>' +
-                  '</td>' +
-                  '<td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-center">' +
-                    '<button data-service-tag="' + escapeHtml(record.service_tag) + '" class="apply-btn px-2 sm:px-3 py-1 sm:py-1.5 bg-blue-600 text-white text-[10px] sm:text-xs rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">' +
-                      'Apply' +
-                    '</button>' +
-                  '</td>' +
-                '</tr>';
+                    '<div class="flex items-center gap-3">' +
+                      '<div class="text-right">' +
+                        '<div class="text-xs text-gray-600 dark:text-gray-300">' + escapeHtml(record.equipment_type || '') + '</div>' +
+                        '<div class="text-[10px] text-gray-400 dark:text-gray-500">' + escapeHtml(record.updated_by || '') + ' &bull; ' + formatDate(record.updated) + '</div>' +
+                      '</div>' +
+                      '<button data-service-tag="' + escapeHtml(record.service_tag) + '" class="apply-btn px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors shadow-sm">' +
+                        'Apply' +
+                      '</button>' +
+                    '</div>' +
+                  '</div>' +
+                  /* ---- Comparison Grid ---- */
+                  '<div class="overflow-x-auto">' +
+                    '<table class="w-full text-left">' +
+                      '<thead>' +
+                        '<tr class="border-b border-gray-100 dark:border-gray-700/60">' +
+                          '<th class="py-1.5 px-3 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider w-[110px]"></th>' +
+                          '<th class="py-1.5 px-3 text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Audit Entry</th>' +
+                          '<th class="py-1.5 px-3 text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Current Equipment</th>' +
+                        '</tr>' +
+                      '</thead>' +
+                      '<tbody class="divide-y divide-gray-50 dark:divide-gray-700/40">' +
+                        diffRow('Assigned To', a.assigned_to, eq.assigned_to, d.assigned_to) +
+                        diffRow('Location', a.location, eq.location, d.location) +
+                        diffRow('TeamViewer', a.teamviewer, eq.teamviewer, d.teamviewer) +
+                        diffRow('Comment', a.comment, eq.comment, d.comment) +
+                        diffRow('Written Off', a.is_written_off, eq.is_written_off, d.is_written_off) +
+                      '</tbody>' +
+                    '</table>' +
+                  '</div>' +
+                '</div>';
               }).join('');
               
               // Add event listeners to apply buttons
