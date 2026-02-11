@@ -1,4 +1,4 @@
-import { SEARCH_ICON, LOCATION_ICON, COG_ICON, SHOPPING_BAG_ICON, X_CIRCLE_ICON, WRENCH_ICON, USER_GROUP_ICON, LOCK_CLOSED_ICON, CLIPBOARD_CHECK_ICON, LOGOUT_ICON, PRINTER_ICON, SUN_ICON, MOON_ICON, COMPUTER_DESKTOP_ICON } from "./icons";
+import { SEARCH_ICON, LOCATION_ICON, COG_ICON, SHOPPING_BAG_ICON, X_CIRCLE_ICON, WRENCH_ICON, USER_GROUP_ICON, LOCK_CLOSED_ICON, CLIPBOARD_CHECK_ICON, LOGOUT_ICON, PRINTER_ICON, SUN_ICON, MOON_ICON, COMPUTER_DESKTOP_ICON, PLUS_ICON, MINUS_ICON, REFRESH_ICON } from "./icons";
 
 const MENU_LINK_CLASSES = "flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium transition-all";
 const MENU_LINK_DISABLED = "flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 dark:text-gray-500 cursor-not-allowed font-medium";
@@ -83,6 +83,22 @@ export function navigationMenu(isAdmin: boolean = false, _hasPcPwView: boolean =
             <button id="theme-system" class="theme-btn flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all" data-theme="system">
               ${COMPUTER_DESKTOP_ICON.replace('w-5 h-5', 'w-4 h-4')}
               System
+            </button>
+          </div>
+        </div>
+
+        <!-- Text Size Control -->
+        <div class="px-3 py-2">
+          <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Text Size</p>
+          <div id="text-zoom-control" class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-1">
+            <button id="zoom-out-btn" class="zoom-btn flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" title="Decrease text size">
+              ${MINUS_ICON.replace('w-5 h-5', 'w-4 h-4')}
+            </button>
+            <button id="zoom-reset-btn" class="zoom-btn flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" title="Reset text size">
+              ${REFRESH_ICON.replace('w-5 h-5', 'w-4 h-4')}
+            </button>
+            <button id="zoom-in-btn" class="zoom-btn flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" title="Increase text size">
+              ${PLUS_ICON.replace('w-5 h-5', 'w-4 h-4')}
             </button>
           </div>
         </div>

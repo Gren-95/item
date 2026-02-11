@@ -28,6 +28,13 @@ export function minimalLayout(title: string, content: string): string {
       if (theme === 'dark') {
         document.documentElement.classList.add('dark');
       }
+      var tz = localStorage.getItem('textZoom');
+      if (tz) {
+        var size = parseInt(tz, 10);
+        if (!isNaN(size) && size >= 12 && size <= 24) {
+          document.documentElement.style.fontSize = size + 'px';
+        }
+      }
     })();
   </script>
 </head>
@@ -68,6 +75,13 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
       const theme = stored || (prefersDark ? 'dark' : 'light');
       if (theme === 'dark') {
         document.documentElement.classList.add('dark');
+      }
+      var tz = localStorage.getItem('textZoom');
+      if (tz) {
+        var size = parseInt(tz, 10);
+        if (!isNaN(size) && size >= 12 && size <= 24) {
+          document.documentElement.style.fontSize = size + 'px';
+        }
       }
     })();
   </script>
