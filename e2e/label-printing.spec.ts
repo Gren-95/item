@@ -300,7 +300,7 @@ test.describe("Label Printing - Navigation (#68)", () => {
     await login(page, TEST_ADMIN_USER.username, TEST_ADMIN_USER.password);
   });
 
-  test("navigation shows single Label Printing link", async ({ page }) => {
+  test("navigation shows single Printing link", async ({ page }) => {
     await page.goto("/");
 
     // Open hamburger menu
@@ -312,10 +312,10 @@ test.describe("Label Printing - Navigation (#68)", () => {
       await page.waitForTimeout(300);
     }
 
-    // Should have Label Printing link
+    // Should have Printing link (renamed from Label Printing in #67)
     const labelLink = page.locator('a[href="/labels"]');
     await expect(labelLink).toBeVisible();
-    await expect(labelLink).toContainText(/label printing/i);
+    await expect(labelLink).toContainText(/printing/i);
 
     // Should NOT have separate Printer Labels or PC Passwords links
     const printerLabelsLink = page.locator('a[href="/printer-labels"]');

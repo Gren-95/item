@@ -54,6 +54,8 @@ interface Equipment {
   cerf: number | null;
   ip: string | null;
   mac_addresses: string | null;
+  imei1: number | null;
+  imei2: number | null;
   repair_note: string | null;
   repair_physical_location: string | null;
 }
@@ -238,10 +240,10 @@ export function editPage(data: EditData, success: string | boolean = false, erro
             <div class="grid grid-cols-1 gap-4">
             <div>
               <label for="type_id" class="label">Type</label>
-              <select id="type_id" name="type_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'types', 'Type'); } else { loadProductLines(this.value); }" ${isReadonly ? 'disabled' : ''}>
+              <select id="type_id" name="type_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'types', 'Type'); } else { loadProductLines(this.value); handleTypeChange(this); }" ${isReadonly ? 'disabled' : ''}>
                 <option value="">Select Type...</option>
                 ${data.types.map(t => `
-                  <option value="${t.id}" ${eq.type_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>
+                  <option value="${t.id}" data-name="${escapeHtml(t.name)}" ${eq.type_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>
                 `).join("")}
                 <option value="__add_new__" class="text-blue-600 font-medium">+ Add new type...</option>
               </select>
@@ -265,6 +267,43 @@ export function editPage(data: EditData, success: string | boolean = false, erro
                 `).join("")}
                 <option value="__add_new__" data-parent="__always__" ${eq.product_line_id ? "" : "hidden"} class="text-blue-600 font-medium">+ Add new model...</option>
               </select>
+            </div>
+
+            <!-- IMEI Fields (shown when Mobile Phone type is selected) -->
+            <div id="imei-fields" class="${eq.type_name && (eq.type_name.toLowerCase().includes('mobile') || eq.type_name.toLowerCase().includes('phone')) ? '' : 'hidden'}">
+              <div class="border-t border-gray-200 dark:border-gray-700 my-3 pt-3">
+                <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Mobile Phone Details</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label for="imei1" class="label">IMEI 1</label>
+                    <input
+                      type="text"
+                      id="imei1"
+                      name="imei1"
+                      value="${eq.imei1 || ''}"
+                      class="input-field font-mono"
+                      placeholder="Enter IMEI 1..."
+                      maxlength="15"
+                      pattern="\\d{15}"
+                      ${isReadonly ? 'readonly disabled' : ''}
+                    >
+                  </div>
+                  <div>
+                    <label for="imei2" class="label">IMEI 2</label>
+                    <input
+                      type="text"
+                      id="imei2"
+                      name="imei2"
+                      value="${eq.imei2 || ''}"
+                      class="input-field font-mono"
+                      placeholder="Enter IMEI 2..."
+                      maxlength="15"
+                      pattern="\\d{15}"
+                      ${isReadonly ? 'readonly disabled' : ''}
+                    >
+                  </div>
+                </div>
+              </div>
             </div>
             </div>
           </div>
@@ -522,6 +561,20 @@ export function editPage(data: EditData, success: string | boolean = false, erro
         </div>
 
         <script>
+          // IMEI fields visibility based on type selection
+          window.handleTypeChange = function(select) {
+            var selectedOption = select.options[select.selectedIndex];
+            var typeName = selectedOption ? (selectedOption.dataset.name || selectedOption.textContent || '') : '';
+            var imeiFields = document.getElementById('imei-fields');
+            if (imeiFields) {
+              if (typeName.toLowerCase().includes('mobile') || typeName.toLowerCase().includes('phone')) {
+                imeiFields.classList.remove('hidden');
+              } else {
+                imeiFields.classList.add('hidden');
+              }
+            }
+          };
+
           function toggleModalWriteOffComment(value) {
             const container = document.getElementById('modal-write-off-comment-container');
             const commentField = document.getElementById('modal_write_off_comment');
