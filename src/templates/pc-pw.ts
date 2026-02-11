@@ -1,6 +1,6 @@
 import { layout } from "./layout";
 import { button, printButton, deleteButton } from "./buttons";
-import { KEY_ICON, EXCLAMATION_CIRCLE_ICON } from "./icons";
+import { KEY_ICON, EXCLAMATION_CIRCLE_ICON, X_ICON, REFRESH_ICON } from "./icons";
 
 interface PcPassword {
   id: number;
@@ -187,38 +187,151 @@ export function pcPwPage(
       </div>
     </div>
 
+    <!-- PC Password Print Modal -->
+    <div id="pwPrintModal" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 hidden items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 border border-gray-200 dark:border-gray-700">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Select Printer</h3>
+          <button onclick="closePwPrintModal()" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            ${X_ICON.replace('w-5 h-5', 'w-6 h-6')}
+          </button>
+        </div>
+        <div id="pw-modal-loading" class="text-center py-4">
+          <div class="w-8 h-8 mx-auto text-purple-500 dark:text-purple-400">
+            ${REFRESH_ICON.replace('w-5 h-5', 'w-8 h-8 animate-spin')}
+          </div>
+          <p class="text-gray-600 dark:text-gray-400 mt-2">Loading printers...</p>
+        </div>
+        <div id="pw-modal-printers" class="hidden max-h-96 overflow-y-auto mb-4"></div>
+        <div id="pw-modal-error" class="hidden text-red-600 dark:text-red-400 text-sm mb-4"></div>
+        <div class="flex justify-end gap-3">
+          <button onclick="closePwPrintModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
+          <button id="pw-confirm-print" onclick="confirmPwPrint()" class="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors hidden">Print</button>
+        </div>
+      </div>
+    </div>
+
     <script>
-      async function printBarcode(user, evocon, password) {
-        const printer = prompt('Enter printer name:', 'EERAK-PRT103');
-        if (!printer) {
-          return;
+      (function() {
+        let pwPrinters = [];
+        let pwSelectedPrinter = null;
+        let pwPendingUser = '';
+        let pwPendingEvocon = '';
+        let pwPendingPassword = '';
+
+        function escapeHtml(str) {
+          if (str == null) return '';
+          const div = document.createElement('div');
+          div.textContent = String(str);
+          return div.innerHTML;
         }
 
-        try {
-          const response = await fetch('/api/pc-pw/print', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              user: user,
-              evocon: evocon || '',
-              password: password,
-              printer: printer
-            })
-          });
+        window.printBarcode = function(user, evocon, password) {
+          pwPendingUser = user;
+          pwPendingEvocon = evocon;
+          pwPendingPassword = password;
+          pwSelectedPrinter = null;
 
-          const result = await response.json();
-          
-          if (response.ok) {
-            alert('Print job sent successfully!');
-          } else {
-            alert('Error: ' + (result.error || 'Failed to send print job'));
+          const modal = document.getElementById('pwPrintModal');
+          const loading = document.getElementById('pw-modal-loading');
+          const list = document.getElementById('pw-modal-printers');
+          const errEl = document.getElementById('pw-modal-error');
+          const confirmBtn = document.getElementById('pw-confirm-print');
+
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+          loading.classList.remove('hidden');
+          list.classList.add('hidden');
+          errEl.classList.add('hidden');
+          confirmBtn.classList.add('hidden');
+
+          if (pwPrinters.length > 0) {
+            renderPwPrinters();
+            return;
           }
-        } catch (error) {
-          alert('Error: ' + error.message);
+
+          fetch('/api/printers')
+            .then(r => r.json())
+            .then(result => {
+              if (result.success && result.data) {
+                pwPrinters = result.data.filter(p => (p.driver || '').toLowerCase().includes('brother'));
+                renderPwPrinters();
+              } else {
+                errEl.textContent = result.message || 'Failed to load printers';
+                errEl.classList.remove('hidden');
+                loading.classList.add('hidden');
+              }
+            })
+            .catch(() => {
+              errEl.textContent = 'Failed to load printers';
+              errEl.classList.remove('hidden');
+              loading.classList.add('hidden');
+            });
+        };
+
+        function renderPwPrinters() {
+          const loading = document.getElementById('pw-modal-loading');
+          const list = document.getElementById('pw-modal-printers');
+
+          if (pwPrinters.length === 0) {
+            list.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-4">No Brother printers available</p>';
+            list.classList.remove('hidden');
+            loading.classList.add('hidden');
+            return;
+          }
+
+          list.innerHTML = pwPrinters.map(p => {
+            const pName = escapeHtml(p.name || 'Unknown');
+            const loc = p.department && p.area ? escapeHtml(p.department) + ' - ' + escapeHtml(p.area) : 'No location';
+            const ip = escapeHtml(p.ip || 'No IP');
+            return '<label class="flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg mb-2 cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-colors">' +
+              '<input type="radio" name="pw-printer" value="' + pName + '" class="mr-3 text-purple-600" onchange="selectPwPrinter(\\'' + pName.replace(/'/g, "\\\\'") + '\\')">' +
+              '<div class="flex-1"><div class="font-medium text-gray-900 dark:text-white">' + pName + '</div>' +
+              '<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">' + loc + ' | ' + ip + '</div></div></label>';
+          }).join('');
+          list.classList.remove('hidden');
+          loading.classList.add('hidden');
         }
-      }
+
+        window.selectPwPrinter = function(name) {
+          pwSelectedPrinter = name;
+          document.getElementById('pw-confirm-print').classList.remove('hidden');
+        };
+
+        window.closePwPrintModal = function() {
+          document.getElementById('pwPrintModal').classList.add('hidden');
+          document.getElementById('pwPrintModal').classList.remove('flex');
+          pwSelectedPrinter = null;
+        };
+
+        window.confirmPwPrint = async function() {
+          if (!pwSelectedPrinter) return;
+          const btn = document.getElementById('pw-confirm-print');
+          const orig = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = 'Printing...';
+
+          try {
+            const response = await fetch('/api/pc-pw/print', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user: pwPendingUser, evocon: pwPendingEvocon || '', password: pwPendingPassword, printer: pwSelectedPrinter })
+            });
+            const result = await response.json();
+            if (response.ok) {
+              alert('Print job sent successfully!');
+              closePwPrintModal();
+            } else {
+              alert('Error: ' + (result.error || 'Failed to send print job'));
+            }
+          } catch (error) {
+            alert('Error: ' + error.message);
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+          }
+        };
+      })();
     </script>
   `;
 

@@ -265,14 +265,16 @@ export function printerLabelsPage(
         };
 
         function renderModalPrinters() {
-          if (allPrinters.length === 0) {
-            modalPrintersList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-4">No printers available</p>';
+          const brotherPrinters = allPrinters.filter(p => (p.driver || '').toLowerCase().includes('brother'));
+
+          if (brotherPrinters.length === 0) {
+            modalPrintersList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-4">No Brother printers available</p>';
             modalPrintersList.classList.remove('hidden');
             modalPrintersLoading.classList.add('hidden');
             return;
           }
 
-          modalPrintersList.innerHTML = allPrinters.map((p, idx) => {
+          modalPrintersList.innerHTML = brotherPrinters.map((p, idx) => {
             const printerName = escapeHtml(p.name || 'Unknown');
             const location = p.department && p.area
               ? escapeHtml(p.department) + ' - ' + escapeHtml(p.area)
