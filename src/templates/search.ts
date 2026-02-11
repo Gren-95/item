@@ -1,5 +1,6 @@
 import { layout } from "./layout";
 import { SEARCH_ICON, EXCLAMATION_CIRCLE_ICON, EMOJI_SAD_ICON, PLUS_ICON, CLIPBOARD_LIST_ICON, X_ICON, QR_SCAN_ICON } from "./icons";
+import { formatEstonianDate } from "../utils/date";
 
 interface SearchResult {
   id: number;
@@ -147,7 +148,7 @@ export function searchPage(
                     <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 hidden xl:table-cell">${escapeHtml(result.vendor_name || '—')}</td>
                     <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 hidden md:table-cell">${escapeHtml(result.assigned_to_name || '—')}</td>
                     <td class="py-3 px-2 md:px-4 text-gray-700 dark:text-gray-300 text-xs hidden lg:table-cell">${escapeHtml(result.location || '—')}</td>
-                    <td class="py-3 px-2 md:px-4 text-gray-500 dark:text-gray-400 text-xs hidden xl:table-cell">${result.latest_audit_date ? new Date(result.latest_audit_date).toLocaleDateString() : '—'}</td>
+                    <td class="py-3 px-2 md:px-4 text-gray-500 dark:text-gray-400 text-xs hidden xl:table-cell">${result.latest_audit_date ? formatEstonianDate(result.latest_audit_date, '—') : '—'}</td>
                     ${results && results.some(r => r.isReadonly) ? `<td class="py-3 px-2 md:px-4">${isReadonly ? '<span class="px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full">Read-only</span>' : '—'}</td>` : ''}
                   </tr>
                 `;

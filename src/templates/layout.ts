@@ -1,6 +1,7 @@
 import { navbar, navbarScripts } from "./navbar";
 import { EXCLAMATION_CIRCLE_ICON } from "./icons";
 import { APP_VERSION } from "../utils/version";
+import { clientDateScript } from "../utils/date";
 
 /**
  * Minimal layout without navbar - for login page
@@ -119,6 +120,7 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
   </footer>
 
 ${navbarScripts()}
+<script>${clientDateScript()}</script>
 <script>
   (function() {
 

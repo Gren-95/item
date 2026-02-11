@@ -1,6 +1,7 @@
 import { layout } from "./layout";
 import { button, deleteButton } from "./buttons";
 import { USER_GROUP_ICON, EXCLAMATION_CIRCLE_ICON, CLOCK_ICON, DOCUMENT_TEXT_ICON } from "./icons";
+import { formatEstonianDate } from "../utils/date";
 
 interface User {
   user_id: string;
@@ -164,11 +165,12 @@ export function permissionsPage(
             <div>
               <label class="label">Expiry Date (optional)</label>
               <input
-                type="date"
+                type="text"
                 name="expiry_date"
                 id="form-expiry-date"
                 class="input-field"
-                placeholder="Leave empty for no expiry"
+                placeholder="dd.mm.yyyy"
+                pattern="(\\d{2}[.,-]\\d{2}[.,-]\\d{4}|\\d{6}|\\d{8})"
               />
             </div>
             <div class="flex items-end">
@@ -366,7 +368,7 @@ export function permissionsPage(
                         : "text-white dark:text-white";
                       
                       const expiryDateDisplay = perm.expiry_date 
-                        ? escapeHtml(perm.expiry_date)
+                        ? escapeHtml(formatEstonianDate(perm.expiry_date))
                         : '<span class="text-gray-400 dark:text-gray-500 italic">Never</span>';
                       
                       const addedByDisplay = perm.added_by_user_id
@@ -493,7 +495,7 @@ export function permissionsPage(
                   '<td class="py-2 px-2 text-red-600 dark:text-red-400">' + (p.plant_id === 0 ? 'All (global)' : (p.plant_name || 'Unknown')) + '</td>' +
                   '<td class="py-2 px-2 font-mono text-xs text-red-600 dark:text-red-400">' + p.permission + '</td>' +
                   '<td class="py-2 px-2"><span class="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">' + p.role + '</span></td>' +
-                  '<td class="py-2 px-2 text-red-600 dark:text-red-400">' + p.expiry_date + ' (' + p.days_since_expiry + ' days ago)</td></tr>';
+                  '<td class="py-2 px-2 text-red-600 dark:text-red-400">' + formatEstonianDate(p.expiry_date) + ' (' + p.days_since_expiry + ' days ago)</td></tr>';
               }).join('') + '</tbody></table></div></div>';
           }
 
@@ -514,7 +516,7 @@ export function permissionsPage(
                     '<td class="py-2 px-2">' + (p.plant_id === 0 ? 'All (global)' : (p.plant_name || 'Unknown')) + '</td>' +
                     '<td class="py-2 px-2 font-mono text-xs">' + p.permission + '</td>' +
                     '<td class="py-2 px-2"><span class="px-2 py-1 rounded text-xs font-medium ' + roleClass + '">' + p.role + '</span></td>' +
-                    '<td class="py-2 px-2 ' + expiryClass + '">' + p.expiry_date + ' (' + p.days_until_expiry + ' days)</td></tr>';
+                    '<td class="py-2 px-2 ' + expiryClass + '">' + formatEstonianDate(p.expiry_date) + ' (' + p.days_until_expiry + ' days)</td></tr>';
                 }).join('') + '</tbody></table></div></div>';
             }
           }
@@ -564,7 +566,7 @@ export function permissionsPage(
             data.data.map(function(l) {
               var roleDisplay = l.action === 'delete' ? '<s>' + (l.old_role || '-') + '</s>' : (l.role || '-');
               return '<tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-900 dark:text-gray-100">' +
-                '<td class="py-2 px-2 text-xs text-gray-500 dark:text-gray-400">' + new Date(l.created).toLocaleString() + '</td>' +
+                '<td class="py-2 px-2 text-xs text-gray-500 dark:text-gray-400">' + formatEstonianDateTime(l.created) + '</td>' +
                 '<td class="py-2 px-2">' + actionBadge(l.action) + '</td>' +
                 '<td class="py-2 px-2">' + (l.user_name || l.user_id) + '</td>' +
                 '<td class="py-2 px-2">' + (l.plant_id === 0 ? 'All (global)' : (l.plant_name || 'Unknown')) + '</td>' +

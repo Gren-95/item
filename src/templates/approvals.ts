@@ -1,5 +1,6 @@
 import { layout } from "./layout";
 import { DOCUMENT_TEXT_ICON, EXCLAMATION_CIRCLE_ICON } from "./icons";
+import { formatEstonianDateTime } from "../utils/date";
 
 interface ApprovalRequest {
   id: number;
@@ -36,13 +37,7 @@ function escapeHtml(str: string | null | undefined): string {
 }
 
 function formatDate(dateString: string | null): string {
-  if (!dateString) return "";
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  } catch {
-    return dateString;
-  }
+  return formatEstonianDateTime(dateString);
 }
 
 function formatActionData(actionData: string): string {

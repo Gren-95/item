@@ -1,6 +1,7 @@
 import { layout } from "./layout";
 import { button } from "./buttons";
 import { WRENCH_ICON, X_ICON, EDIT_ICON, CHECK_CIRCLE_ICON, CHECK_ICON } from "./icons";
+import { formatEstonianDate } from "../utils/date";
 
 interface RepairItem {
   id: number;
@@ -35,13 +36,7 @@ function escapeHtml(str: string | null | undefined): string {
 }
 
 function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "—";
-  try {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString();
-  } catch {
-    return dateStr;
-  }
+  return formatEstonianDate(dateStr, "—");
 }
 
 export function repairsPage(data: RepairsData, success = "", error = "", isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
@@ -191,16 +186,16 @@ export function repairsPage(data: RepairsData, success = "", error = "", isAdmin
               \` : ''}
               <div>
                 <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Sent Date</label>
-                <p class="text-gray-900 dark:text-white">\${sentDate ? new Date(sentDate).toLocaleDateString() : '—'}</p>
+                <p class="text-gray-900 dark:text-white">\${sentDate ? formatEstonianDate(sentDate) : '—'}</p>
               </div>
               <div>
                 <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Returned Date</label>
-                <p class="text-gray-900 dark:text-white">\${returnedDate ? new Date(returnedDate).toLocaleDateString() : '—'}</p>
+                <p class="text-gray-900 dark:text-white">\${returnedDate ? formatEstonianDate(returnedDate) : '—'}</p>
               </div>
               \${markedBackupDate ? \`
               <div>
                 <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Marked Backup Date</label>
-                <p class="text-gray-900 dark:text-white">\${new Date(markedBackupDate).toLocaleDateString()}</p>
+                <p class="text-gray-900 dark:text-white">\${formatEstonianDate(markedBackupDate) || '—'}</p>
               </div>
               \` : ''}
               <div>

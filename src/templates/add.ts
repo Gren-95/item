@@ -121,20 +121,24 @@ export function addPage(data: AddData, success: boolean = false, error: string |
             <div>
               <label for="purchase_date" class="label">Purchase Date <span class="text-red-500">*</span></label>
               <input 
-                type="date" 
+                type="text" 
                 id="purchase_date" 
                 name="purchase_date"
                 class="input-field"
+                placeholder="dd.mm.yyyy"
+                pattern="(\\d{2}[.,-]\\d{2}[.,-]\\d{4}|\\d{6}|\\d{8})"
                 required
               >
             </div>
             <div>
               <label for="warranty_expiry_date" class="label">Warranty Expiry Date <span class="text-red-500">*</span></label>
               <input 
-                type="date" 
+                type="text" 
                 id="warranty_expiry_date" 
                 name="warranty_expiry_date"
                 class="input-field"
+                placeholder="dd.mm.yyyy"
+                pattern="(\\d{2}[.,-]\\d{2}[.,-]\\d{4}|\\d{6}|\\d{8})"
                 required
               >
             </div>
@@ -573,10 +577,10 @@ export function addPage(data: AddData, success: boolean = false, error: string |
               const warrantyExpiryInput = document.getElementById('warranty_expiry_date');
 
               if (result.data.shipDate && purchaseDateInput) {
-                purchaseDateInput.value = result.data.shipDate;
+                purchaseDateInput.value = formatEstonianDate(result.data.shipDate);
               }
               if (result.data.warrantyEnd && warrantyExpiryInput) {
-                warrantyExpiryInput.value = result.data.warrantyEnd;
+                warrantyExpiryInput.value = formatEstonianDate(result.data.warrantyEnd);
               }
 
               // Flash success on the fields
