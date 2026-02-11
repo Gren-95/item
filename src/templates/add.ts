@@ -10,24 +10,15 @@ import {
   REFRESH_ICON,
   CPU_ICON,
   LOCATION_ICON,
-  CLIPBOARD_LIST_ICON,
   USER_ICON,
   PRINTER_ICON,
-  X_ICON,
-  MENU_ALT_ICON
+  X_ICON
 } from "./icons";
 
 interface SelectOption {
   id: number;
   name: string;
   parent_id?: number;
-}
-
-interface InventoryPeriod {
-  id: number;
-  name: string;
-  start_date: string;
-  end_date: string;
 }
 
 interface AddData {
@@ -44,19 +35,18 @@ interface AddData {
   vendors: SelectOption[];
   suppliers: SelectOption[];
   employees: { employee_no: string; name: string }[];
-  inventoryPeriods: InventoryPeriod[];
 }
 
 export function addPage(data: AddData, success: boolean = false, error: string | null = null, isAdmin: boolean = false, hasPcPwView: boolean = false, username: string | null = null, hasAuditApprover: boolean = false): string {
   const content = `
-    <div class="max-w-4xl mx-auto">
-      <div class="flex items-center gap-4 mb-6">
-        <a href="/" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+    <div class="w-full px-4 sm:px-6 lg:px-12 xl:px-16">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
+        <a href="/" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors self-start sm:self-center">
           ${ARROW_LEFT_ICON.replace('w-5 h-5', 'w-6 h-6')}
         </a>
         <div class="flex items-center gap-2">
-          ${PLUS_ICON.replace('w-5 h-5', 'w-6 h-6').replace('text-current', 'text-gray-900 dark:text-white')}
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Add New Equipment</h1>
+          ${PLUS_ICON.replace('w-5 h-5', 'w-6 h-6 sm:w-7 sm:h-7').replace('text-current', 'text-gray-900 dark:text-white')}
+          <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Add New Equipment</h1>
         </div>
       </div>
 
@@ -76,20 +66,23 @@ export function addPage(data: AddData, success: boolean = false, error: string |
       </div>
 
       <form action="/add" method="POST">
-        <!-- Basic Information -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            ${INFORMATION_CIRCLE_ICON.replace('text-current', 'text-gray-400')}
-            Basic Information
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="max-w-[1200px] mx-auto">
+        <!-- Equipment Information and Type (Top Row) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <!-- Equipment Information -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              ${INFORMATION_CIRCLE_ICON.replace('text-current', 'text-gray-400 dark:text-gray-500')}
+              Equipment Information
+            </h2>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="service_tag" class="label">Service Tag / Serial Number <span class="text-red-500">*</span></label>
-              <input 
-                type="text" 
-                id="service_tag" 
-                name="service_tag" 
+              <label for="service_tag" class="label">Service Tag <span class="text-red-500">*</span></label>
+              <input
+                type="text"
+                id="service_tag"
+                name="service_tag"
                 value="${escapeHtml(data.serviceTag)}"
                 placeholder="Enter service tag..."
                 class="input-field font-mono"
@@ -109,7 +102,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
                 <div class="flex items-center justify-between gap-3">
                   <p class="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
                     ${INFORMATION_CIRCLE_ICON.replace('w-5 h-5', 'w-4 h-4 flex-shrink-0')}
-                    <span>Enter the service tag and click <strong>Get Warranty</strong> to auto-fill dates.</span>
+                    <span>Click <strong>Get Warranty</strong> to auto-fill dates.</span>
                   </p>
                   <button type="button" id="get-warranty-btn" onclick="fetchDellWarranty()" class="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1.5">
                     ${REFRESH_ICON.replace('w-5 h-5', 'w-4 h-4')}
@@ -119,10 +112,10 @@ export function addPage(data: AddData, success: boolean = false, error: string |
               </div>
             </div>
             <div>
-              <label for="purchase_date" class="label">Purchase Date <span class="text-red-500">*</span></label>
-              <input 
-                type="text" 
-                id="purchase_date" 
+              <label for="purchase_date" class="label">Warranty Start <span class="text-red-500">*</span></label>
+              <input
+                type="text"
+                id="purchase_date"
                 name="purchase_date"
                 class="input-field"
                 placeholder="dd.mm.yyyy"
@@ -131,10 +124,10 @@ export function addPage(data: AddData, success: boolean = false, error: string |
               >
             </div>
             <div>
-              <label for="warranty_expiry_date" class="label">Warranty Expiry Date <span class="text-red-500">*</span></label>
-              <input 
-                type="text" 
-                id="warranty_expiry_date" 
+              <label for="warranty_expiry_date" class="label">Warranty Expiry <span class="text-red-500">*</span></label>
+              <input
+                type="text"
+                id="warranty_expiry_date"
                 name="warranty_expiry_date"
                 class="input-field"
                 placeholder="dd.mm.yyyy"
@@ -154,31 +147,51 @@ export function addPage(data: AddData, success: boolean = false, error: string |
             </div>
             <div>
               <label for="cerf" class="label">CERF</label>
-              <input 
-                type="number" 
-                id="cerf" 
+              <input
+                type="number"
+                id="cerf"
                 name="cerf"
                 placeholder="Enter CERF number..."
                 class="input-field"
               >
             </div>
+            <div>
+              <label for="ip" class="label">IP Address</label>
+              <input
+                type="text"
+                id="ip"
+                name="ip"
+                class="input-field font-mono"
+                placeholder="e.g., 192.168.1.100"
+              >
+            </div>
+            <div>
+              <label for="mac_addresses" class="label">MAC Addresses</label>
+              <input
+                type="text"
+                id="mac_addresses"
+                name="mac_addresses"
+                class="input-field font-mono"
+                placeholder="Comma-separated MAC addresses"
+              >
+            </div>
+            </div>
           </div>
-        </div>
 
-        <!-- Type & Model Selection -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            ${CPU_ICON.replace('text-current', 'text-gray-400')}
-            Equipment Type
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Type & Model Selection -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              ${CPU_ICON.replace('text-current', 'text-gray-400 dark:text-gray-500')}
+              Equipment Type
+            </h2>
+            
+            <div class="grid grid-cols-1 gap-4">
             <div>
               <label for="type_id" class="label">Type</label>
-              <select id="type_id" name="type_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'types', 'Type'); } else { loadProductLines(this.value); }">
+              <select id="type_id" name="type_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'types', 'Type'); } else { loadProductLines(this.value); handleTypeChange(this); }">
                 <option value="">Select Type...</option>
                 ${data.types.map(t => `
-                  <option value="${t.id}">${escapeHtml(t.name)}</option>
+                  <option value="${t.id}" data-name="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>
                 `).join("")}
                 <option value="__add_new__" class="text-blue-600 font-medium">+ Add new type...</option>
               </select>
@@ -203,17 +216,53 @@ export function addPage(data: AddData, success: boolean = false, error: string |
                 <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new model...</option>
               </select>
             </div>
+
+            <!-- IMEI Fields (shown when Mobile Phone type is selected) -->
+            <div id="imei-fields" class="hidden">
+              <div class="border-t border-gray-200 dark:border-gray-700 my-3 pt-3">
+                <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Mobile Phone Details</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label for="imei1" class="label">IMEI 1</label>
+                    <input
+                      type="text"
+                      id="imei1"
+                      name="imei1"
+                      class="input-field font-mono"
+                      placeholder="Enter IMEI 1..."
+                      maxlength="15"
+                      pattern="\\d{15}"
+                    >
+                  </div>
+                  <div>
+                    <label for="imei2" class="label">IMEI 2</label>
+                    <input
+                      type="text"
+                      id="imei2"
+                      name="imei2"
+                      class="input-field font-mono"
+                      placeholder="Enter IMEI 2..."
+                      maxlength="15"
+                      pattern="\\d{15}"
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            </div>
           </div>
         </div>
 
-        <!-- Location Selection -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            ${LOCATION_ICON.replace('text-current', 'text-gray-400')}
-            Location
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Location and Assignment (Bottom Row) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <!-- Location Selection -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              ${LOCATION_ICON.replace('text-current', 'text-gray-400 dark:text-gray-500')}
+              Location
+            </h2>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label for="region_id" class="label">Region</label>
               <select id="region_id" name="region_id" class="select-field" onchange="if(this.value === '__add_new__') { handleSelectChange(this, 'regions', 'Region'); } else { loadCountries(this.value); }">
@@ -274,37 +323,17 @@ export function addPage(data: AddData, success: boolean = false, error: string |
                 <option value="__add_new__" data-parent="__always__" hidden class="text-blue-600 font-medium">+ Add new sub area...</option>
               </select>
             </div>
-          </div>
-        </div>
-
-        <!-- Inventory Period -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            ${CLIPBOARD_LIST_ICON.replace('text-current', 'text-gray-400')}
-            Inventory
-          </h2>
-          
-          <div class="grid grid-cols-1 gap-4">
-            <div>
-              <label for="inventory_period_id" class="label">Inventory Period</label>
-              <select id="inventory_period_id" name="inventory_period_id" class="select-field">
-                <option value="">No inventory period</option>
-                ${data.inventoryPeriods.map(ip => `
-                  <option value="${ip.id}">${escapeHtml(ip.name)} (${ip.start_date} - ${ip.end_date})</option>
-                `).join("")}
-              </select>
             </div>
           </div>
-        </div>
 
-        <!-- Assignment & TeamViewer -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            ${USER_ICON.replace('text-current', 'text-gray-400')}
-            Assignment & Remote Access
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Assignment & Remote Access -->
+          <div class="card">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              ${USER_ICON.replace('text-current', 'text-gray-400 dark:text-gray-500')}
+              Assignment & Remote Access
+            </h2>
+            
+            <div class="grid grid-cols-1 gap-4">
             <div>
               <label for="assigned_to" class="label">Assigned To</label>
               <select id="assigned_to" name="assigned_to" class="select-field">
@@ -316,54 +345,24 @@ export function addPage(data: AddData, success: boolean = false, error: string |
             </div>
             <div>
               <label for="teamviewer" class="label">TeamViewer ID</label>
-              <input 
-                type="text" 
-                id="teamviewer" 
+              <input
+                type="text"
+                id="teamviewer"
                 name="teamviewer"
                 placeholder="Enter TeamViewer ID..."
                 class="input-field"
               >
             </div>
-          </div>
-        </div>
-
-        <!-- Additional Info -->
-        <div class="card mb-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            ${MENU_ALT_ICON.replace('text-current', 'text-gray-400')}
-            Additional Information
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label for="ip" class="label">IP Address</label>
-              <input 
-                type="text" 
-                id="ip" 
-                name="ip"
-                placeholder="e.g., 192.168.1.100"
-                class="input-field font-mono"
-              >
-            </div>
-            <div>
-              <label for="mac_addresses" class="label">MAC Addresses</label>
-              <input 
-                type="text" 
-                id="mac_addresses" 
-                name="mac_addresses"
-                placeholder="Comma-separated MAC addresses"
-                class="input-field font-mono"
-              >
-            </div>
-            <div class="md:col-span-2">
-              <label for="comment" class="label">Comments</label>
-              <textarea 
-                id="comment" 
+              <label for="comment" class="label">Comment</label>
+              <textarea
+                id="comment"
                 name="comment"
                 rows="3"
-                placeholder="Any additional notes..."
+                placeholder="Add notes about this equipment..."
                 class="input-field"
               ></textarea>
+            </div>
             </div>
           </div>
         </div>
@@ -383,6 +382,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
               Add Equipment
             </span>
           </button>
+        </div>
         </div>
       </form>
       
@@ -551,6 +551,20 @@ export function addPage(data: AddData, success: boolean = false, error: string |
               .replace(/'/g, '&#039;');
           }
         })();
+
+        // IMEI fields visibility based on type selection
+        window.handleTypeChange = function(select) {
+          var selectedOption = select.options[select.selectedIndex];
+          var typeName = selectedOption ? (selectedOption.dataset.name || selectedOption.textContent || '') : '';
+          var imeiFields = document.getElementById('imei-fields');
+          if (imeiFields) {
+            if (typeName.toLowerCase().includes('mobile') || typeName.toLowerCase().includes('phone')) {
+              imeiFields.classList.remove('hidden');
+            } else {
+              imeiFields.classList.add('hidden');
+            }
+          }
+        };
 
         // Dell warranty fetch handler
         window.fetchDellWarranty = async function() {

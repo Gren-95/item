@@ -45,6 +45,14 @@ export const equipmentAddSchema = z.object({
   mac_addresses: z.string().max(255).optional().nullable(),
   comment: z.string().optional().nullable(),
   inventory_period_id: z.string().optional().nullable(),
+  imei1: z.string().max(15).optional().nullable().or(z.literal("")).transform((val) => {
+    if (!val || val.trim() === "") return null;
+    return val.trim();
+  }),
+  imei2: z.string().max(15).optional().nullable().or(z.literal("")).transform((val) => {
+    if (!val || val.trim() === "") return null;
+    return val.trim();
+  }),
 });
 
 export const equipmentEditSchema = equipmentAddSchema.partial().extend({

@@ -382,13 +382,16 @@ async function executeApprovedAction(
       const mac_addresses = actionData.mac_addresses as string | null;
       const comment = actionData.comment as string | null;
       const inventory_period_id = actionData.inventory_period_id as number | null;
+      const imei1 = actionData.imei1 as string | null;
+      const imei2 = actionData.imei2 as string | null;
 
       const [result] = await pool.query<import("mysql2").ResultSetHeader>(
         `INSERT INTO it_equipment (
           service_tag, vendor_id, supplier_id, model_id,
-          purchase_date, warranty_expiry_date, teamviewer, cerf, ip, mac_addresses
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [service_tag, vendor_id, supplier_id, model_id, purchase_date, warranty_expiry_date, teamviewer, cerf, ip, mac_addresses]
+          purchase_date, warranty_expiry_date, teamviewer, cerf, ip, mac_addresses,
+          imei1, imei2
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [service_tag, vendor_id, supplier_id, model_id, purchase_date, warranty_expiry_date, teamviewer, cerf, ip, mac_addresses, imei1, imei2]
       );
 
       const equipmentId = result.insertId;
@@ -436,6 +439,10 @@ async function executeApprovedAction(
         ? actionData.ip as string : current.ip;
       const mac_addresses = actionData.mac_addresses !== null && actionData.mac_addresses !== undefined && actionData.mac_addresses !== ''
         ? actionData.mac_addresses as string : current.mac_addresses;
+      const imei1 = actionData.imei1 !== null && actionData.imei1 !== undefined && actionData.imei1 !== ''
+        ? actionData.imei1 as string : current.imei1;
+      const imei2 = actionData.imei2 !== null && actionData.imei2 !== undefined && actionData.imei2 !== ''
+        ? actionData.imei2 as string : current.imei2;
       const teamviewer = actionData.teamviewer !== null && actionData.teamviewer !== undefined && actionData.teamviewer !== ''
         ? actionData.teamviewer as number : current.teamviewer;
 
@@ -453,9 +460,10 @@ async function executeApprovedAction(
         `UPDATE it_equipment SET
           model_id = ?, vendor_id = ?, supplier_id = ?, purchase_date = ?,
           warranty_expiry_date = ?, cerf = ?, ip = ?, mac_addresses = ?,
+          imei1 = ?, imei2 = ?,
           teamviewer = ?, updated = CURRENT_TIMESTAMP
         WHERE id = ?`,
-        [model_id, vendor_id, supplier_id, purchase_date, warranty_expiry_date, cerf, ip, mac_addresses, teamviewer, id]
+        [model_id, vendor_id, supplier_id, purchase_date, warranty_expiry_date, cerf, ip, mac_addresses, imei1, imei2, teamviewer, id]
       );
 
       await pool.query(
@@ -2165,6 +2173,8 @@ async function handleRequest(req: Request): Promise<Response> {
         mac_addresses: formData.get("mac_addresses") || null,
         comment: formData.get("comment") || null,
         inventory_period_id: formData.get("inventory_period_id") || null,
+        imei1: formData.get("imei1") || null,
+        imei2: formData.get("imei2") || null,
       };
 
       // Check add equipment permission
@@ -2240,12 +2250,15 @@ async function handleRequest(req: Request): Promise<Response> {
         const mac_addresses = validated.mac_addresses;
         const comment = validated.comment;
         const inventory_period_id = validated.inventory_period_id;
+        const imei1 = validated.imei1;
+        const imei2 = validated.imei2;
         // Insert into equipment table (static data only)
         const [result] = await pool.query<ResultSetHeader>(`
           INSERT INTO it_equipment (
             service_tag, vendor_id, supplier_id, model_id,
-            purchase_date, warranty_expiry_date, teamviewer, cerf, ip, mac_addresses
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            purchase_date, warranty_expiry_date, teamviewer, cerf, ip, mac_addresses,
+            imei1, imei2
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           service_tag,
           vendor_id || null,
@@ -2256,7 +2269,9 @@ async function handleRequest(req: Request): Promise<Response> {
           teamviewer || null,
           cerf || 0,
           ip || null,
-          mac_addresses || null
+          mac_addresses || null,
+          imei1 || null,
+          imei2 || null
         ]);
 
         const equipmentId = result.insertId;
@@ -2469,6 +2484,8 @@ async function handleRequest(req: Request): Promise<Response> {
           cerf: formData.get("cerf") || "0",
           ip: formData.get("ip") || null,
           mac_addresses: formData.get("mac_addresses") || null,
+          imei1: formData.get("imei1") || null,
+          imei2: formData.get("imei2") || null,
         };
 
         // Create approval request
@@ -2532,6 +2549,8 @@ async function handleRequest(req: Request): Promise<Response> {
         cerf: formData.get("cerf") || "0",
         ip: formData.get("ip") || null,
         mac_addresses: formData.get("mac_addresses") || null,
+        imei1: formData.get("imei1") || null,
+        imei2: formData.get("imei2") || null,
         is_written_off: formData.get("is_written_off") || null,
         write_off_comment: formData.get("write_off_comment") || null,
         repair_status: formData.get("repair_status") || null,
@@ -2555,6 +2574,8 @@ async function handleRequest(req: Request): Promise<Response> {
         const cerf = validated.cerf || 0;
         const ip = validated.ip;
         const mac_addresses = validated.mac_addresses;
+        const imei1 = validated.imei1;
+        const imei2 = validated.imei2;
         const is_written_off = validated.is_written_off ? Number(validated.is_written_off) : null;
         const write_off_comment = rawData.write_off_comment ? rawData.write_off_comment.toString().trim() : null;
         const repair_status = rawData.repair_status ? rawData.repair_status.toString() : null;
@@ -2641,6 +2662,8 @@ async function handleRequest(req: Request): Promise<Response> {
             cerf = ?,
             ip = ?,
             mac_addresses = ?,
+            imei1 = ?,
+            imei2 = ?,
             teamviewer = ?,
             is_written_off = ?,
             repair_status = ?,
@@ -2660,6 +2683,8 @@ async function handleRequest(req: Request): Promise<Response> {
           cerf || 0,
           ip || null,
           mac_addresses || null,
+          imei1 || null,
+          imei2 || null,
           teamviewer || null,
           is_written_off,
           repair_status || null,
