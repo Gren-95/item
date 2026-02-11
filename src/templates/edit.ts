@@ -1,6 +1,7 @@
 import { layout } from "./layout";
 import { renderAlert } from "./components";
 import { getModalHtml, getScriptsHtml } from "./components";
+import { formatDateForInput } from "../utils/date";
 import {
   INFORMATION_CIRCLE_ICON,
   EDIT_ICON,
@@ -130,11 +131,13 @@ export function editPage(data: EditData, success: string | boolean = false, erro
             <div>
               <label for="purchase_date" class="label">Warranty Start</label>
               <input
-                type="date"
+                type="text"
                 id="purchase_date"
                 name="purchase_date"
                 value="${formatDateForInput(eq.purchase_date)}"
                 class="input-field"
+                placeholder="dd.mm.yyyy"
+                pattern="(\\d{2}[.,-]\\d{2}[.,-]\\d{4}|\\d{6}|\\d{8})"
                 ${isReadonly ? 'readonly disabled' : ''}
               >
             </div>
@@ -142,11 +145,13 @@ export function editPage(data: EditData, success: string | boolean = false, erro
               <label for="warranty_expiry_date" class="label">Warranty Expiry</label>
               <div class="flex">
                 <input
-                  type="date"
+                  type="text"
                   id="warranty_expiry_date"
                   name="warranty_expiry_date"
                   value="${formatDateForInput(eq.warranty_expiry_date)}"
                   class="input-field flex-1 ${isExpired(eq.warranty_expiry_date) ? "text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700" : ""}"
+                  placeholder="dd.mm.yyyy"
+                  pattern="(\\d{2}[.,-]\\d{2}[.,-]\\d{4}|\\d{6}|\\d{8})"
                   ${isReadonly ? 'readonly disabled' : ''}
                 >
                 <button
@@ -769,15 +774,15 @@ export function editPage(data: EditData, success: string | boolean = false, erro
               document.getElementById('dell-service-tag').textContent = dellWarrantyData.serviceTag || '-';
               document.getElementById('dell-model').textContent = dellWarrantyData.model || '-';
               document.getElementById('dell-product-line').textContent = dellWarrantyData.productLine || '-';
-              document.getElementById('dell-ship-date').textContent = dellWarrantyData.shipDate || '-';
+              document.getElementById('dell-ship-date').textContent = formatEstonianDate(dellWarrantyData.shipDate) || '-';
               
               // Populate warranty dates
-              document.getElementById('dell-warranty-start').textContent = dellWarrantyData.warrantyStart || '-';
-              document.getElementById('dell-warranty-end').textContent = dellWarrantyData.warrantyEnd || '-';
+              document.getElementById('dell-warranty-start').textContent = formatEstonianDate(dellWarrantyData.warrantyStart) || '-';
+              document.getElementById('dell-warranty-end').textContent = formatEstonianDate(dellWarrantyData.warrantyEnd) || '-';
               
               // Populate new date inputs
-              document.getElementById('dell-new-start').value = dellWarrantyData.warrantyStart || '';
-              document.getElementById('dell-new-end').value = dellWarrantyData.warrantyEnd || '';
+              document.getElementById('dell-new-start').value = formatEstonianDate(dellWarrantyData.warrantyStart) || '';
+              document.getElementById('dell-new-end').value = formatEstonianDate(dellWarrantyData.warrantyEnd) || '';
               
               // Populate entitlements
               const entContainer = document.getElementById('dell-entitlements-container');
@@ -788,7 +793,7 @@ export function editPage(data: EditData, success: string | boolean = false, erro
                 entList.innerHTML = dellWarrantyData.entitlements.map(ent => \`
                   <div class="bg-gray-50 dark:bg-gray-700/50 rounded p-2 text-sm">
                     <div class="font-medium text-gray-900 dark:text-white">\${(ent.serviceLevel || 'Unknown Service').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
-                    <div class="text-gray-500 dark:text-gray-400 text-xs">\${ent.startDate || ''} - \${ent.endDate || ''}</div>
+                    <div class="text-gray-500 dark:text-gray-400 text-xs">\${formatEstonianDate(ent.startDate) || ''} - \${formatEstonianDate(ent.endDate) || ''}</div>
                   </div>
                 \`).join('');
               } else {
@@ -819,11 +824,11 @@ export function editPage(data: EditData, success: string | boolean = false, erro
             const warrantyExpiryInput = document.getElementById('warranty_expiry_date');
             
             if (dellWarrantyData.warrantyStart && purchaseDateInput) {
-              purchaseDateInput.value = dellWarrantyData.warrantyStart;
+              purchaseDateInput.value = formatEstonianDate(dellWarrantyData.warrantyStart) || '';
             }
             
             if (dellWarrantyData.warrantyEnd && warrantyExpiryInput) {
-              warrantyExpiryInput.value = dellWarrantyData.warrantyEnd;
+              warrantyExpiryInput.value = formatEstonianDate(dellWarrantyData.warrantyEnd) || '';
               // Update styling for expired/valid warranty
               const today = new Date();
               const expiryDate = new Date(dellWarrantyData.warrantyEnd);
@@ -942,8 +947,7 @@ export function editPage(data: EditData, success: string | boolean = false, erro
           // Device History functions
           function formatHistoryDate(dateStr) {
             if (!dateStr) return '-';
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            return formatEstonianDateTime(dateStr) || '-';
           }
 
           function escapeHistoryHtml(text) {
@@ -1138,11 +1142,11 @@ export function editPage(data: EditData, success: string | boolean = false, erro
                   <div class="grid grid-cols-2 gap-4">
                     <div>
                       <label class="label text-xs">New Warranty Start</label>
-                      <input type="date" id="dell-new-start" class="input-field text-sm" readonly>
+                      <input type="text" id="dell-new-start" class="input-field text-sm" readonly placeholder="dd.mm.yyyy">
                     </div>
                     <div>
                       <label class="label text-xs">New Warranty End</label>
-                      <input type="date" id="dell-new-end" class="input-field text-sm" readonly>
+                      <input type="text" id="dell-new-end" class="input-field text-sm" readonly placeholder="dd.mm.yyyy">
                     </div>
                   </div>
                 </div>
@@ -1353,25 +1357,3 @@ function isExpired(dateStr: string): boolean {
   return new Date(dateStr) < new Date();
 }
 
-function formatDateForInput(dateStr: string | Date | null | undefined): string {
-  if (!dateStr) return "";
-  // MySQL DATE format is already YYYY-MM-DD, but handle Date objects or other formats
-  if (typeof dateStr === 'object' && dateStr instanceof Date) {
-    return dateStr.toISOString().split('T')[0];
-  }
-  // If it's already in YYYY-MM-DD format, return as is
-  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr;
-  }
-  // Try to parse and format
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return "";
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return year + "-" + month + "-" + day;
-  } catch {
-    return "";
-  }
-}

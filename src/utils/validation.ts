@@ -1,4 +1,31 @@
 import { z } from "zod";
+import { parseEstonianDate } from "./date";
+
+// Date field that accepts dd.mm.yyyy (Estonian) or yyyy-mm-dd (ISO) and outputs ISO
+const estonianDateField = z.string().transform((val, ctx) => {
+  const parsed = parseEstonianDate(val);
+  if (!parsed) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Invalid date format. Use dd.mm.yyyy",
+    });
+    return z.NEVER;
+  }
+  return parsed;
+});
+
+const estonianDateFieldOptional = z.string().optional().nullable().transform((val, ctx) => {
+  if (!val || val.trim() === "") return null;
+  const parsed = parseEstonianDate(val);
+  if (!parsed) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Invalid date format. Use dd.mm.yyyy",
+    });
+    return z.NEVER;
+  }
+  return parsed;
+});
 
 // Equipment validation schemas
 export const serviceTagSchema = z.string().min(1).max(30).trim();
@@ -8,8 +35,8 @@ export const equipmentAddSchema = z.object({
   vendor_id: z.string().optional().nullable(),
   supplier_id: z.string().optional().nullable(),
   model_id: z.string().optional().nullable(),
-  purchase_date: z.string().date(),
-  warranty_expiry_date: z.string().date(),
+  purchase_date: estonianDateField,
+  warranty_expiry_date: estonianDateField,
   equipment_sub_area_id: z.string().optional().nullable(),
   assigned_to: z.string().max(9).optional().nullable(),
   teamviewer: z.string().max(255).optional().nullable(),
@@ -22,8 +49,8 @@ export const equipmentAddSchema = z.object({
 
 export const equipmentEditSchema = equipmentAddSchema.partial().extend({
   service_tag: serviceTagSchema.optional(),
-  purchase_date: z.string().date().optional().nullable(),
-  warranty_expiry_date: z.string().date().optional().nullable(),
+  purchase_date: estonianDateFieldOptional,
+  warranty_expiry_date: estonianDateFieldOptional,
   is_written_off: z.string().optional().nullable().or(z.literal("")),
   repair_status: z.enum(["needs_repair", "at_supplier", "returned", "in_backup"]).optional().nullable().or(z.literal("")),
   repair_note: z.string().max(65535).optional().nullable().or(z.literal("")),

@@ -1,6 +1,7 @@
 import { layout } from "./layout";
 import { escapeHtml, renderAlert } from "./components";
 import { button } from "./buttons";
+import { formatEstonianDate as formatEstDate } from "../utils/date";
 import {
   CLIPBOARD_CHECK_ICON,
   PLUS_ICON,
@@ -87,12 +88,11 @@ export function auditPage(
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   function formatDate(date: string | Date | null | undefined): string {
-    if (!date) return '';
-    const d = date instanceof Date ? date : new Date(date);
-    return d.toISOString().split('T')[0];
+    return formatEstDate(date);
   }
 
-  const today = new Date().toISOString().split('T')[0];
+  // Today in dd.mm.yyyy for display, but keep ISO for date comparisons
+  const todayISO = new Date().toISOString().split('T')[0];
   
   const alert = message ? renderAlert(messageType === "error" ? "" : message, messageType === "error" ? message : "") : "";
 
@@ -339,10 +339,12 @@ export function auditPage(
                         Start Date *
                       </label>
                       <input
-                        type="date"
+                        type="text"
                         id="start_date"
                         name="start_date"
                         required
+                        placeholder="dd.mm.yyyy"
+                        pattern="(\\d{2}[.,-]\\d{2}[.,-]\\d{4}|\\d{6}|\\d{8})"
                         class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         onchange="updatePeriodPreview()"
                       />
@@ -353,10 +355,12 @@ export function auditPage(
                         End Date *
                       </label>
                       <input
-                        type="date"
+                        type="text"
                         id="end_date"
                         name="end_date"
                         required
+                        placeholder="dd.mm.yyyy"
+                        pattern="(\\d{2}[.,-]\\d{2}[.,-]\\d{4}|\\d{6}|\\d{8})"
                         class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       />
                     </div>
@@ -422,9 +426,12 @@ export function auditPage(
                       ${allPeriodsForTab.map(period => {
                         const startDateStr = formatDate(period.start_date);
                         const endDateStr = formatDate(period.end_date);
-                        const isActive = endDateStr >= today && startDateStr <= today;
-                        const isPast = endDateStr < today;
-                        const isFuture = startDateStr > today;
+                        // Use ISO format for date comparisons (lexicographic)
+                        const startISO = period.start_date instanceof Date ? period.start_date.toISOString().split('T')[0] : String(period.start_date || '').substring(0, 10);
+                        const endISO = period.end_date instanceof Date ? period.end_date.toISOString().split('T')[0] : String(period.end_date || '').substring(0, 10);
+                        const isActive = endISO >= todayISO && startISO <= todayISO;
+                        const isPast = endISO < todayISO;
+                        const isFuture = startISO > todayISO;
                         
                         let statusBadge = '';
                         if (isActive) {
@@ -682,8 +689,7 @@ export function auditPage(
 
         function formatDate(dateStr) {
           if (!dateStr) return 'Never';
-          const date = new Date(dateStr);
-          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+          return formatEstonianDate(dateStr) || 'Never';
         }
 
         function formatDeviceAge(purchaseDate) {
@@ -716,8 +722,7 @@ export function auditPage(
 
         function formatDateTime(dateStr) {
           if (!dateStr) return '-';
-          const date = new Date(dateStr);
-          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          return formatEstonianDateTime(dateStr) || '-';
         }
 
         async function toggleHistory(equipmentId) {
@@ -1205,14 +1210,7 @@ export function auditPage(
         
         function formatDate(dateStr) {
           if (!dateStr) return '';
-          const date = dateStr instanceof Date ? dateStr : new Date(dateStr);
-          return date.toLocaleString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          });
+          return formatEstonianDateTime(dateStr);
         }
         
         function escapeHtml(text) {

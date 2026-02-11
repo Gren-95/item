@@ -22,6 +22,7 @@ import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/appro
 import { validateEmailConfig, sendApprovalNotification, sendApprovalDecisionNotification, verifyApprovalToken } from "./utils/email";
 import { startScheduler } from "./utils/scheduler";
 import { APP_VERSION } from "./utils/version";
+import { parseEstonianDate } from "./utils/date";
 import {
   verifyCredentials,
   changePassword,
@@ -297,8 +298,8 @@ async function executeApprovedAction(
       const vendor_id = actionData.vendor_id as number | null;
       const supplier_id = actionData.supplier_id as number | null;
       const model_id = actionData.model_id as number | null;
-      const purchase_date = actionData.purchase_date as string;
-      const warranty_expiry_date = actionData.warranty_expiry_date as string;
+      const purchase_date = parseEstonianDate(actionData.purchase_date as string) || (actionData.purchase_date as string);
+      const warranty_expiry_date = parseEstonianDate(actionData.warranty_expiry_date as string) || (actionData.warranty_expiry_date as string);
       const equipment_sub_area_id = actionData.equipment_sub_area_id as number | null;
       const assigned_to = actionData.assigned_to as string | null;
       const teamviewer = actionData.teamviewer as number | null;
@@ -352,9 +353,9 @@ async function executeApprovedAction(
       const supplier_id = actionData.supplier_id !== null && actionData.supplier_id !== undefined && actionData.supplier_id !== ''
         ? actionData.supplier_id as number : current.supplier_id;
       const purchase_date = actionData.purchase_date !== null && actionData.purchase_date !== undefined && actionData.purchase_date !== ''
-        ? actionData.purchase_date as string : current.purchase_date;
+        ? (parseEstonianDate(actionData.purchase_date as string) || actionData.purchase_date as string) : current.purchase_date;
       const warranty_expiry_date = actionData.warranty_expiry_date !== null && actionData.warranty_expiry_date !== undefined && actionData.warranty_expiry_date !== ''
-        ? actionData.warranty_expiry_date as string : current.warranty_expiry_date;
+        ? (parseEstonianDate(actionData.warranty_expiry_date as string) || actionData.warranty_expiry_date as string) : current.warranty_expiry_date;
       const cerf = actionData.cerf !== null && actionData.cerf !== undefined && actionData.cerf !== ''
         ? actionData.cerf as number : current.cerf;
       const ip = actionData.ip !== null && actionData.ip !== undefined && actionData.ip !== ''
@@ -609,13 +610,16 @@ async function handleRequest(req: Request): Promise<Response> {
 
       try {
         if (action === "add") {
-          const startDate = form.get("start_date")?.toString();
-          const endDate = form.get("end_date")?.toString();
+          const startDateRaw = form.get("start_date")?.toString();
+          const endDateRaw = form.get("end_date")?.toString();
           const comment = form.get("comment")?.toString() || null;
 
-          if (!startDate || !endDate) {
+          if (!startDateRaw || !endDateRaw) {
             throw new Error("Start and end date are required");
           }
+
+          const startDate = parseEstonianDate(startDateRaw) || startDateRaw;
+          const endDate = parseEstonianDate(endDateRaw) || endDateRaw;
 
           // Auto-generate inventory_nr: INV-YYYY-QX-N
           const start = new Date(startDate);
@@ -941,7 +945,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
           const plant_id = plant_id_raw === "" ? NaN : Number(plant_id_raw);
           const permission = access_key.trim().toLowerCase();
-          const expiry_date = expiry_date_raw ? expiry_date_raw : null;
+          const expiry_date = expiry_date_raw ? parseEstonianDate(expiry_date_raw) : null;
           const added_by_user_id = session.username;
 
           // Detailed logging for debugging
