@@ -131,16 +131,41 @@ export function getScriptsHtml(): string {
         document.getElementById('modalInput').focus();
       }
 
-      function closeModal() {
+      function closeModal(resetSelect) {
         document.getElementById('addModal').classList.add('hidden');
         document.getElementById('addModal').classList.remove('flex');
-        // Reset select to empty value
-        if (currentSelectId) {
+        // Reset select to empty value only when cancelling (not after successful add/duplicate)
+        if (resetSelect !== false && currentSelectId) {
           document.getElementById(currentSelectId).value = '';
         }
         currentModalType = '';
         currentParentId = null;
         currentSelectId = '';
+      }
+
+      function selectItemInDropdown(id, name) {
+        const select = document.getElementById(currentSelectId);
+        if (!select) return;
+
+        // Check if option already exists in the dropdown
+        let option = select.querySelector('option[value="' + id + '"]');
+        if (!option) {
+          // Add a new option for this item
+          option = document.createElement('option');
+          option.value = id;
+          option.textContent = name;
+          if (currentParentId) {
+            option.dataset.parent = String(currentParentId);
+          }
+          const addNewOption = select.querySelector('option[value="__add_new__"]');
+          select.insertBefore(option, addNewOption);
+        }
+        // Unhide the option if it was hidden (e.g. filtered by parent)
+        option.hidden = false;
+        select.value = id;
+
+        // Trigger change event to cascade child selects
+        select.dispatchEvent(new Event('change'));
       }
 
       async function submitModal() {
@@ -164,32 +189,21 @@ export function getScriptsHtml(): string {
           });
 
           const result = await response.json();
+
+          // Handle duplicate — auto-select existing item and close modal
+          if (response.status === 409 && result.duplicate) {
+            selectItemInDropdown(result.id, result.name);
+            closeModal(false);
+            return;
+          }
           
           if (!response.ok) {
             throw new Error(result.error || 'Failed to create item');
           }
 
-          // Add new option to select and select it
-          const select = document.getElementById(currentSelectId);
-          const newOption = document.createElement('option');
-          newOption.value = result.id;
-          newOption.textContent = name;
-          if (currentParentId) {
-            newOption.dataset.parent = currentParentId;
-          }
-          
-          // Insert before the "Add new..." option
-          const addNewOption = select.querySelector('option[value="__add_new__"]');
-          select.insertBefore(newOption, addNewOption);
-          select.value = result.id;
-          
-          // Trigger change event to cascade if needed
-          select.dispatchEvent(new Event('change'));
-          
-          // Clear input and error, keep modal open for adding more
-          document.getElementById('modalInput').value = '';
-          document.getElementById('modalError').classList.add('hidden');
-          document.getElementById('modalInput').focus();
+          // Add new option to select, select it, and close modal
+          selectItemInDropdown(result.id, name);
+          closeModal(false);
         } catch (err) {
           document.getElementById('modalError').textContent = err.message;
           document.getElementById('modalError').classList.remove('hidden');

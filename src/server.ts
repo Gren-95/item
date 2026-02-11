@@ -220,6 +220,80 @@ async function getTlsOptions() {
 }
 
 /**
+ * Find an existing item by name (and optional parent) for duplicate detection.
+ * Returns { id, name } or null if not found.
+ */
+async function findExistingItem(
+  pool: import("mysql2/promise").Pool,
+  apiType: string,
+  name: string,
+  parentId?: number | null
+): Promise<{ id: number; name: string } | null> {
+  type Row = { id: number; name: string };
+  let rows: Row[] = [];
+
+  switch (apiType) {
+    case "regions":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_region WHERE name = ? LIMIT 1", [name]
+      );
+      break;
+    case "countries":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_country WHERE name = ? AND region_id = ? LIMIT 1", [name, parentId]
+      );
+      break;
+    case "plants":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_plant WHERE name = ? AND country_id = ? LIMIT 1", [name, parentId]
+      );
+      break;
+    case "departments":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_department WHERE name = ? AND plant_id = ? LIMIT 1", [name, parentId]
+      );
+      break;
+    case "areas":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_area WHERE name = ? AND department_id = ? LIMIT 1", [name, parentId]
+      );
+      break;
+    case "sub-areas":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_sub_area WHERE name = ? AND area_id = ? LIMIT 1", [name, parentId]
+      );
+      break;
+    case "types":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, type_name as name FROM it_equipment_type WHERE type_name = ? LIMIT 1", [name]
+      );
+      break;
+    case "product-lines":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_product_line WHERE name = ? AND type_id = ? LIMIT 1", [name, parentId]
+      );
+      break;
+    case "models":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_model WHERE name = ? AND product_line_id = ? LIMIT 1", [name, parentId]
+      );
+      break;
+    case "vendors":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_vendor WHERE name = ? LIMIT 1", [name]
+      );
+      break;
+    case "suppliers":
+      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
+        "SELECT id, name FROM it_equipment_supplier WHERE name = ? LIMIT 1", [name]
+      );
+      break;
+  }
+
+  return rows.length > 0 ? { id: rows[0].id, name: rows[0].name } : null;
+}
+
+/**
  * Execute an approved action from an approval request
  */
 async function executeApprovedAction(
@@ -5276,10 +5350,13 @@ async function handleRequest(req: Request): Promise<Response> {
       const body = await req.json();
       const apiType = path.replace("/api/", "");
 
+      let name = "";
+      let parent_id: number | null = null;
+
       try {
         const validated = apiAddItemSchema.parse(body);
-        const name = validated.name;
-        const parent_id = validated.parent_id;
+        name = validated.name;
+        parent_id = validated.parent_id;
 
         const employeeNo = await getEmployeeNo(session.username, pool);
         const clientIp = getClientIp(req);
@@ -5358,6 +5435,20 @@ async function handleRequest(req: Request): Promise<Response> {
               headers: { "Content-Type": "application/json" },
             });
           }
+        }
+
+        // Check for duplicate before inserting
+        const existing = await findExistingItem(pool, apiType, name, parent_id);
+        if (existing) {
+          return new Response(JSON.stringify({
+            duplicate: true,
+            id: existing.id,
+            name: existing.name,
+            message: `"${name}" already exists`,
+          }), {
+            status: 409,
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         // User has permission, proceed with direct insert
@@ -5448,9 +5539,25 @@ async function handleRequest(req: Request): Promise<Response> {
           status: 201,
           headers: { "Content-Type": "application/json" },
         });
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-        return new Response(JSON.stringify({ error: errorMessage }), {
+      } catch (err: unknown) {
+        // Handle MySQL duplicate entry error (race condition fallback)
+        const mysqlErr = err as { code?: string };
+        if (mysqlErr.code === "ER_DUP_ENTRY") {
+          const existing = await findExistingItem(pool, apiType, name, parent_id);
+          if (existing) {
+            return new Response(JSON.stringify({
+              duplicate: true,
+              id: existing.id,
+              name: existing.name,
+              message: `"${name}" already exists`,
+            }), {
+              status: 409,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+        }
+        logger.error("API create item error", err, { traceId, apiType, name });
+        return new Response(JSON.stringify({ error: "Failed to create item. Please try again." }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
         });
