@@ -232,8 +232,8 @@ ${navbarScripts()}
       { name: 'Providers', url: '/vendors', keywords: ['providers', 'vendors', 'suppliers'], requiresAdmin: false, requiresPcPw: false },
       { name: 'Write-Off Reasons', url: '/write-off-reasons', keywords: ['write-off', 'writeoff', 'disposal', 'reasons'], requiresAdmin: false, requiresPcPw: false },
       { name: 'Repair Tracking', url: '/repairs', keywords: ['repair', 'repairs', 'fix', 'maintenance'], requiresAdmin: false, requiresPcPw: false },
-      { name: 'Inventory Audit', url: '/inventory-audit', keywords: ['inventory', 'audit', 'stock'], requiresAdmin: false, requiresPcPw: false },
-      { name: 'Label Printing', url: '/labels', keywords: ['printer', 'labels', 'print', 'tags', 'service tag', 'pc', 'passwords', 'barcode'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'Audit', url: '/inventory-audit', keywords: ['inventory', 'audit', 'stock'], requiresAdmin: false, requiresPcPw: false },
+      { name: 'Printing', url: '/labels', keywords: ['printer', 'labels', 'print', 'tags', 'service tag', 'barcode', 'pc', 'passwords'], requiresAdmin: false, requiresPcPw: false },
       { name: 'Change Password', url: '/change-password', keywords: ['change', 'password', 'account'], requiresAdmin: false, requiresPcPw: false },
       { name: 'User Permissions', url: '/permissions', keywords: ['permissions', 'users', 'access', 'admin'], requiresAdmin: true, requiresPcPw: false },
       { name: 'Add Equipment', url: '/add', keywords: ['add', 'new', 'create', 'equipment'], requiresAdmin: false, requiresPcPw: false }

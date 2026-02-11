@@ -3758,12 +3758,12 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Inventory Audit - GET (redirect to review page)
+    // Audit - GET (redirect to review page)
     if (path === "/inventory-audit" && req.method === "GET") {
       return Response.redirect("/inventory-audit/review", 302);
     }
 
-    // Inventory Audit - POST (save audit record)
+    // Audit - POST (save audit record)
     if (path === "/inventory-audit/save" && req.method === "POST") {
       const session = getSessionFromRequest(req);
       if (!session) {
@@ -3867,7 +3867,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Inventory Audit - Quick Edit POST (only updates audit table, NOT main equipment table)
+    // Audit - Quick Edit POST (only updates audit table, NOT main equipment table)
     if (path === "/inventory-audit/quick-edit" && req.method === "POST") {
       const session = getSessionFromRequest(req);
       if (!session) {
@@ -3968,7 +3968,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Inventory Audit Review - GET (page with Audit, Review, and Periods tabs)
+    // Audit Review - GET (page with Audit, Review, and Periods tabs)
     if (path === "/inventory-audit/review" && req.method === "GET") {
       const session = getSessionFromRequest(req);
       if (!session) {
@@ -4095,12 +4095,12 @@ async function handleRequest(req: Request): Promise<Response> {
         );
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-        logger.error("Failed to load inventory audit review page", err, { traceId });
+        logger.error("Failed to load audit review page", err, { traceId });
         return new Response(`Error: ${errorMessage}`, { status: 500 });
       }
     }
 
-    // Inventory Audit Search - API
+    // Audit Search - API
     if (path === "/api/inventory-audit/search" && req.method === "GET") {
       const session = getSessionFromRequest(req);
       if (!session) {
@@ -4261,7 +4261,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Inventory Audit Review - API (live updates)
+    // Audit Review - API (live updates)
     if (path === "/api/inventory-audit/review" && req.method === "GET") {
       const session = getSessionFromRequest(req);
       if (!session) {
@@ -4374,7 +4374,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Inventory Audit Review - Comparison view (latest unique service tags with current equipment data)
+    // Audit Review - Comparison view (latest unique service tags with current equipment data)
     if (path === "/api/inventory-audit/review-compare" && req.method === "GET") {
       const session = getSessionFromRequest(req);
       if (!session) {
@@ -4552,7 +4552,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Inventory Audit Review - CSV Export
+    // Audit Review - CSV Export
     if (path === "/inventory-audit/review/export" && req.method === "GET") {
       const session = getSessionFromRequest(req);
       if (!session) {
@@ -4703,7 +4703,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Inventory Audit Review - Apply to Main Table
+    // Audit Review - Apply to Main Table
     if (path === "/api/inventory-audit/apply" && req.method === "POST") {
       const session = getSessionFromRequest(req);
       if (!session) {
@@ -4801,7 +4801,7 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Inventory Audit Review - Apply Latest for All Service Tags
+    // Audit Review - Apply Latest for All Service Tags
     if (path === "/api/inventory-audit/apply-all" && req.method === "POST") {
       const session = getSessionFromRequest(req);
       if (!session) {

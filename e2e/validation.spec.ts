@@ -52,8 +52,8 @@ test.describe("Input Validation", () => {
 
       const purchaseDate = page.locator('input[name="purchase_date"]');
       if (await purchaseDate.isVisible()) {
-        await purchaseDate.fill("2024-01-15");
-        await expect(purchaseDate).toHaveValue("2024-01-15");
+        await purchaseDate.fill("15.01.2024");
+        await expect(purchaseDate).toHaveValue("15.01.2024");
       }
     });
 
@@ -62,8 +62,8 @@ test.describe("Input Validation", () => {
 
       const warrantyDate = page.locator('input[name="warranty_expiry_date"]');
       if (await warrantyDate.isVisible()) {
-        await warrantyDate.fill("2025-01-15");
-        await expect(warrantyDate).toHaveValue("2025-01-15");
+        await warrantyDate.fill("15.01.2025");
+        await expect(warrantyDate).toHaveValue("15.01.2025");
       }
     });
   });

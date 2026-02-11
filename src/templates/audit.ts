@@ -84,7 +84,7 @@ export function auditPage(
   locationData: LocationData | null = null,
   employees: Employee[] = []
 ): string {
-  const title = "Inventory Audit Review";
+  const title = "Audit Review";
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   function formatDate(date: string | Date | null | undefined): string {
@@ -126,7 +126,7 @@ export function auditPage(
                 <div class="text-emerald-500 dark:text-emerald-400">
                   ${CLIPBOARD_CHECK_ICON}
                 </div>
-                <h1 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Inventory Audit</h1>
+                <h1 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Audit</h1>
                 ${defaultPeriod ? `<span class="ml-auto text-sm text-gray-500 dark:text-gray-400">${escapeHtml(defaultPeriod.inventory_nr)}</span>` : ''}
               </div>
               <!-- Search Bar -->
@@ -220,7 +220,7 @@ export function auditPage(
                   <div class="text-emerald-500 dark:text-emerald-400">
                     ${CLIPBOARD_CHECK_ICON}
                   </div>
-                  <h1 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Inventory Audit Review</h1>
+                  <h1 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Audit Review</h1>
                 </div>
                 <div class="flex flex-wrap items-center gap-2" id="header-action-buttons">
                   <button
