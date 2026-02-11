@@ -3981,6 +3981,10 @@ async function handleRequest(req: Request): Promise<Response> {
         const teamviewer = form.get("teamviewer")?.toString() || null;
         const comment = form.get("comment")?.toString() || null;
         const equipmentSubAreaId = form.get("equipment_sub_area_id")?.toString() || null;
+        const proposedLocation = form.get("proposed_location")?.toString()?.trim() || null;
+        const proposedDepartmentId = form.get("proposed_department_id")?.toString()?.trim() || null;
+        const proposedAreaName = form.get("proposed_area_name")?.toString()?.trim() || null;
+        const proposedSubAreaName = form.get("proposed_sub_area_name")?.toString()?.trim() || null;
 
         if (!equipmentId || !inventoryPeriodId) {
           throw new Error("Missing required fields");
@@ -4030,9 +4034,16 @@ async function handleRequest(req: Request): Promise<Response> {
 
         // Use form values if provided, otherwise use current values from latest record (log or audit)
         const auditAssignedTo = assignedTo !== null ? assignedTo : eq.assigned_to;
-        const auditSubAreaId = equipmentSubAreaId !== null ? (equipmentSubAreaId ? parseInt(equipmentSubAreaId) : null) : eq.equipment_sub_area_id;
+        const auditSubAreaId = proposedLocation
+          ? null  // Clear sub_area_id when using proposed location
+          : (equipmentSubAreaId !== null ? (equipmentSubAreaId ? parseInt(equipmentSubAreaId) : null) : eq.equipment_sub_area_id);
         const auditComment = comment !== null ? comment : eq.comment;
         const auditTeamviewer = teamviewer !== null ? (teamviewer ? parseInt(teamviewer) : null) : eq.latest_teamviewer;
+        const auditProposedLocation = proposedLocation || null;
+        const auditProposedLocationStatus = proposedLocation ? "pending" : null;
+        const auditProposedDeptId = proposedLocation && proposedDepartmentId ? parseInt(proposedDepartmentId) : null;
+        const auditProposedAreaName = proposedLocation ? proposedAreaName : null;
+        const auditProposedSubAreaName = proposedLocation ? proposedSubAreaName : null;
 
         // Update ONLY the audit table - do NOT update main equipment table or log table
         await pool.query(
@@ -4040,12 +4051,19 @@ async function handleRequest(req: Request): Promise<Response> {
             equipment_id, inventory_period_id, service_tag, model_id, vendor_id, supplier_id,
             cerf, device_no, is_personal, purchase_date, warranty_expiry_date, is_written_off,
             teamviewer, imei1, imei2, ip, mac_addresses, assigned_to, equipment_sub_area_id,
+            proposed_location, proposed_location_status,
+            proposed_department_id, proposed_area_name, proposed_sub_area_name,
             comment, updated_by, created, updated
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           ON DUPLICATE KEY UPDATE
             teamviewer = VALUES(teamviewer),
             assigned_to = VALUES(assigned_to),
             equipment_sub_area_id = VALUES(equipment_sub_area_id),
+            proposed_location = VALUES(proposed_location),
+            proposed_location_status = VALUES(proposed_location_status),
+            proposed_department_id = VALUES(proposed_department_id),
+            proposed_area_name = VALUES(proposed_area_name),
+            proposed_sub_area_name = VALUES(proposed_sub_area_name),
             comment = VALUES(comment),
             updated_by = VALUES(updated_by),
             updated = CURRENT_TIMESTAMP`,
@@ -4053,6 +4071,8 @@ async function handleRequest(req: Request): Promise<Response> {
             equipmentId, inventoryPeriodId, serviceTag, eq.model_id, eq.vendor_id, eq.supplier_id,
             eq.cerf, eq.device_no, eq.is_personal, eq.purchase_date, eq.warranty_expiry_date, eq.is_written_off,
             auditTeamviewer, eq.imei1, eq.imei2, eq.ip, eq.mac_addresses, auditAssignedTo, auditSubAreaId,
+            auditProposedLocation, auditProposedLocationStatus,
+            auditProposedDeptId, auditProposedAreaName, auditProposedSubAreaName,
             auditComment, updatedBy
           ]
         );
@@ -4264,7 +4284,9 @@ async function handleRequest(req: Request): Promise<Response> {
             ar.name as area_name,
             sa.name as sub_area_name,
             lpe.equipment_sub_area_id,
-            lpe.comment
+            lpe.comment,
+            latest_audit.proposed_location,
+            latest_audit.proposed_location_status
           FROM it_equipment e
           LEFT JOIN latest_per_equipment lpe ON e.id = lpe.equipment_id
           LEFT JOIN it_equipment_model m ON e.model_id = m.id
@@ -4279,6 +4301,15 @@ async function handleRequest(req: Request): Promise<Response> {
           LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
           LEFT JOIN it_equipment_country c ON p.country_id = c.id
           LEFT JOIN it_equipment_region r ON c.region_id = r.id
+          LEFT JOIN (
+            SELECT a1.equipment_id, a1.proposed_location, a1.proposed_location_status
+            FROM it_equipment_audit a1
+            INNER JOIN (
+              SELECT equipment_id, MAX(updated) as max_updated
+              FROM it_equipment_audit
+              GROUP BY equipment_id
+            ) a2 ON a1.equipment_id = a2.equipment_id AND a1.updated = a2.max_updated
+          ) latest_audit ON e.id = latest_audit.equipment_id
           WHERE e.service_tag = ?
           LIMIT 1
         `, [query]);
@@ -4518,6 +4549,8 @@ async function handleRequest(req: Request): Promise<Response> {
             a.comment as audit_comment,
             a.is_written_off as audit_is_written_off,
             a_wor.reason as audit_write_off_reason,
+            a.proposed_location as audit_proposed_location,
+            a.proposed_location_status as audit_proposed_location_status,
             /* --- Current equipment values --- */
             log.assigned_to as equip_assigned_to,
             CONCAT(e_emp.first_name, ' ', e_emp.last_name) as equip_assigned_to_name,
@@ -4600,9 +4633,14 @@ async function handleRequest(req: Request): Promise<Response> {
           const auditWo = r.audit_is_written_off ? (r.audit_write_off_reason || 'Yes') : 'No';
           const equipWo = r.equip_is_written_off ? (r.equip_write_off_reason || 'Yes') : 'No';
 
+          // If there's a proposed location, use it as the audit location display
+          const auditLocationDisplay = r.audit_proposed_location
+            ? r.audit_proposed_location
+            : (r.audit_location || null);
+
           const diffs = {
             assigned_to: (auditAssigned || '') !== (equipAssigned || ''),
-            location: (r.audit_location || '') !== (r.equip_location || ''),
+            location: (auditLocationDisplay || '') !== (r.equip_location || ''),
             teamviewer: (auditTv || '') !== (equipTv || ''),
             comment: (r.audit_comment || '') !== (r.equip_comment || ''),
             is_written_off: auditWo !== equipWo,
@@ -4622,7 +4660,7 @@ async function handleRequest(req: Request): Promise<Response> {
             diffs,
             audit: {
               assigned_to: auditAssigned,
-              location: r.audit_location || null,
+              location: auditLocationDisplay,
               teamviewer: auditTv,
               comment: r.audit_comment || null,
               is_written_off: auditWo,
@@ -4634,6 +4672,8 @@ async function handleRequest(req: Request): Promise<Response> {
               comment: r.equip_comment || null,
               is_written_off: equipWo,
             },
+            proposed_location: r.audit_proposed_location || null,
+            proposed_location_status: r.audit_proposed_location_status || null,
           };
         });
 
@@ -4856,6 +4896,17 @@ async function handleRequest(req: Request): Promise<Response> {
         const employeeNo = await getEmployeeNo(session.username, pool);
         const updatedBy = isAdminUser(session.username) ? null : (employeeNo || null);
 
+        // Check if there's a pending proposed location - block apply until resolved
+        if (audit.proposed_location && audit.proposed_location_status === 'pending') {
+          return new Response(
+            JSON.stringify({ success: false, error: "Cannot apply: this audit entry has a pending proposed location. Please approve or reject it first." }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        // Use the resolved sub_area_id (may have been updated by approve-location)
+        const resolvedSubAreaId = audit.equipment_sub_area_id;
+
         // Update main equipment table (teamviewer only, as other fields shouldn't change)
         if (audit.teamviewer !== null) {
           await pool.query(
@@ -4874,7 +4925,7 @@ async function handleRequest(req: Request): Promise<Response> {
             audit.equipment_id,
             audit.service_tag,
             audit.assigned_to,
-            audit.equipment_sub_area_id,
+            resolvedSubAreaId,
             audit.inventory_period_id,
             audit.comment,
             updatedBy
@@ -4896,6 +4947,255 @@ async function handleRequest(req: Request): Promise<Response> {
             status: 500,
             headers: { "Content-Type": "application/json" }
           }
+        );
+      }
+    }
+
+    // Audit Review - Approve proposed location (creates location in hierarchy)
+    if (path === "/api/inventory-audit/approve-location" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      try {
+        if (!hasAuditApprover) {
+          return new Response(JSON.stringify({ error: "Access denied" }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        const body = await req.json();
+        const auditId = parseInt(body.audit_id?.toString() || "0");
+
+        if (!auditId) {
+          return new Response(JSON.stringify({ error: "Audit entry ID is required" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        // Get the audit entry with stored structured fields
+        const [auditEntries] = await pool.query<RowDataPacket[]>(
+          "SELECT * FROM it_equipment_audit WHERE id = ?",
+          [auditId]
+        );
+
+        if (auditEntries.length === 0) {
+          return new Response(JSON.stringify({ error: "Audit entry not found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        const audit = auditEntries[0];
+
+        if (!audit.proposed_location || audit.proposed_location_status !== 'pending') {
+          return new Response(JSON.stringify({ error: "This audit entry does not have a pending proposed location" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        // Use stored structured fields, or fall back to parsing proposed_location text
+        let departmentId = audit.proposed_department_id;
+        let areaName = audit.proposed_area_name || "";
+        let subAreaName = audit.proposed_sub_area_name || "";
+
+        // Fallback: parse "Country - Plant - Department - Area - SubArea" from proposed_location text
+        if (!departmentId || !areaName || !subAreaName) {
+          const parts = (audit.proposed_location || "").split(" - ").map((p: string) => p.trim());
+          if (parts.length >= 5) {
+            // Format: Country - Plant - Department - Area - SubArea
+            const deptName = parts[2];
+            areaName = areaName || parts[3];
+            subAreaName = subAreaName || parts[4];
+            if (!departmentId && deptName) {
+              const [deptRows] = await pool.query<RowDataPacket[]>(
+                "SELECT id FROM it_equipment_department WHERE name = ? LIMIT 1",
+                [deptName]
+              );
+              if (deptRows.length > 0) {
+                departmentId = deptRows[0].id;
+              }
+            }
+          } else if (parts.length >= 2 && !areaName && !subAreaName) {
+            // Fallback for old "Area - SubArea" format
+            areaName = parts[parts.length - 2];
+            subAreaName = parts[parts.length - 1];
+          }
+        }
+
+        if (!departmentId || !areaName || !subAreaName) {
+          return new Response(JSON.stringify({ error: "Cannot determine location data. Please re-edit this audit entry using the quick edit modal so that the department, area, and sub-area are saved." }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        // Find or create the area under the department
+        let areaId: number;
+        const [existingAreas] = await pool.query<RowDataPacket[]>(
+          "SELECT id FROM it_equipment_area WHERE department_id = ? AND name = ?",
+          [departmentId, areaName]
+        );
+        if (existingAreas.length > 0) {
+          areaId = existingAreas[0].id;
+        } else {
+          const [areaInsert] = await pool.query<ResultSetHeader>(
+            "INSERT INTO it_equipment_area (department_id, name) VALUES (?, ?)",
+            [departmentId, areaName]
+          );
+          areaId = areaInsert.insertId;
+          logger.info("Created new area for approved location", { traceId, areaId, areaName, departmentId });
+        }
+
+        // Find or create the sub-area under the area
+        let subAreaId: number;
+        const [existingSubAreas] = await pool.query<RowDataPacket[]>(
+          "SELECT id FROM it_equipment_sub_area WHERE area_id = ? AND name = ?",
+          [areaId, subAreaName]
+        );
+        if (existingSubAreas.length > 0) {
+          subAreaId = existingSubAreas[0].id;
+        } else {
+          const [subAreaInsert] = await pool.query<ResultSetHeader>(
+            "INSERT INTO it_equipment_sub_area (area_id, name) VALUES (?, ?)",
+            [areaId, subAreaName]
+          );
+          subAreaId = subAreaInsert.insertId;
+          logger.info("Created new sub-area for approved location", { traceId, subAreaId, subAreaName, areaId });
+        }
+
+        // Update the audit entry: set the new sub_area_id and mark location as approved
+        await pool.query(
+          `UPDATE it_equipment_audit SET
+            equipment_sub_area_id = ?,
+            proposed_location_status = 'approved',
+            updated = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+          [subAreaId, auditId]
+        );
+
+        logger.info("Proposed location approved and created", {
+          traceId,
+          auditId,
+          proposedLocation: audit.proposed_location,
+          departmentId,
+          areaId,
+          areaName,
+          subAreaId,
+          subAreaName,
+          username: session.username
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Location "${areaName} - ${subAreaName}" created successfully`,
+            area_id: areaId,
+            sub_area_id: subAreaId
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to approve proposed location", err, { traceId });
+        return new Response(
+          JSON.stringify({ success: false, error: errorMessage }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Audit Review - Reject proposed location (optionally reassign to existing location)
+    if (path === "/api/inventory-audit/reject-location" && req.method === "POST") {
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      try {
+        if (!hasAuditApprover) {
+          return new Response(JSON.stringify({ error: "Access denied" }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        const body = await req.json();
+        const auditId = parseInt(body.audit_id?.toString() || "0");
+        const reassignSubAreaId = body.reassign_sub_area_id ? parseInt(body.reassign_sub_area_id.toString()) : null;
+
+        if (!auditId) {
+          return new Response(JSON.stringify({ error: "Audit entry ID is required" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        // Get the audit entry
+        const [auditEntries] = await pool.query<RowDataPacket[]>(
+          "SELECT * FROM it_equipment_audit WHERE id = ?",
+          [auditId]
+        );
+
+        if (auditEntries.length === 0) {
+          return new Response(JSON.stringify({ error: "Audit entry not found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        const audit = auditEntries[0];
+
+        if (!audit.proposed_location || audit.proposed_location_status !== 'pending') {
+          return new Response(JSON.stringify({ error: "This audit entry does not have a pending proposed location" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+
+        // Update the audit entry: mark as rejected, optionally reassign to existing location
+        await pool.query(
+          `UPDATE it_equipment_audit SET
+            equipment_sub_area_id = ?,
+            proposed_location_status = 'rejected',
+            updated = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+          [reassignSubAreaId, auditId]
+        );
+
+        logger.info("Proposed location rejected", {
+          traceId,
+          auditId,
+          proposedLocation: audit.proposed_location,
+          reassignSubAreaId,
+          username: session.username
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: reassignSubAreaId
+              ? "Proposed location rejected and reassigned to existing location"
+              : "Proposed location rejected"
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        logger.error("Failed to reject proposed location", err, { traceId });
+        return new Response(
+          JSON.stringify({ success: false, error: errorMessage }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
     }

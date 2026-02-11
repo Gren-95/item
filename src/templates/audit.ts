@@ -4,6 +4,7 @@ import { button } from "./buttons";
 import { formatEstonianDate as formatEstDate } from "../utils/date";
 import {
   CLIPBOARD_CHECK_ICON,
+  CHECK_ICON,
   PLUS_ICON,
   TRASH_ICON,
   CHECK_CIRCLE_ICON,
@@ -506,17 +507,24 @@ export function auditPage(
 
     <!-- Quick Edit Modal -->
     <div id="quickEditModal" class="fixed inset-0 bg-black/50 dark:bg-black/70 hidden items-center justify-center z-50">
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Edit Equipment</h3>
-          <button id="closeQuickEditModal" class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center px-6 py-4 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 rounded-t-xl">
+          <h3 class="text-lg font-semibold text-amber-800 dark:text-amber-200 flex items-center gap-2">
+            ${CLIPBOARD_CHECK_ICON.replace('w-5 h-5', 'w-5 h-5 text-amber-600 dark:text-amber-400')}
+            Quick Audit Edit
+          </h3>
+          <button id="closeQuickEditModal" class="text-amber-400 hover:text-amber-600 dark:text-amber-500 dark:hover:text-amber-300 transition-colors">
             ${X_ICON.replace('w-5 h-5', 'w-6 h-6')}
           </button>
         </div>
+        <div class="p-6">
 
         <form id="quickEditForm" class="space-y-4">
           <input type="hidden" name="equipment_id" id="qe_equipment_id">
           <input type="hidden" name="inventory_period_id" value="${defaultPeriod?.id || ''}">
+          <input type="hidden" name="proposed_department_id" id="qe_proposed_department_id" disabled>
+          <input type="hidden" name="proposed_area_name" id="qe_proposed_area_name" disabled>
+          <input type="hidden" name="proposed_sub_area_name" id="qe_proposed_sub_area_name" disabled>
 
           <!-- User (Employee) -->
           <div>
@@ -524,7 +532,7 @@ export function auditPage(
             <select
               name="assigned_to"
               id="qe_assigned_to"
-              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
             >
               <option value="">Not assigned</option>
               ${employees.map(e => `<option value="${escapeHtml(e.employee_no)}">${escapeHtml(e.name)} - ${escapeHtml(e.employee_no)}</option>`).join('')}
@@ -533,44 +541,78 @@ export function auditPage(
 
           <!-- Location Section -->
           <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Location</label>
+            <div class="flex items-center justify-between mb-3">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Location</label>
+              <button type="button" id="qe_toggle_location_mode" class="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 font-medium transition-colors">
+                Location not listed? Enter manually
+              </button>
+            </div>
+
+            <!-- Shared: Country / Plant / Department (always visible) -->
             <div class="space-y-3">
               <div>
                 <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Country</label>
-                <select id="qe_country_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="qe_country_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                   <option value="">Select...</option>
                   ${locationData?.countries.map(c => `<option value="${c.id}" data-parent="${c.parent_id}">${escapeHtml(c.name)}</option>`).join('') || ''}
                 </select>
               </div>
               <div>
                 <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Region</label>
-                <select id="qe_plant_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="qe_plant_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                   <option value="">Select country first...</option>
                   ${locationData?.plants.map(p => `<option value="${p.id}" data-parent="${p.parent_id}">${escapeHtml(p.name)}</option>`).join('') || ''}
                 </select>
               </div>
               <div>
                 <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Department</label>
-                <select id="qe_department_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="qe_department_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                   <option value="">Select region first...</option>
                   ${locationData?.departments.map(d => `<option value="${d.id}" data-parent="${d.parent_id}">${escapeHtml(d.name)}</option>`).join('') || ''}
                 </select>
               </div>
-              <div>
-                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Area</label>
-                <select id="qe_area_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Select department first...</option>
-                  ${locationData?.areas.map(a => `<option value="${a.id}" data-parent="${a.parent_id}">${escapeHtml(a.name)}</option>`).join('') || ''}
-                </select>
+
+              <!-- Dropdown Location Mode: strict Area / Sub-Area selects -->
+              <div id="qe_dropdown_location" class="space-y-3">
+                <div>
+                  <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Area</label>
+                  <select id="qe_area_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <option value="">Select department first...</option>
+                    ${locationData?.areas.map(a => `<option value="${a.id}" data-parent="${a.parent_id}">${escapeHtml(a.name)}</option>`).join('') || ''}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Sub-Area</label>
+                  <select id="qe_sub_area_id" name="equipment_sub_area_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <option value="">Select area first...</option>
+                    ${locationData?.subAreas.map(s => `<option value="${s.id}" data-parent="${s.parent_id}">${escapeHtml(s.name)}</option>`).join('') || ''}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Sub-Area</label>
-                <select id="qe_sub_area_id" name="equipment_sub_area_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Select area first...</option>
-                  ${locationData?.subAreas.map(s => `<option value="${s.id}" data-parent="${s.parent_id}">${escapeHtml(s.name)}</option>`).join('') || ''}
-                </select>
+
+              <!-- Proposed Location Mode: datalist Area / Sub-Area inputs (hidden by default) -->
+              <div id="qe_freetext_location" class="hidden space-y-3">
+                <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <p class="text-xs text-amber-700 dark:text-amber-300">
+                    <strong>Proposed location</strong> — this will be flagged for approval. An approver will assign it to the correct location hierarchy.
+                  </p>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Area</label>
+                  <input type="text" id="qe_prop_area_name" list="qe_area_list" placeholder="Select or type new area" autocomplete="off"
+                    class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-amber-400 dark:border-amber-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <datalist id="qe_area_list"></datalist>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Sub-Area</label>
+                  <input type="text" id="qe_prop_sub_area_name" list="qe_sub_area_list" placeholder="Select or type new sub-area" autocomplete="off"
+                    class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-amber-400 dark:border-amber-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  <datalist id="qe_sub_area_list"></datalist>
+                </div>
+                <input type="hidden" id="qe_proposed_location" name="proposed_location" disabled />
               </div>
             </div>
+
             <!-- Hidden field for region (auto-derived from country) -->
             <input type="hidden" id="qe_region_id" />
           </div>
@@ -583,7 +625,7 @@ export function auditPage(
               name="teamviewer"
               id="qe_teamviewer"
               placeholder="Teamviewer ID"
-              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
             />
           </div>
 
@@ -591,14 +633,17 @@ export function auditPage(
 
           <div class="flex justify-end gap-3 pt-2">
             <button type="button" id="cancelQuickEdit" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
-            <button type="submit" id="saveQuickEdit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <button type="submit" id="saveQuickEdit" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2">
+              ${CHECK_ICON.replace('w-5 h-5', 'w-4 h-4')}
               Save
             </button>
           </div>
         </form>
+        </div>
       </div>
     </div>
 
+    <!-- Approve Location Modal -->
     <script>
       (function() {
         // Tab switching functionality
@@ -798,12 +843,14 @@ export function auditPage(
         }
 
         function renderEquipment(equipment) {
-          const locationStr = [
-            equipment.plant_name,
-            equipment.department_name,
-            equipment.area_name,
-            equipment.sub_area_name
-          ].filter(Boolean).join(' - ') || 'Not assigned';
+          const locationStr = equipment.proposed_location && equipment.proposed_location_status === 'pending'
+            ? equipment.proposed_location + ' (proposed)'
+            : [
+                equipment.plant_name,
+                equipment.department_name,
+                equipment.area_name,
+                equipment.sub_area_name
+              ].filter(Boolean).join(' - ') || 'Not assigned';
 
           const typeStr = [
             equipment.vendor_name,
@@ -872,7 +919,7 @@ export function auditPage(
               </div>
               <!-- Actions - Icon buttons in single row -->
               <div class="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center gap-2">
-                <button type="button" class="quick-edit-btn p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors" title="Quick Edit"
+                <button type="button" class="quick-edit-btn p-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors" title="Quick Audit Edit"
                   data-equipment-id="\${equipment.id}"
                   data-service-tag="\${escapeHtml(equipment.service_tag)}"
                   data-assigned-to="\${escapeHtml(equipment.assigned_to || '')}"
@@ -883,10 +930,12 @@ export function auditPage(
                   data-department-id="\${equipment.department_id || ''}"
                   data-area-id="\${equipment.area_id || ''}"
                   data-equipment-sub-area-id="\${equipment.equipment_sub_area_id || ''}"
+                  data-proposed-location="\${escapeHtml(equipment.proposed_location || '')}"
+                  data-proposed-location-status="\${escapeHtml(equipment.proposed_location_status || '')}"
                 >
-                  ${EDIT_ICON}
+                  ${CLIPBOARD_CHECK_ICON}
                 </button>
-                <a href="/edit/\${equipment.id}" class="p-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" title="Full Edit">
+                <a href="/edit/\${equipment.id}" class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors" title="Full Edit">
                   ${EXTERNAL_LINK_ICON}
                 </a>
                 <button type="button" class="history-toggle-btn p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors" title="View History" data-equipment-id="\${equipment.id}">
@@ -1017,6 +1066,16 @@ export function auditPage(
         const qeArea = document.getElementById('qe_area_id');
         const qeSubArea = document.getElementById('qe_sub_area_id');
 
+        // Proposed-mode datalist elements
+        const qePropAreaInput = document.getElementById('qe_prop_area_name');
+        const qePropSubAreaInput = document.getElementById('qe_prop_sub_area_name');
+        const qeAreaDatalist = document.getElementById('qe_area_list');
+        const qeSubAreaDatalist = document.getElementById('qe_sub_area_list');
+
+        // All areas / sub-areas for datalist filtering
+        const qeAllAreas = ${JSON.stringify(locationData?.areas || [])};
+        const qeAllSubAreas = ${JSON.stringify(locationData?.subAreas || [])};
+
         // Filter options based on parent selection
         function filterOptions(selectEl, parentId) {
           if (!selectEl) return;
@@ -1043,35 +1102,77 @@ export function auditPage(
           });
         }
 
+        // Update area datalist based on selected department
+        function updateAreaDatalist(departmentId) {
+          if (!qeAreaDatalist) return;
+          qeAreaDatalist.innerHTML = qeAllAreas
+            .filter(a => String(a.parent_id) === String(departmentId))
+            .map(a => '<option value="' + a.name + '" data-id="' + a.id + '" data-parent="' + a.parent_id + '"></option>')
+            .join('');
+          if (qePropAreaInput) qePropAreaInput.value = '';
+          if (qeSubAreaDatalist) qeSubAreaDatalist.innerHTML = '';
+          if (qePropSubAreaInput) qePropSubAreaInput.value = '';
+        }
+
+        // Update sub-area datalist based on entered area name
+        function updateSubAreaDatalist(areaName) {
+          if (!qeSubAreaDatalist) return;
+          var selectedArea = qeAllAreas.find(a => a.name === areaName);
+          if (selectedArea) {
+            qeSubAreaDatalist.innerHTML = qeAllSubAreas
+              .filter(s => String(s.parent_id) === String(selectedArea.id))
+              .map(s => '<option value="' + s.name + '" data-id="' + s.id + '" data-parent="' + s.parent_id + '"></option>')
+              .join('');
+          } else {
+            qeSubAreaDatalist.innerHTML = '';
+          }
+          if (qePropSubAreaInput) qePropSubAreaInput.value = '';
+        }
+
         // Cascading handlers
         qeCountry?.addEventListener('change', function() {
           const countryId = this.value;
           filterOptions(qePlant, countryId);
           if (qePlant) qePlant.value = '';
           if (qeDepartment) qeDepartment.value = '';
+          // Dropdown mode
           if (qeArea) qeArea.value = '';
           if (qeSubArea) qeSubArea.value = '';
           filterOptions(qeDepartment, null);
           filterOptions(qeArea, null);
           filterOptions(qeSubArea, null);
+          // Proposed mode
+          if (qeAreaDatalist) qeAreaDatalist.innerHTML = '';
+          if (qePropAreaInput) qePropAreaInput.value = '';
+          if (qeSubAreaDatalist) qeSubAreaDatalist.innerHTML = '';
+          if (qePropSubAreaInput) qePropSubAreaInput.value = '';
         });
 
         qePlant?.addEventListener('change', function() {
           const plantId = this.value;
           filterOptions(qeDepartment, plantId);
           if (qeDepartment) qeDepartment.value = '';
+          // Dropdown mode
           if (qeArea) qeArea.value = '';
           if (qeSubArea) qeSubArea.value = '';
           filterOptions(qeArea, null);
           filterOptions(qeSubArea, null);
+          // Proposed mode
+          if (qeAreaDatalist) qeAreaDatalist.innerHTML = '';
+          if (qePropAreaInput) qePropAreaInput.value = '';
+          if (qeSubAreaDatalist) qeSubAreaDatalist.innerHTML = '';
+          if (qePropSubAreaInput) qePropSubAreaInput.value = '';
         });
 
         qeDepartment?.addEventListener('change', function() {
           const deptId = this.value;
+          // Dropdown mode
           filterOptions(qeArea, deptId);
           if (qeArea) qeArea.value = '';
           if (qeSubArea) qeSubArea.value = '';
           filterOptions(qeSubArea, null);
+          // Proposed mode - update area datalist
+          updateAreaDatalist(deptId);
         });
 
         qeArea?.addEventListener('change', function() {
@@ -1080,16 +1181,90 @@ export function auditPage(
           if (qeSubArea) qeSubArea.value = '';
         });
 
+        // Proposed mode: area input → filter sub-area datalist
+        qePropAreaInput?.addEventListener('input', function() {
+          updateSubAreaDatalist((this.value || '').trim());
+        });
+
+        // Location mode toggle (dropdown vs proposed)
+        const toggleLocationModeBtn = document.getElementById('qe_toggle_location_mode');
+        const dropdownLocationDiv = document.getElementById('qe_dropdown_location');
+        const freetextLocationDiv = document.getElementById('qe_freetext_location');
+        const proposedLocationInput = document.getElementById('qe_proposed_location');
+        let isFreetextMode = false;
+
+        // Hidden fields for structured proposed location
+        const qeProposedDeptId = document.getElementById('qe_proposed_department_id');
+        const qeProposedAreaName = document.getElementById('qe_proposed_area_name');
+        const qeProposedSubAreaName = document.getElementById('qe_proposed_sub_area_name');
+
+        function setLocationMode(freetext) {
+          isFreetextMode = freetext;
+          if (freetext) {
+            dropdownLocationDiv.classList.add('hidden');
+            freetextLocationDiv.classList.remove('hidden');
+            proposedLocationInput.disabled = false;
+            if (qeProposedDeptId) qeProposedDeptId.disabled = false;
+            if (qeProposedAreaName) qeProposedAreaName.disabled = false;
+            if (qeProposedSubAreaName) qeProposedSubAreaName.disabled = false;
+            // Clear dropdown selection so it won't be submitted
+            if (qeSubArea) qeSubArea.value = '';
+            if (toggleLocationModeBtn) toggleLocationModeBtn.textContent = 'Use dropdown instead';
+            // Populate area datalist if department is already selected
+            var deptId = qeDepartment ? qeDepartment.value : '';
+            if (deptId) updateAreaDatalist(deptId);
+          } else {
+            dropdownLocationDiv.classList.remove('hidden');
+            freetextLocationDiv.classList.add('hidden');
+            proposedLocationInput.disabled = true;
+            proposedLocationInput.value = '';
+            if (qeProposedDeptId) { qeProposedDeptId.disabled = true; qeProposedDeptId.value = ''; }
+            if (qeProposedAreaName) { qeProposedAreaName.disabled = true; qeProposedAreaName.value = ''; }
+            if (qeProposedSubAreaName) { qeProposedSubAreaName.disabled = true; qeProposedSubAreaName.value = ''; }
+            // Clear proposed fields
+            if (qePropAreaInput) qePropAreaInput.value = '';
+            if (qePropSubAreaInput) qePropSubAreaInput.value = '';
+            if (toggleLocationModeBtn) toggleLocationModeBtn.textContent = 'Location not listed? Enter manually';
+          }
+        }
+
+        if (toggleLocationModeBtn) {
+          toggleLocationModeBtn.addEventListener('click', function() {
+            setLocationMode(!isFreetextMode);
+          });
+        }
+
         function openQuickEditModal(data) {
           if (!quickEditModal) return;
 
           // Store current search query for re-searching after save
           currentSearchQuery = searchInput?.value?.trim() || '';
 
+          // Reset to dropdown mode by default
+          setLocationMode(false);
+
           // Populate form fields
           document.getElementById('qe_equipment_id').value = data.equipmentId || '';
           document.getElementById('qe_assigned_to').value = data.assignedTo || '';
           document.getElementById('qe_teamviewer').value = data.teamviewer || '';
+
+          // If equipment has a pending proposed location, show it in free-text mode
+          if (data.proposedLocation && data.proposedLocationStatus === 'pending') {
+            setLocationMode(true);
+            // Pre-fill the proposed area/sub-area from the stored proposed_location
+            // Format is "Country - Plant - Department - Area - SubArea"
+            // The last two parts are area and sub-area; hierarchy parts are handled by the shared selects
+            var parts = (data.proposedLocation || '').split(' - ');
+            if (parts.length >= 2 && qePropAreaInput && qePropSubAreaInput) {
+              // Last two = area and sub-area
+              qePropSubAreaInput.value = parts[parts.length - 1].trim();
+              qePropAreaInput.value = parts[parts.length - 2].trim();
+              // Trigger sub-area datalist update
+              updateSubAreaDatalist(parts[parts.length - 2].trim());
+            } else if (parts.length === 1 && qePropSubAreaInput) {
+              qePropSubAreaInput.value = data.proposedLocation;
+            }
+          }
 
           // Set location selects with cascading filtering
           // Country (show all)
@@ -1104,13 +1279,29 @@ export function auditPage(
           filterOptions(qeDepartment, data.plantId);
           if (qeDepartment) qeDepartment.value = data.departmentId || '';
 
-          // Area (filter by department)
+          // Area (filter by department) — dropdown mode
           filterOptions(qeArea, data.departmentId);
           if (qeArea) qeArea.value = data.areaId || '';
 
-          // Sub-Area (filter by area)
+          // Sub-Area (filter by area) — dropdown mode
           filterOptions(qeSubArea, data.areaId);
           if (qeSubArea) qeSubArea.value = data.equipmentSubAreaId || '';
+
+          // If in proposed mode, update area datalist based on department
+          if (isFreetextMode && data.departmentId) {
+            updateAreaDatalist(data.departmentId);
+            // Re-fill after datalist update if needed
+            if (data.proposedLocation) {
+              var parts2 = (data.proposedLocation || '').split(' - ');
+              if (parts2.length >= 2 && qePropAreaInput && qePropSubAreaInput) {
+                var areaName = parts2[parts2.length - 2].trim();
+                var subAreaName = parts2[parts2.length - 1].trim();
+                qePropAreaInput.value = areaName;
+                updateSubAreaDatalist(areaName);
+                qePropSubAreaInput.value = subAreaName;
+              }
+            }
+          }
 
           // Clear any previous errors
           if (quickEditError) quickEditError.classList.add('hidden');
@@ -1142,6 +1333,33 @@ export function auditPage(
             saveQuickEditBtn.textContent = 'Saving...';
           }
           if (quickEditError) quickEditError.classList.add('hidden');
+
+          // In proposed mode, compose proposed_location and populate structured hidden fields
+          if (isFreetextMode && proposedLocationInput) {
+            var parts = [];
+            // Build hierarchy from shared selects
+            if (qeCountry && qeCountry.value) {
+              var opt = qeCountry.options[qeCountry.selectedIndex];
+              if (opt && opt.text) parts.push(opt.text);
+            }
+            if (qePlant && qePlant.value) {
+              var opt = qePlant.options[qePlant.selectedIndex];
+              if (opt && opt.text) parts.push(opt.text);
+            }
+            if (qeDepartment && qeDepartment.value) {
+              var opt = qeDepartment.options[qeDepartment.selectedIndex];
+              if (opt && opt.text) parts.push(opt.text);
+            }
+            var areaVal = (qePropAreaInput ? qePropAreaInput.value : '').trim();
+            var subAreaVal = (qePropSubAreaInput ? qePropSubAreaInput.value : '').trim();
+            if (areaVal) parts.push(areaVal);
+            if (subAreaVal) parts.push(subAreaVal);
+            proposedLocationInput.value = parts.join(' - ');
+            // Populate structured hidden fields for server-side approval
+            if (qeProposedDeptId) qeProposedDeptId.value = qeDepartment ? qeDepartment.value : '';
+            if (qeProposedAreaName) qeProposedAreaName.value = areaVal;
+            if (qeProposedSubAreaName) qeProposedSubAreaName.value = subAreaVal;
+          }
 
           const formData = new FormData(quickEditForm);
 
@@ -1192,6 +1410,8 @@ export function auditPage(
         const lastUpdate = document.getElementById('last-update');
         const exportBtn = document.getElementById('export-btn');
         const refreshBtn = document.getElementById('refresh-btn');
+
+        // Filter/show helpers for cascading selects (used by approve-location modal)
         const copyApiBtn = document.getElementById('copy-api-btn');
         const applyAllBtn = document.getElementById('apply-all-btn');
         const periodSelector = document.getElementById('period-selector');
@@ -1320,6 +1540,73 @@ export function auditPage(
           '</tr>';
         }
 
+        // --- Approve/Reject Proposed Location ---
+        // (approve modal removed — approval is now a single click using stored structured data)
+
+        async function approveProposedLocation(auditId, button) {
+          if (!confirm('Approve this proposed location? It will be created in the location hierarchy.')) {
+            return;
+          }
+
+          var originalText = button.innerHTML;
+          button.disabled = true;
+          button.textContent = 'Approving...';
+
+          try {
+            var response = await fetch('/api/inventory-audit/approve-location', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audit_id: parseInt(auditId) })
+            });
+            var result = await response.json();
+            if (result.success) {
+              // Reload page so location dropdowns/datalists get the newly created area/sub-area
+              window.location.href = '/inventory-audit#review';
+              window.location.reload();
+              return;
+            } else {
+              alert('Failed to approve: ' + (result.error || 'Unknown error'));
+            }
+          } catch (err) {
+            alert('Failed to approve location: ' + (err instanceof Error ? err.message : 'Unknown error'));
+          } finally {
+            button.disabled = false;
+            button.innerHTML = originalText;
+          }
+        }
+
+        async function rejectProposedLocation(auditId, button) {
+          if (!confirm('Reject this proposed location? The audit entry will keep its current location assignment (if any).')) {
+            return;
+          }
+
+          var originalText = button.textContent;
+          button.disabled = true;
+          button.textContent = 'Rejecting...';
+
+          try {
+            var response = await fetch('/api/inventory-audit/reject-location', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audit_id: parseInt(auditId) })
+            });
+            var result = await response.json();
+            if (result.success) {
+              alert(result.message || 'Proposed location rejected.');
+              loadAuditData();
+            } else {
+              alert('Failed to reject: ' + (result.error || 'Unknown error'));
+            }
+          } catch (err) {
+            alert('Failed to reject: ' + (err instanceof Error ? err.message : 'Unknown error'));
+          } finally {
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+        }
+
+        // (approve modal removed — approval is now a single click)
+
         async function loadAuditData() {
           try {
             if (loadingState) loadingState.classList.remove('hidden');
@@ -1345,6 +1632,7 @@ export function auditPage(
                 var d = record.diffs || {};
                 var a = record.audit || {};
                 var eq = record.equipment || {};
+                var hasProposedLocation = record.proposed_location && record.proposed_location_status === 'pending';
 
                 var changedCount = Object.values(d).filter(Boolean).length;
 
@@ -1358,27 +1646,67 @@ export function auditPage(
                       'Match' +
                     '</span>';
 
-                var borderColor = record.hasChanges
-                  ? 'border-amber-300 dark:border-amber-700'
-                  : 'border-gray-200 dark:border-gray-700';
+                var proposedBadge = hasProposedLocation
+                  ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">' +
+                      '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' +
+                      'Proposed Location' +
+                    '</span>'
+                  : (record.proposed_location_status === 'approved'
+                    ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">✓ Location Approved</span>'
+                    : (record.proposed_location_status === 'rejected'
+                      ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">✗ Location Rejected</span>'
+                      : ''));
+
+                var borderColor = hasProposedLocation
+                  ? 'border-purple-300 dark:border-purple-700'
+                  : (record.hasChanges
+                    ? 'border-amber-300 dark:border-amber-700'
+                    : 'border-gray-200 dark:border-gray-700');
+
+                // Build proposed location action section
+                var proposedLocationSection = '';
+                if (hasProposedLocation) {
+                  proposedLocationSection =
+                    '<div class="px-4 py-3 bg-purple-50 dark:bg-purple-900/20 border-t border-purple-200 dark:border-purple-700/60">' +
+                      '<div class="flex items-start gap-3 mb-3">' +
+                        '<svg class="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' +
+                        '<div class="flex-1">' +
+                          '<p class="text-sm font-semibold text-purple-800 dark:text-purple-200">Proposed Location: <span class="font-normal">' + escapeHtml(record.proposed_location) + '</span></p>' +
+                          '<p class="text-xs text-purple-600 dark:text-purple-400 mt-0.5">This location needs to be approved and added to the hierarchy, or rejected.</p>' +
+                        '</div>' +
+                      '</div>' +
+                      '<div class="flex flex-wrap gap-2">' +
+                        '<button data-audit-id="' + record.id + '" class="approve-location-btn px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors inline-flex items-center gap-1">' +
+                          '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>' +
+                          'Approve' +
+                        '</button>' +
+                        '<button data-audit-id="' + record.id + '" class="reject-location-btn px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors inline-flex items-center gap-1">' +
+                          '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
+                          'Reject' +
+                        '</button>' +
+                      '</div>' +
+                    '</div>';
+                }
 
                 return '<div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border ' + borderColor + ' overflow-hidden transition-shadow hover:shadow-md">' +
                   /* ---- Card Header ---- */
                   '<div class="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-700/60 bg-gray-50/50 dark:bg-gray-800/80">' +
-                    '<div class="flex items-center gap-3">' +
+                    '<div class="flex items-center gap-3 flex-wrap">' +
                       '<a href="/inventory-audit?search=' + encodeURIComponent(record.service_tag) + '" class="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300 font-mono tracking-wide">' +
                         escapeHtml(record.service_tag || '') +
                       '</a>' +
                       statusBadge +
+                      proposedBadge +
                     '</div>' +
                     '<div class="flex items-center gap-3">' +
                       '<div class="text-right">' +
                         '<div class="text-xs text-gray-600 dark:text-gray-300">' + escapeHtml(record.equipment_type || '') + '</div>' +
                         '<div class="text-[10px] text-gray-400 dark:text-gray-500">' + escapeHtml(record.updated_by || '') + ' &bull; ' + formatDate(record.updated) + '</div>' +
                       '</div>' +
-                      '<button data-service-tag="' + escapeHtml(record.service_tag) + '" class="apply-btn px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors shadow-sm">' +
-                        'Apply' +
-                      '</button>' +
+                      (hasProposedLocation
+                        ? '<button data-service-tag="' + escapeHtml(record.service_tag) + '" class="apply-btn px-3 py-1.5 bg-gray-400 text-white text-xs font-medium rounded-lg cursor-not-allowed opacity-60" disabled title="Resolve proposed location first">Apply</button>'
+                        : '<button data-service-tag="' + escapeHtml(record.service_tag) + '" class="apply-btn px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors shadow-sm">Apply</button>'
+                      ) +
                     '</div>' +
                   '</div>' +
                   /* ---- Comparison Grid ---- */
@@ -1400,15 +1728,36 @@ export function auditPage(
                       '</tbody>' +
                     '</table>' +
                   '</div>' +
+                  proposedLocationSection +
                 '</div>';
               }).join('');
               
               // Add event listeners to apply buttons
-              tableBody.querySelectorAll('.apply-btn').forEach(function(btn) {
+              tableBody.querySelectorAll('.apply-btn:not([disabled])').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                   const serviceTag = this.getAttribute('data-service-tag');
                   if (serviceTag) {
                     applyAuditEntry(serviceTag, this);
+                  }
+                });
+              });
+
+              // Add event listeners to approve-location buttons (direct one-click approval)
+              tableBody.querySelectorAll('.approve-location-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                  const auditId = this.getAttribute('data-audit-id');
+                  if (auditId) {
+                    approveProposedLocation(auditId, this);
+                  }
+                });
+              });
+
+              // Add event listeners to reject-location buttons
+              tableBody.querySelectorAll('.reject-location-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                  const auditId = this.getAttribute('data-audit-id');
+                  if (auditId) {
+                    rejectProposedLocation(auditId, this);
                   }
                 });
               });
