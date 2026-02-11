@@ -1204,7 +1204,7 @@ export function editPage(data: EditData, success: string | boolean = false, erro
                 const result = await response.json();
                 
                 if (result.success && result.data) {
-                  printers = result.data;
+                  printers = result.data.filter(p => (p.driver || '').toLowerCase().includes('brother'));
                   renderPrinters();
                 } else {
                   showError(result.message || 'Failed to load printers');
@@ -1218,7 +1218,7 @@ export function editPage(data: EditData, success: string | boolean = false, erro
             
             function renderPrinters() {
               if (printers.length === 0) {
-                printersList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-4">No printers available</p>';
+                printersList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-4">No Brother printers available</p>';
                 printersList.classList.remove('hidden');
                 return;
               }
