@@ -137,7 +137,7 @@ export function permissionsPage(
                 <option value="vendors_edit">vendors_edit - Manage vendors/suppliers (view/add/edit/delete)</option>
                 <option value="write_off_reasons_edit">write_off_reasons_edit - Manage write-off reasons (view/add/edit/delete)</option>
                 <option value="repairs">repairs - Manage repairs (view, manage, and send equipment to repair)</option>
-                <option value="audit-approver">audit-approver - Review and approve inventory audits</option>
+                <option value="audit-approver">audit-approver - Review and approve audits</option>
                 <option value="pc_pw_view">pc_pw_view - View PC passwords</option>
                 <option value="pc_pw_edit">pc_pw_edit - Edit PC passwords</option>
               </select>

@@ -205,6 +205,36 @@ export function navbarScripts(): string {
           });
         }
 
+        // Management section toggle
+        const mgmtToggle = document.getElementById('management-toggle');
+        const mgmtLinks = document.getElementById('management-links');
+        const mgmtChevron = document.getElementById('management-chevron');
+
+        if (mgmtToggle && mgmtLinks && mgmtChevron) {
+          // Restore saved state
+          const mgmtExpanded = localStorage.getItem('managementExpanded') === 'true';
+          if (mgmtExpanded) {
+            mgmtLinks.classList.remove('hidden');
+            mgmtChevron.style.transform = 'rotate(180deg)';
+            mgmtToggle.setAttribute('aria-expanded', 'true');
+          }
+
+          mgmtToggle.addEventListener('click', function() {
+            const isHidden = mgmtLinks.classList.contains('hidden');
+            if (isHidden) {
+              mgmtLinks.classList.remove('hidden');
+              mgmtChevron.style.transform = 'rotate(180deg)';
+              mgmtToggle.setAttribute('aria-expanded', 'true');
+              localStorage.setItem('managementExpanded', 'true');
+            } else {
+              mgmtLinks.classList.add('hidden');
+              mgmtChevron.style.transform = '';
+              mgmtToggle.setAttribute('aria-expanded', 'false');
+              localStorage.setItem('managementExpanded', 'false');
+            }
+          });
+        }
+
         // Logout confirmation with username
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {

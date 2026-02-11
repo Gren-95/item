@@ -15,7 +15,7 @@ A server-side rendered application for IT equipment tracking and management.
 - Equipment search and management
 - Hierarchical location management (Region → Country → Plant → Department → Area → Sub Area)
 - Equipment type hierarchy (Type → Product Line → Model)
-- Inventory auditing with approval workflows
+- Auditing with approval workflows
 - Employee assignment tracking
 - Dell warranty integration
 - Label printing (BarTender integration)
