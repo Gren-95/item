@@ -152,6 +152,59 @@ export function navbarScripts(): string {
           }
         });
 
+        // Text zoom control
+        const ZOOM_STEP = 2;
+        const ZOOM_MIN = 12;
+        const ZOOM_MAX = 24;
+        const ZOOM_DEFAULT = 16;
+
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const zoomResetBtn = document.getElementById('zoom-reset-btn');
+
+        function getTextZoom() {
+          const stored = localStorage.getItem('textZoom');
+          if (stored) {
+            const parsed = parseInt(stored, 10);
+            if (!isNaN(parsed) && parsed >= ZOOM_MIN && parsed <= ZOOM_MAX) {
+              return parsed;
+            }
+          }
+          return ZOOM_DEFAULT;
+        }
+
+        function applyTextZoom(size) {
+          document.documentElement.style.fontSize = size + 'px';
+          if (size === ZOOM_DEFAULT) {
+            localStorage.removeItem('textZoom');
+            document.documentElement.style.fontSize = '';
+          } else {
+            localStorage.setItem('textZoom', String(size));
+          }
+        }
+
+        if (zoomInBtn) {
+          zoomInBtn.addEventListener('click', function() {
+            const current = getTextZoom();
+            const next = Math.min(current + ZOOM_STEP, ZOOM_MAX);
+            applyTextZoom(next);
+          });
+        }
+
+        if (zoomOutBtn) {
+          zoomOutBtn.addEventListener('click', function() {
+            const current = getTextZoom();
+            const next = Math.max(current - ZOOM_STEP, ZOOM_MIN);
+            applyTextZoom(next);
+          });
+        }
+
+        if (zoomResetBtn) {
+          zoomResetBtn.addEventListener('click', function() {
+            applyTextZoom(ZOOM_DEFAULT);
+          });
+        }
+
         // Logout confirmation with username
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
