@@ -22,17 +22,27 @@ jobs:
 
             cd ${{ secrets.DEPLOY_PATH }}
 
+            # Remember current package.json hash to detect dependency changes
+            OLD_PKG_HASH=$(md5sum package.json 2>/dev/null | cut -d' ' -f1 || echo "none")
+
             echo "📥 Pulling latest changes..."
             git pull origin main
 
             echo "📝 Writing version file..."
             git rev-parse --short HEAD > VERSION
 
-            echo "🔨 Rebuilding containers..."
-            docker compose build --no-cache app
+            NEW_PKG_HASH=$(md5sum package.json | cut -d' ' -f1)
 
-            echo "🔄 Restarting services..."
-            docker compose up -d app
+            if [ "$OLD_PKG_HASH" != "$NEW_PKG_HASH" ]; then
+              echo "📦 Dependencies changed — installing..."
+              docker exec item bun install
+            fi
+
+            echo "🎨 Rebuilding CSS..."
+            docker exec item bun run build:css
+
+            echo "🔄 Restarting app..."
+            docker compose restart app
 
             echo "⏳ Waiting for app to start..."
             sleep 10
