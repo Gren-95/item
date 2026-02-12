@@ -272,11 +272,19 @@ export function searchPage(
             <div class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600 flex items-center justify-center">
               ${EMOJI_SAD_ICON.replace('w-5 h-5', 'w-16 h-16')}
             </div>
-            <p class="text-gray-500 dark:text-gray-400 mb-4">No equipment found matching "${escapeHtml(query)}"</p>
-            <a href="/add?serial=${encodeURIComponent(query)}" class="btn btn-primary inline-flex items-center gap-2">
-              ${PLUS_ICON}
-              Add New Equipment
-            </a>
+            ${query.trim() === '*' || hasActiveFilters ? `
+              <p class="text-gray-500 dark:text-gray-400 mb-4">${hasActiveFilters ? 'No equipment matches the current filters' : 'No equipment in the system yet'}</p>
+              <a href="/add" class="btn btn-primary inline-flex items-center gap-2">
+                ${PLUS_ICON}
+                Add New Equipment
+              </a>
+            ` : `
+              <p class="text-gray-500 dark:text-gray-400 mb-4">No equipment found matching "${escapeHtml(query)}"</p>
+              <a href="/add?serial=${encodeURIComponent(query)}" class="btn btn-primary inline-flex items-center gap-2">
+                ${PLUS_ICON}
+                Add New Equipment
+              </a>
+            `}
           </div>
         </div>
       ` : `

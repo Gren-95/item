@@ -231,18 +231,20 @@ test.describe("Wildcard Search & Pagination (#71)", () => {
     const match1 = text1!.match(/(\d+)/);
     const count1 = parseInt(match1![1]);
 
-    // Add type filter — should be ≤
+    // Add impossible type filter — should produce fewer or zero results
     await page.goto(`/?q=*&f_serial=${encodeURIComponent(prefix)}&f_type=NONEXISTENT_TYPE_XYZ`);
     await page.waitForLoadState("networkidle");
 
-    // Either "No equipment found" or a smaller count
-    const noResults = await page.locator("text=/No equipment found/").isVisible({ timeout: 2000 }).catch(() => false);
-    if (noResults) {
-      expect(0).toBeLessThanOrEqual(count1);
-    } else {
-      const text2 = await page.locator("#showing-info").textContent();
+    // Either an empty-state message or a smaller count in #showing-info
+    const showingInfo = page.locator("#showing-info");
+    const hasShowingInfo = await showingInfo.isVisible({ timeout: 2000 }).catch(() => false);
+    if (hasShowingInfo) {
+      const text2 = await showingInfo.textContent();
       const match2 = text2!.match(/(\d+)/);
       expect(parseInt(match2![1])).toBeLessThanOrEqual(count1);
+    } else {
+      // No results at all — still ≤ count1
+      expect(0).toBeLessThanOrEqual(count1);
     }
   });
 
