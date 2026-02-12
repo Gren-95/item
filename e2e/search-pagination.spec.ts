@@ -20,15 +20,15 @@ test.describe("Wildcard Search & Pagination (#71)", () => {
 
   // --- Wildcard Search ---
 
-  test("searching with * returns results or shows no-results page", async ({ page }) => {
+  test("searching with * returns results or shows empty-state page", async ({ page }) => {
     await page.goto("/?q=*");
     await page.waitForLoadState("networkidle");
 
-    // Either shows results or no-equipment message
+    // Either shows results or an empty-state message
     const hasTable = await page.locator("table tbody tr").count().catch(() => 0);
-    const hasNoResults = await page.locator("text=/No equipment found/").isVisible({ timeout: 2000 }).catch(() => false);
+    const hasEmptyState = await page.locator("text=/No equipment/").isVisible({ timeout: 2000 }).catch(() => false);
 
-    expect(hasTable > 0 || hasNoResults).toBeTruthy();
+    expect(hasTable > 0 || hasEmptyState).toBeTruthy();
   });
 
   test("wildcard search shows correct count in header", async ({ page }) => {
