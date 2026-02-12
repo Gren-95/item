@@ -98,7 +98,7 @@ test.describe("User Flow: Search Equipment", () => {
       await page.waitForLoadState("networkidle");
 
       // Should be on edit page or see edit form
-      const form = page.locator("form");
+      const form = page.locator("form").first();
       await expect(form).toBeVisible();
     }
   });

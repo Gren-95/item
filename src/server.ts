@@ -2024,32 +2024,29 @@ async function handleRequest(req: Request): Promise<Response> {
       // Search permission removed - all logged-in users can search
 
       const query = url.searchParams.get("q") || url.searchParams.get("serial") || "";
+      const PAGE_SIZE = 25;
+      const showAll = url.searchParams.get("all") === "1";
+      const page = showAll ? 1 : Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+
+      // Parse column filters
+      const columnFilters = {
+        serial: (url.searchParams.get("f_serial") || "").trim(),
+        type: (url.searchParams.get("f_type") || "").trim(),
+        pline: (url.searchParams.get("f_pline") || "").trim(),
+        model: (url.searchParams.get("f_model") || "").trim(),
+        vendor: (url.searchParams.get("f_vendor") || "").trim(),
+        assigned: (url.searchParams.get("f_assigned") || "").trim(),
+        location: (url.searchParams.get("f_location") || "").trim(),
+        date: (url.searchParams.get("f_date") || "").trim(),
+      };
 
       if (query && query.trim()) {
         const trimmed = query.trim();
-        logger.info("Search request", { traceId, query: trimmed });
+        const isWildcard = trimmed === "*";
+        logger.info("Search request", { traceId, query: trimmed, page, filters: columnFilters });
 
-        // Comprehensive search query covering all fields
-        const searchTerm = `%${trimmed}%`;
-        const [rows] = await pool.query<RowDataPacket[]>(
-          `SELECT DISTINCT
-            e.id,
-            e.service_tag,
-            t.type_name,
-            pl.name as product_line_name,
-            m.name as model_name,
-            v.name as vendor_name,
-            CONCAT(emp.first_name, ' ', emp.last_name) as assigned_to_name,
-            CONCAT_WS(' > ',
-              r.name,
-              c.name,
-              p.name,
-              d.name,
-              a.name,
-              sa.name
-            ) as location,
-            log.created as latest_audit_date,
-            p.id as plant_id
+        // Base query with all joins
+        const baseFrom = `
           FROM it_equipment e
           LEFT JOIN it_equipment_model m ON e.model_id = m.id
           LEFT JOIN it_equipment_product_line pl ON m.product_line_id = pl.id
@@ -2069,8 +2066,16 @@ async function handleRequest(req: Request): Promise<Response> {
           LEFT JOIN it_equipment_department d ON a.department_id = d.id
           LEFT JOIN it_equipment_plant p ON d.plant_id = p.id
           LEFT JOIN it_equipment_country c ON p.country_id = c.id
-          LEFT JOIN it_equipment_region r ON c.region_id = r.id
-          WHERE 
+          LEFT JOIN it_equipment_region r ON c.region_id = r.id`;
+
+        // Build WHERE conditions
+        const whereParts: string[] = [];
+        const allParams: (string | number)[] = [];
+
+        // Main search (OR across all fields)
+        if (!isWildcard) {
+          const searchTerm = `%${trimmed}%`;
+          whereParts.push(`(
             e.service_tag LIKE ?
             OR t.type_name LIKE ?
             OR pl.name LIKE ?
@@ -2085,35 +2090,95 @@ async function handleRequest(req: Request): Promise<Response> {
             OR d.name LIKE ?
             OR a.name LIKE ?
             OR sa.name LIKE ?
+          )`);
+          allParams.push(
+            searchTerm, searchTerm, searchTerm, searchTerm, searchTerm,
+            searchTerm, searchTerm, searchTerm, searchTerm, searchTerm,
+            searchTerm, searchTerm, searchTerm, searchTerm
+          );
+        }
+
+        // Column filters (AND — each narrows the results)
+        if (columnFilters.serial) {
+          whereParts.push(`e.service_tag LIKE ?`);
+          allParams.push(`%${columnFilters.serial}%`);
+        }
+        if (columnFilters.type) {
+          whereParts.push(`t.type_name LIKE ?`);
+          allParams.push(`%${columnFilters.type}%`);
+        }
+        if (columnFilters.pline) {
+          whereParts.push(`pl.name LIKE ?`);
+          allParams.push(`%${columnFilters.pline}%`);
+        }
+        if (columnFilters.model) {
+          whereParts.push(`m.name LIKE ?`);
+          allParams.push(`%${columnFilters.model}%`);
+        }
+        if (columnFilters.vendor) {
+          whereParts.push(`v.name LIKE ?`);
+          allParams.push(`%${columnFilters.vendor}%`);
+        }
+        if (columnFilters.assigned) {
+          whereParts.push(`CONCAT(emp.first_name, ' ', emp.last_name) LIKE ?`);
+          allParams.push(`%${columnFilters.assigned}%`);
+        }
+        if (columnFilters.location) {
+          whereParts.push(`CONCAT_WS(' > ', r.name, c.name, p.name, d.name, a.name, sa.name) LIKE ?`);
+          allParams.push(`%${columnFilters.location}%`);
+        }
+        if (columnFilters.date) {
+          whereParts.push(`DATE_FORMAT(log.created, '%d.%m.%Y') LIKE ?`);
+          allParams.push(`%${columnFilters.date}%`);
+        }
+
+        const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
+
+        // Get total count
+        const [countResult] = await pool.query<RowDataPacket[]>(
+          `SELECT COUNT(DISTINCT e.id) as total ${baseFrom} ${whereClause}`,
+          allParams
+        );
+        const totalCount = countResult[0]?.total || 0;
+        const totalPages = showAll ? 1 : Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+        const currentPage = showAll ? 1 : Math.min(page, totalPages);
+        const offset = (currentPage - 1) * PAGE_SIZE;
+
+        // Get results (all or paginated)
+        const limitClause = showAll ? '' : 'LIMIT ? OFFSET ?';
+        const queryParams: (string | number)[] = showAll ? [...allParams] : [...allParams, PAGE_SIZE, offset];
+
+        const [rows] = await pool.query<RowDataPacket[]>(
+          `SELECT DISTINCT
+            e.id,
+            e.service_tag,
+            t.type_name,
+            pl.name as product_line_name,
+            m.name as model_name,
+            v.name as vendor_name,
+            CONCAT(emp.first_name, ' ', emp.last_name) as assigned_to_name,
+            CONCAT_WS(' > ',
+              r.name,
+              c.name,
+              p.name,
+              d.name,
+              a.name,
+              sa.name
+            ) as location,
+            log.created as latest_audit_date,
+            p.id as plant_id
+          ${baseFrom}
+          ${whereClause}
           ORDER BY e.service_tag
-          LIMIT 100`,
-          [
-            searchTerm, // service_tag
-            searchTerm, // type_name
-            searchTerm, // product_line name
-            searchTerm, // model name
-            searchTerm, // vendor name
-            searchTerm, // full name
-            searchTerm, // first_name
-            searchTerm, // last_name
-            searchTerm, // region
-            searchTerm, // country
-            searchTerm, // plant
-            searchTerm, // department
-            searchTerm, // area
-            searchTerm  // sub_area
-          ]
+          ${limitClause}`,
+          queryParams
         );
 
-        logger.info("Search results", { traceId, query: trimmed, count: rows.length });
+        logger.info("Search results", { traceId, query: trimmed, count: rows.length, totalCount, page: currentPage, totalPages, showAll });
 
         // Mark items as readonly if they're from a different plant (unless user is admin)
         const resultsWithReadonly = rows.map((row: RowDataPacket) => {
           const result = row as SearchResult;
-          // Item is readonly if:
-          // 1. User is not admin
-          // 2. Item has a plant_id
-          // 3. Item's plant_id doesn't match user's plant_id
           result.isReadonly = !isAdmin &&
             result.plant_id !== null &&
             userPlantId !== null &&
@@ -2121,7 +2186,7 @@ async function handleRequest(req: Request): Promise<Response> {
           return result;
         });
 
-        return new Response(searchPage(trimmed, resultsWithReadonly.length > 0 ? resultsWithReadonly : [], null, isAdmin, hasPcPwView, userPlantId, currentUsername, hasAuditApprover), {
+        return new Response(searchPage(trimmed, resultsWithReadonly.length > 0 ? resultsWithReadonly : [], null, isAdmin, hasPcPwView, userPlantId, currentUsername, hasAuditApprover, currentPage, totalPages, totalCount, showAll ? totalCount : PAGE_SIZE, showAll, columnFilters), {
           headers: { "Content-Type": "text/html" },
         });
       }
