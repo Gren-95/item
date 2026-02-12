@@ -16,6 +16,99 @@ interface SearchResult {
   isReadonly?: boolean;
 }
 
+export interface ColumnFilters {
+  serial: string;
+  type: string;
+  pline: string;
+  model: string;
+  vendor: string;
+  assigned: string;
+  location: string;
+  date: string;
+}
+
+function buildFilterParams(filters: ColumnFilters): string {
+  const parts: string[] = [];
+  for (const [key, val] of Object.entries(filters)) {
+    if (val) parts.push(`f_${key}=${encodeURIComponent(val)}`);
+  }
+  return parts.length > 0 ? '&' + parts.join('&') : '';
+}
+
+function renderPagination(query: string, currentPage: number, totalPages: number, showAll: boolean, totalCount: number, filters: ColumnFilters): string {
+  const encodedQuery = encodeURIComponent(query);
+  const fp = buildFilterParams(filters);
+
+  // "Show all" mode — just show a link back to paginated view
+  if (showAll) {
+    return `
+    <div class="mt-6 flex items-center justify-between flex-wrap gap-4">
+      <div class="text-sm text-gray-500 dark:text-gray-400">
+        Showing all ${totalCount} results
+      </div>
+      <a href="/?q=${encodedQuery}&page=1${fp}" class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+        ← Back to paginated view
+      </a>
+    </div>`;
+  }
+
+  if (totalPages <= 1) return '';
+
+  const prevBtn = currentPage > 1
+    ? `<a href="/?q=${encodedQuery}&page=${currentPage - 1}${fp}" class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">← Previous</a>`
+    : `<span class="px-3 py-2 text-sm font-medium text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg cursor-not-allowed">← Previous</span>`;
+
+  const nextBtn = currentPage < totalPages
+    ? `<a href="/?q=${encodedQuery}&page=${currentPage + 1}${fp}" class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Next →</a>`
+    : `<span class="px-3 py-2 text-sm font-medium text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg cursor-not-allowed">Next →</span>`;
+
+  const showAllBtn = `<a href="/?q=${encodedQuery}&all=1${fp}" class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Show All</a>`;
+
+  // Generate page numbers with ellipsis
+  const maxVisible = 7;
+  let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+  let end = Math.min(totalPages, start + maxVisible - 1);
+  if (end - start < maxVisible - 1) {
+    start = Math.max(1, end - maxVisible + 1);
+  }
+
+  const pageLinks: string[] = [];
+
+  if (start > 1) {
+    pageLinks.push(`<a href="/?q=${encodedQuery}&page=1${fp}" class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">1</a>`);
+    if (start > 2) pageLinks.push('<span class="px-2 py-2 text-gray-400 dark:text-gray-600">…</span>');
+  }
+
+  for (let i = start; i <= end; i++) {
+    if (i === currentPage) {
+      pageLinks.push(`<span class="px-3 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-lg">${i}</span>`);
+    } else {
+      pageLinks.push(`<a href="/?q=${encodedQuery}&page=${i}${fp}" class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">${i}</a>`);
+    }
+  }
+
+  if (end < totalPages) {
+    if (end < totalPages - 1) pageLinks.push('<span class="px-2 py-2 text-gray-400 dark:text-gray-600">…</span>');
+    pageLinks.push(`<a href="/?q=${encodedQuery}&page=${totalPages}${fp}" class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">${totalPages}</a>`);
+  }
+
+  return `
+    <div class="mt-6 flex items-center justify-between flex-wrap gap-4">
+      <div class="text-sm text-gray-500 dark:text-gray-400">
+        Page ${currentPage} of ${totalPages}
+      </div>
+      <nav class="flex items-center gap-1" aria-label="Pagination">
+        ${prevBtn}
+        ${pageLinks.join('\n        ')}
+        ${nextBtn}
+        <span class="mx-1 text-gray-300 dark:text-gray-600">|</span>
+        ${showAllBtn}
+      </nav>
+    </div>`;
+}
+
+const emptyFilters: ColumnFilters = { serial: '', type: '', pline: '', model: '', vendor: '', assigned: '', location: '', date: '' };
+
 export function searchPage(
   query: string = "",
   results: SearchResult[] | null = null,
@@ -24,8 +117,15 @@ export function searchPage(
   hasPcPwView: boolean = false,
   userPlantId: number | null = null,
   username: string | null = null,
-  hasAuditApprover: boolean = false
+  hasAuditApprover: boolean = false,
+  currentPage: number = 1,
+  totalPages: number = 1,
+  totalCount: number = 0,
+  pageSize: number = 25,
+  showAll: boolean = false,
+  filters: ColumnFilters = emptyFilters
 ): string {
+  const hasActiveFilters = Object.values(filters).some(v => v !== '');
   const content = `
       <div class="max-w-6xl mx-auto">
       <div class="card mb-8">
@@ -81,10 +181,16 @@ export function searchPage(
 
       ${results !== null && results.length > 0 ? `
         <div class="card">
-          <div class="mb-4 flex items-center justify-between">
+          <div class="mb-4 flex items-center justify-between flex-wrap gap-2">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-              Search Results (${results.length})
+              Search Results
             </h2>
+            <span id="showing-info" class="text-sm text-gray-500 dark:text-gray-400">
+              ${showAll
+                ? `Showing all ${totalCount} results`
+                : `Showing ${((currentPage - 1) * pageSize) + 1}–${Math.min(currentPage * pageSize, totalCount)} of ${totalCount}`
+              }
+            </span>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -102,32 +208,34 @@ export function searchPage(
                   ${results && results.some(r => r.isReadonly) ? '<th class="py-3 px-2 md:px-4">Status</th>' : ''}
                 </tr>
                 <tr id="filter-row" class="border-b border-gray-200 dark:border-gray-700">
-                  <th class="py-2 px-2 md:px-4 sticky left-0 z-10"></th>
+                  <th class="py-2 px-2 md:px-4 sticky left-0 z-10">
+                    ${hasActiveFilters ? `<a href="/?q=${encodeURIComponent(query)}${showAll ? '&all=1' : ''}" class="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 whitespace-nowrap" title="Clear all filters">✕ Clear</a>` : ''}
+                  </th>
                   <th class="py-2 px-2 md:px-4">
-                    <input type="text" data-filter-col="1" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                    <input type="text" name="f_serial" data-filter value="${escapeHtml(filters.serial)}" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
                   </th>
                   <th class="py-2 px-2 md:px-4 hidden md:table-cell">
-                    <input type="text" data-filter-col="2" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                    <input type="text" name="f_type" data-filter value="${escapeHtml(filters.type)}" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
                   </th>
                   <th class="py-2 px-2 md:px-4 hidden lg:table-cell">
-                    <input type="text" data-filter-col="3" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                    <input type="text" name="f_pline" data-filter value="${escapeHtml(filters.pline)}" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
                   </th>
                   <th class="py-2 px-2 md:px-4 hidden lg:table-cell">
-                    <input type="text" data-filter-col="4" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                    <input type="text" name="f_model" data-filter value="${escapeHtml(filters.model)}" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
                   </th>
                   <th class="py-2 px-2 md:px-4 hidden xl:table-cell">
-                    <input type="text" data-filter-col="5" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                    <input type="text" name="f_vendor" data-filter value="${escapeHtml(filters.vendor)}" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
                   </th>
                   <th class="py-2 px-2 md:px-4 hidden md:table-cell">
-                    <input type="text" data-filter-col="6" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                    <input type="text" name="f_assigned" data-filter value="${escapeHtml(filters.assigned)}" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
                   </th>
                   <th class="py-2 px-2 md:px-4 hidden lg:table-cell">
-                    <input type="text" data-filter-col="7" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                    <input type="text" name="f_location" data-filter value="${escapeHtml(filters.location)}" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
                   </th>
                   <th class="py-2 px-2 md:px-4 hidden xl:table-cell">
-                    <input type="text" data-filter-col="8" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
+                    <input type="text" name="f_date" data-filter value="${escapeHtml(filters.date)}" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" />
                   </th>
-                  ${results && results.some(r => r.isReadonly) ? '<th class="py-2 px-2 md:px-4"><input type="text" data-filter-col="9" placeholder="Filter..." class="input-field !py-1 !px-2 !text-xs" /></th>' : ''}
+                  ${results && results.some(r => r.isReadonly) ? '<th class="py-2 px-2 md:px-4"></th>' : ''}
                 </tr>
               </thead>
               <tbody>
@@ -156,6 +264,7 @@ export function searchPage(
               </tbody>
             </table>
           </div>
+          ${renderPagination(query, currentPage, totalPages, showAll, totalCount, filters)}
         </div>
       ` : results !== null && results.length === 0 ? `
         <div class="card">
@@ -449,61 +558,42 @@ export function searchPage(
 
     <script>
       (function() {
-        const filterInputs = document.querySelectorAll('input[data-filter-col]');
+        // Server-side column filters — debounce and navigate with filter params
+        const filterInputs = document.querySelectorAll('input[data-filter]');
         if (filterInputs.length === 0) return;
 
-        const table = filterInputs[0].closest('table');
-        if (!table) return;
-
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
-
-        const rows = Array.from(tbody.querySelectorAll('tr'));
+        let debounceTimer = null;
 
         function applyFilters() {
-          const filters = {};
-          filterInputs.forEach(input => {
-            const col = input.getAttribute('data-filter-col');
-            const value = input.value.toLowerCase().trim();
-            if (value) {
-              filters[col] = value;
-            }
-          });
-
-          let visibleCount = 0;
-          rows.forEach(row => {
-            const cells = row.querySelectorAll('td');
-            let showRow = true;
-
-            for (const [col, filterValue] of Object.entries(filters)) {
-              const colIndex = parseInt(col);
-              if (cells[colIndex]) {
-                const cellText = cells[colIndex].textContent.toLowerCase();
-                if (!cellText.includes(filterValue)) {
-                  showRow = false;
-                  break;
-                }
-              }
-            }
-
-            row.style.display = showRow ? '' : 'none';
-            if (showRow) visibleCount++;
-          });
-
-          // Update visible count in header
-          const header = document.querySelector('.card h2');
-          if (header) {
-            const totalCount = rows.length;
-            if (Object.keys(filters).length > 0) {
-              header.textContent = 'Search Results (' + visibleCount + ' of ' + totalCount + ')';
+          const params = new URLSearchParams(window.location.search);
+          // Reset to page 1 when filters change
+          params.set('page', '1');
+          // Collect all filter values
+          filterInputs.forEach(function(input) {
+            const name = input.getAttribute('name');
+            const val = input.value.trim();
+            if (val) {
+              params.set(name, val);
             } else {
-              header.textContent = 'Search Results (' + totalCount + ')';
+              params.delete(name);
             }
-          }
+          });
+          window.location.href = '/?' + params.toString();
         }
 
-        filterInputs.forEach(input => {
-          input.addEventListener('input', applyFilters);
+        filterInputs.forEach(function(input) {
+          input.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(applyFilters, 600);
+          });
+          // Also apply on Enter immediately
+          input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              clearTimeout(debounceTimer);
+              applyFilters();
+            }
+          });
         });
       })();
     </script>
