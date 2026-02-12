@@ -6,13 +6,22 @@ import { join } from "path";
  * Reads the application version.
  * Priority:
  *  1. APP_VERSION env var (set by CI/CD)
- *  2. VERSION file in project root (generated during deploy)
- *  3. Git commit hash (short, works in dev with .git mounted)
- *  4. Fallback "unknown"
+ *  2. package.json version field
+ *  3. VERSION file in project root (generated during deploy)
+ *  4. Git commit hash (short, works in dev with .git mounted)
+ *  5. Fallback "unknown"
  */
 function resolveVersion(): string {
   if (process.env.APP_VERSION) {
     return process.env.APP_VERSION;
+  }
+
+  try {
+    const pkgPath = join(process.cwd(), "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    if (pkg.version && pkg.version !== "0.0.0") return pkg.version;
+  } catch {
+    // package.json not found or invalid, continue
   }
 
   try {
