@@ -26,7 +26,8 @@ jobs:
             OLD_PKG_HASH=$(md5sum package.json 2>/dev/null | cut -d' ' -f1 || echo "none")
 
             echo "📥 Pulling latest changes..."
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "📝 Writing version file..."
             git rev-parse --short HEAD > VERSION
