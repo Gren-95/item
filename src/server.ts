@@ -5465,8 +5465,13 @@ async function handleRequest(req: Request): Promise<Response> {
         });
       }
       try {
+        const bartenderHost = process.env.BARTENDER_HOST;
+        if (!bartenderHost) {
+          return new Response(JSON.stringify({ success: true, data: [] }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
         logger.info("Fetching printers from Bartender", { traceId });
-        const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
         const host = bartenderHost.replace(/\/$/, "");
         const printersUrl = `${host}/integration/getprinters/execute`;
 
@@ -5578,8 +5583,13 @@ async function handleRequest(req: Request): Promise<Response> {
     // Get printers from Bartender
     if (path === "/api/printers/all" && req.method === "GET") {
       try {
+        const bartenderHost = process.env.BARTENDER_HOST || "";
+        if (!bartenderHost) {
+          return new Response(JSON.stringify({ success: true, data: [] }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
         logger.info("Fetching all printers from Bartender", { traceId });
-        const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
         const host = bartenderHost.replace(/\/$/, "");
         const printersUrl = `${host}/integration/getprinters/execute`;
 
@@ -5716,11 +5726,16 @@ async function handleRequest(req: Request): Promise<Response> {
         });
       }
       try {
+        const bartenderHost = process.env.BARTENDER_HOST || "";
+        if (!bartenderHost) {
+          return new Response(JSON.stringify({ success: false, error: "Printer service not configured" }), {
+            status: 503, headers: { "Content-Type": "application/json" },
+          });
+        }
         const body = await req.json();
         const validated = printLabelSchema.parse(body);
         const service_tag = validated.service_tag;
         const printer = validated.printer || "EERAK-PRT103";
-        const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
 
         // Remove trailing slash from host if present
         const host = bartenderHost.replace(/\/$/, "");
@@ -5769,12 +5784,17 @@ async function handleRequest(req: Request): Promise<Response> {
         });
       }
       try {
+        const bartenderHost = process.env.BARTENDER_HOST || "";
+        if (!bartenderHost) {
+          return new Response(JSON.stringify({ success: false, error: "Printer service not configured" }), {
+            status: 503, headers: { "Content-Type": "application/json" },
+          });
+        }
         const body = await req.json();
         const validated = printPrinterTagSchema.parse(body);
         const printer_name = validated.printer_name;
         const printer = validated.printer;
         logger.info("Print printer tag request", { traceId, printer_name, printer });
-        const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
 
         // Remove trailing slash from host if present
         const host = bartenderHost.replace(/\/$/, "");
