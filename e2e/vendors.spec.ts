@@ -137,13 +137,13 @@ test.describe("Suppliers Management", () => {
   });
 
   test("suppliers page loads successfully", async ({ page }) => {
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     await expect(page.locator("body")).toBeVisible();
   });
 
   test("add supplier form has all required fields", async ({ page }) => {
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     const addButton = page.locator('button:has-text("Add"), a:has-text("Add")').first();
 
@@ -162,7 +162,7 @@ test.describe("Suppliers Management", () => {
   });
 
   test("supplier form validates SAP vendor number format", async ({ page }) => {
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     const addButton = page.locator('button:has-text("Add"), a:has-text("Add")').first();
 
