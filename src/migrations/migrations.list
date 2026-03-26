@@ -5,3 +5,6 @@
 005_add_permission_expiry_and_auditing.sql
 006_remove_audit_period_id.sql
 007_add_permission_audit_log.sql
+008_add_proposed_location.sql
+009_add_proposed_location_structured.sql
+010_add_test_equipment_seed.sql
