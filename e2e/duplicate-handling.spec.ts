@@ -12,7 +12,7 @@ test.describe("Friendly Duplicate Handling (#70)", () => {
     await page.goto("/add");
 
     // Create a type via API
-    const uniqueName = `TestType-${Date.now()}`;
+    const uniqueName = `TT-${Date.now().toString(36)}`;
     const createRes = await page.evaluate(async (name) => {
       const res = await fetch("/api/types", {
         method: "POST",
@@ -76,7 +76,7 @@ test.describe("Friendly Duplicate Handling (#70)", () => {
   test("no raw SQL error messages in API response", async ({ page }) => {
     await page.goto("/add");
 
-    const uniqueName = `TestType-NoSQL-${Date.now()}`;
+    const uniqueName = `TN-${Date.now().toString(36)}`;
     // Create first
     await page.evaluate(async (name) => {
       await fetch("/api/types", {
@@ -108,7 +108,7 @@ test.describe("Friendly Duplicate Handling (#70)", () => {
     await page.goto("/add");
 
     // Create a type via API first
-    const uniqueName = `ModalType-${Date.now()}`;
+    const uniqueName = `MT-${Date.now().toString(36)}`;
     const createRes = await page.evaluate(async (name) => {
       const res = await fetch("/api/types", {
         method: "POST",
@@ -180,7 +180,7 @@ test.describe("Friendly Duplicate Handling (#70)", () => {
   }) => {
     await page.goto("/add");
 
-    const uniqueName = `NewType-${Date.now()}`;
+    const uniqueName = `NT-${Date.now().toString(36)}`;
 
     // Open the "Add new type" modal
     const typeSelect = page.locator("#type_id");
@@ -204,7 +204,7 @@ test.describe("Friendly Duplicate Handling (#70)", () => {
   test("no error message shown in modal on duplicate", async ({ page }) => {
     await page.goto("/add");
 
-    const uniqueName = `NoError-${Date.now()}`;
+    const uniqueName = `NE-${Date.now().toString(36)}`;
 
     // Create type first
     await page.evaluate(async (name) => {

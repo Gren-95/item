@@ -66,6 +66,9 @@ export async function verifyCredentials(username: string, password: string): Pro
   }
 
   // Proceed with normal auth API call for non-admin users
+  if (!AUTH_ENDPOINT) {
+    return false;
+  }
   try {
     const formData = new URLSearchParams();
     formData.append("user", username);
