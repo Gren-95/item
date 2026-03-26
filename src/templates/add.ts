@@ -464,7 +464,7 @@ export function addPage(data: AddData, success: boolean = false, error: string |
             
             printersList.innerHTML = printers.map((p) => \`
               <label class="flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg mb-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                <input type="radio" name="printer" value="\${p.name}" class="mr-3" onchange="selectPrinter('\${p.name}')">
+                <input type="radio" name="printer" value="\${escapeHtml(p.name)}" class="mr-3" onchange="selectPrinter(this.value)">
                 <div class="flex-1">
                   <div class="font-medium text-gray-900 dark:text-white">\${escapeHtml(p.name)}</div>
                   <div class="text-sm text-gray-500 dark:text-gray-400">

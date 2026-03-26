@@ -1,5 +1,5 @@
 import { serve, file } from "bun";
-import path from "path";
+import nodePath from "path";
 import pool from "./db";
 import { searchPage } from "./templates/search";
 import { editPage } from "./templates/edit";
@@ -18,6 +18,8 @@ import { printerLabelsPage } from "./templates/printer-labels";
 import { labelPrintingPage } from "./templates/label-printing";
 import { logger } from "./utils/logger";
 import { getSessionFromRequest, createSession, deleteSession, createSessionCookie, deleteSessionCookie } from "./utils/session";
+import { withSecurityHeaders, isRateLimited } from "./utils/security";
+import { escapeHtml } from "./templates/components";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification, sendApprovalDecisionNotification, verifyApprovalToken } from "./utils/email";
 import { startScheduler } from "./utils/scheduler";
@@ -189,8 +191,8 @@ interface LocationRow extends RowDataPacket {
 
 const PORT = process.env.PORT || 3000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
-const DEFAULT_CERT_PATH = path.join(process.cwd(), "certs", "ssl.pem");
-const DEFAULT_KEY_PATH = path.join(process.cwd(), "certs", "ssl-key.pem");
+const DEFAULT_CERT_PATH = nodePath.join(process.cwd(), "certs", "ssl.pem");
+const DEFAULT_KEY_PATH = nodePath.join(process.cwd(), "certs", "ssl-key.pem");
 const HTTPS_CERT_FILE = process.env.HTTPS_CERT_FILE || DEFAULT_CERT_PATH;
 const HTTPS_KEY_FILE = process.env.HTTPS_KEY_FILE || DEFAULT_KEY_PATH;
 
@@ -557,8 +559,13 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   if (path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/icons/") || path === "/manifest.webmanifest") {
-    const filePath = `./public${path}`;
-    const staticFile = file(filePath);
+    // Resolve and validate path stays within public directory to prevent traversal
+    const resolved = nodePath.resolve("./public", `.${path}`);
+    const publicDir = nodePath.resolve("./public");
+    if (!resolved.startsWith(publicDir)) {
+      return new Response("Forbidden", { status: 403 });
+    }
+    const staticFile = file(resolved);
     if (await staticFile.exists()) {
       return new Response(staticFile);
     }
@@ -641,6 +648,32 @@ async function handleRequest(req: Request): Promise<Response> {
     const userPlantId = await getUserPlantId(session.username, pool);
     hasAuditApprover = isAdmin || await hasPermission(session.username, pool, "audit-approver", userPlantId, true);
     logger.info("Audit approver permission", { traceId, username: session.username, hasAuditApprover });
+
+    // CSRF protection: verify Origin/Referer header on state-changing requests
+    if (req.method === "POST" || req.method === "PUT" || req.method === "DELETE") {
+      const origin = req.headers.get("origin");
+      const referer = req.headers.get("referer");
+      const host = req.headers.get("host");
+      const contentType = req.headers.get("content-type") || "";
+      if (origin) {
+        const originHost = new URL(origin).host;
+        if (host && originHost !== host) {
+          logger.info("CSRF: Origin mismatch", { traceId, origin, host });
+          return new Response("Forbidden: cross-origin request", { status: 403 });
+        }
+      } else if (referer) {
+        const refererHost = new URL(referer).host;
+        if (host && refererHost !== host) {
+          logger.info("CSRF: Referer mismatch", { traceId, referer, host });
+          return new Response("Forbidden: cross-origin request", { status: 403 });
+        }
+      } else if (!contentType.includes("application/json")) {
+        // No Origin or Referer — reject form submissions (JSON APIs are exempt as
+        // they cannot be sent cross-origin by HTML forms without CORS preflight)
+        logger.info("CSRF: Missing Origin and Referer", { traceId, path });
+        return new Response("Forbidden: missing origin header", { status: 403 });
+      }
+    }
   }
 
   // Routes
@@ -752,7 +785,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         throw new Error("Unknown action");
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Inventory periods action failed", err, { traceId });
         return Response.redirect("/inventory-audit/review?error=" + encodeURIComponent(errorMessage) + "#periods", 303);
       }
@@ -763,8 +796,9 @@ async function handleRequest(req: Request): Promise<Response> {
       // If already logged in, redirect to home
       const session = getSessionFromRequest(req);
       if (session) {
-        const redirect = url.searchParams.get("redirect") || "/";
-        return Response.redirect(redirect, 302);
+        const rawRedirect = url.searchParams.get("redirect") || "/";
+        const safeRedirect = rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : "/";
+        return Response.redirect(safeRedirect, 302);
       }
 
       const error = url.searchParams.get("error") || null;
@@ -776,6 +810,17 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Login page - POST
     if (path === "/login" && req.method === "POST") {
+      // Rate limiting by IP — use server socket address, fall back to X-Forwarded-For only behind trusted proxy
+      const serverAddr = (req as unknown as { socket?: { remoteAddress?: string } }).socket?.remoteAddress;
+      const clientIp = serverAddr || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+      if (isRateLimited(clientIp)) {
+        logger.info("Rate limited login attempt", { traceId, ip: clientIp });
+        return new Response(loginPage("Too many login attempts. Please try again later.", null), {
+          status: 429,
+          headers: { "Content-Type": "text/html" },
+        });
+      }
+
       const formData = await req.formData();
       const username = (formData.get("username") || "").toString().trim();
       const password = (formData.get("password") || "").toString();
@@ -791,7 +836,7 @@ async function handleRequest(req: Request): Promise<Response> {
         const isValid = await verifyCredentials(username, password);
 
         if (!isValid) {
-          logger.info("Failed login attempt", { traceId, username });
+          logger.info("Failed login attempt", { traceId, username, ip: clientIp });
           return new Response(loginPage("Invalid username or password", redirect || null), {
             headers: { "Content-Type": "text/html" },
           });
@@ -829,10 +874,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
         logger.info("User logged in", { traceId, username, isAdmin });
 
+        const safeRedirect = redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/";
         return new Response(null, {
           status: 302,
           headers: {
-            "Location": redirect,
+            "Location": safeRedirect,
             "Set-Cookie": createSessionCookie(sessionId),
           },
         });
@@ -908,7 +954,7 @@ async function handleRequest(req: Request): Promise<Response> {
           return Response.redirect("/change-password?error=" + encodeURIComponent(result.error || "Password change failed"), 303);
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Invalid input. Please check your entries.";
+        const errorMessage = "Invalid input. Please check your entries.";
         logger.error("Password change validation error", err, { traceId, username: session.username });
         return Response.redirect("/change-password?error=" + encodeURIComponent(errorMessage), 303);
       }
@@ -1011,6 +1057,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
       if (!isAdmin) {
         return Response.redirect("/permissions?error=" + encodeURIComponent("You do not have admin permission"), 303);
+      }
+
+      // Rate limit permission changes (30 per 15 min per user)
+      if (isRateLimited(`perm:${session.username}`)) {
+        return Response.redirect("/permissions?error=" + encodeURIComponent("Too many permission changes. Please wait and try again."), 303);
       }
 
       const formData = await req.formData();
@@ -1122,18 +1173,47 @@ async function handleRequest(req: Request): Promise<Response> {
         }
       } catch (err) {
         logger.error("Error processing permission action", err, { traceId, action });
-        const errorMessage = err instanceof Error ? err.message : "An error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         return Response.redirect("/permissions?error=" + encodeURIComponent(errorMessage), 303);
       }
     }
 
-    // Quick approve API endpoint (from email link)
+    // Quick approve confirmation page (from email link) — renders a form with POST
     if (path === "/api/approvals/quick-approve" && req.method === "GET") {
+      const token = url.searchParams.get("token");
+      if (!token) {
+        return Response.redirect("/approvals?error=" + encodeURIComponent("Invalid approval link"), 303);
+      }
+
+      // Check if user is logged in
+      const session = getSessionFromRequest(req);
+      if (!session) {
+        return Response.redirect(`/login?redirect=${encodeURIComponent("/api/approvals/quick-approve?token=" + encodeURIComponent(token))}`, 302);
+      }
+
+      // Render a confirmation page with a POST form instead of auto-approving
+      const { minimalLayout } = await import("./templates/layout");
+      const confirmHtml = minimalLayout("Confirm Approval", `
+        <div style="max-width:400px;margin:80px auto;text-align:center;font-family:sans-serif;">
+          <h2>Confirm Approval</h2>
+          <p>Click the button below to approve this request.</p>
+          <form method="POST" action="/api/approvals/quick-approve">
+            <input type="hidden" name="token" value="${escapeHtml(token)}">
+            <button type="submit" style="padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:16px;">Approve</button>
+          </form>
+        </div>
+      `);
+      return new Response(confirmHtml, { headers: { "Content-Type": "text/html" } });
+    }
+
+    // Quick approve API endpoint (POST — actually processes the approval)
+    if (path === "/api/approvals/quick-approve" && req.method === "POST") {
       const traceId = crypto.randomUUID();
       logger.info("Quick approve request", { traceId, method: req.method, path });
 
       try {
-        const token = url.searchParams.get("token");
+        const formData = await req.formData();
+        const token = (formData.get("token") || "").toString();
         if (!token) {
           return Response.redirect("/approvals?error=" + encodeURIComponent("Invalid approval link"), 303);
         }
@@ -1149,7 +1229,7 @@ async function handleRequest(req: Request): Promise<Response> {
         // Check if user is logged in
         const session = getSessionFromRequest(req);
         if (!session) {
-          return Response.redirect(`/login?redirect=/api/approvals/quick-approve?token=${encodeURIComponent(token)}`, 302);
+          return Response.redirect(`/login?redirect=${encodeURIComponent("/api/approvals/quick-approve?token=" + encodeURIComponent(token))}`, 302);
         }
 
         // Get user info
@@ -1478,7 +1558,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
       } catch (err) {
         logger.error("Error processing PC password action (via labels)", err, { traceId, action });
-        const errorMessage = err instanceof Error ? err.message : "An error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent(errorMessage), 303);
       }
     }
@@ -1618,7 +1698,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
       } catch (err) {
         logger.error("Error processing PC password action", err, { traceId, action });
-        const errorMessage = err instanceof Error ? err.message : "An error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent(errorMessage), 303);
       }
     }
@@ -1683,7 +1763,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
       } catch (err) {
         logger.error("Error sending PC password print job", err, { traceId });
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         return new Response(JSON.stringify({ error: errorMessage }), {
           status: 500,
           headers: { "Content-Type": "application/json" },
@@ -2006,7 +2086,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
       } catch (err) {
         logger.error("Error processing approval action", err, { traceId, action, requestId });
-        const errorMessage = err instanceof Error ? err.message : "An error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         return Response.redirect("/approvals?error=" + encodeURIComponent(errorMessage), 303);
       }
     }
@@ -2028,16 +2108,17 @@ async function handleRequest(req: Request): Promise<Response> {
       const showAll = url.searchParams.get("all") === "1";
       const page = showAll ? 1 : Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
 
-      // Parse column filters
+      // Parse column filters (capped at 200 chars to prevent abuse)
+      const cap = (v: string) => v.trim().slice(0, 200);
       const columnFilters = {
-        serial: (url.searchParams.get("f_serial") || "").trim(),
-        type: (url.searchParams.get("f_type") || "").trim(),
-        pline: (url.searchParams.get("f_pline") || "").trim(),
-        model: (url.searchParams.get("f_model") || "").trim(),
-        vendor: (url.searchParams.get("f_vendor") || "").trim(),
-        assigned: (url.searchParams.get("f_assigned") || "").trim(),
-        location: (url.searchParams.get("f_location") || "").trim(),
-        date: (url.searchParams.get("f_date") || "").trim(),
+        serial: cap(url.searchParams.get("f_serial") || ""),
+        type: cap(url.searchParams.get("f_type") || ""),
+        pline: cap(url.searchParams.get("f_pline") || ""),
+        model: cap(url.searchParams.get("f_model") || ""),
+        vendor: cap(url.searchParams.get("f_vendor") || ""),
+        assigned: cap(url.searchParams.get("f_assigned") || ""),
+        location: cap(url.searchParams.get("f_location") || ""),
+        date: cap(url.searchParams.get("f_date") || ""),
       };
 
       if (query && query.trim()) {
@@ -2358,7 +2439,7 @@ async function handleRequest(req: Request): Promise<Response> {
         // Redirect to the edit page for the newly created equipment
         return Response.redirect(`${url.origin}/edit/${equipmentId}?success=1`, 303);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to add equipment", err, { traceId, serviceTag: rawData.service_tag });
         const addData = await getAddData(rawData.service_tag || "");
         return new Response(addPage(addData as unknown as AddDataType, false, errorMessage, isAdmin, hasPcPwView, currentUsername), {
@@ -2404,33 +2485,28 @@ async function handleRequest(req: Request): Promise<Response> {
       // Check location management permission
       const hasManageLocations = isAdmin || await hasManageLocationsPermission(session.username, pool, userPlantId);
 
-      // Check if equipment is from a different plant (readonly mode)
+      // Deny access to equipment from a different plant
       const equipmentPlantId = auditData.equipment.plant_id as number | null;
-      const isReadonly = !isAdmin &&
+      const isCrossPlant = !isAdmin &&
         equipmentPlantId !== null &&
         userPlantId !== null &&
         equipmentPlantId !== userPlantId;
 
-      if (isReadonly) {
-        // Get user's plant hierarchy for location filtering
-        let allowedRegionIdReadonly: number | null = null;
-        let allowedCountryIdReadonly: number | null = null;
-        if (!isAdmin && userPlantId !== null) {
-          const [plantInfoReadonly] = await pool.query<RowDataPacket[]>(
-            `SELECT p.id, p.country_id, c.region_id
-             FROM it_equipment_plant p
-             LEFT JOIN it_equipment_country c ON p.country_id = c.id
-             WHERE p.id = ? AND p.status = 1`,
-            [userPlantId]
-          );
-          if (plantInfoReadonly.length > 0) {
-            allowedCountryIdReadonly = plantInfoReadonly[0].country_id;
-            allowedRegionIdReadonly = plantInfoReadonly[0].region_id;
-          }
-        }
+      if (isCrossPlant) {
+        const { errorPage } = await import("./templates/error");
         return new Response(
-          editPage(auditData as unknown as EditDataType, success, "Read-only: This equipment belongs to another plant. You can view but not edit.", isAdmin, hasPcPwView, true, userPlantId, allowedRegionIdReadonly, allowedCountryIdReadonly, currentUsername, hasAuditApprover, hasManageLocations),
+          errorPage(
+            "Access Denied",
+            "You do not have permission to view this equipment.",
+            "This equipment belongs to a different plant. Please contact your administrator if you need access.",
+            403,
+            isAdmin,
+            hasPcPwView,
+            currentUsername ?? "",
+            hasAuditApprover
+          ),
           {
+            status: 403,
             headers: { "Content-Type": "text/html" },
           }
         );
@@ -2853,7 +2929,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         return Response.redirect(`${url.origin}/edit/${id}?success=1`, 303);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to edit equipment", err, { traceId, equipmentId: id });
         const userPlantIdError = await getUserPlantId(session.username, pool);
         const isAdminError = await hasAdminPermission(session.username, pool);
@@ -3039,7 +3115,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         return Response.redirect(`/locations?success=${encodeURIComponent("Saved")}`, 303);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         return Response.redirect(`/locations?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
@@ -3295,7 +3371,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         return Response.redirect(`/vendors?success=${encodeURIComponent("Saved")}`, 303);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to manage vendor/supplier", err, { traceId, action: rawCommon.action, entity });
         return Response.redirect(`/vendors?error=${encodeURIComponent(errorMessage)}`, 303);
       }
@@ -3591,7 +3667,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         return Response.redirect(`/types?success=${encodeURIComponent("Saved")}`, 303);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to manage type/model", err, { traceId, rawData });
         return Response.redirect(`/types?error=${encodeURIComponent(errorMessage)}`, 303);
       }
@@ -3751,7 +3827,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         return Response.redirect(`/write-off-reasons?success=${encodeURIComponent("Saved")}`, 303);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to manage write-off reason", err, { traceId, rawData });
         return Response.redirect(`/write-off-reasons?error=${encodeURIComponent(errorMessage)}`, 303);
       }
@@ -3916,7 +3992,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         return Response.redirect(`/repairs?success=${encodeURIComponent("Status updated")}`, 303);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to update repair status", err, { traceId, rawData });
         return Response.redirect(`/repairs?error=${encodeURIComponent(errorMessage)}`, 303);
       }
@@ -4025,7 +4101,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         return Response.redirect(`/inventory-audit?search=${encodeURIComponent(eq.service_tag)}&success=${encodeURIComponent("Audit recorded successfully")}`, 303);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to save audit record", err, { traceId });
         return Response.redirect(`/inventory-audit?error=${encodeURIComponent(errorMessage)}`, 303);
       }
@@ -4146,7 +4222,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         return Response.redirect(`/inventory-audit?search=${encodeURIComponent(serviceTag)}&success=${encodeURIComponent("Audit updated successfully")}`, 303);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to quick edit audit", err, { traceId });
         return Response.redirect(`/inventory-audit?error=${encodeURIComponent(errorMessage)}`, 303);
       }
@@ -4278,9 +4354,8 @@ async function handleRequest(req: Request): Promise<Response> {
           { headers: { "Content-Type": "text/html" } }
         );
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         logger.error("Failed to load audit review page", err, { traceId });
-        return new Response(`Error: ${errorMessage}`, { status: 500 });
+        return new Response("An internal error occurred. Please try again later.", { status: 500 });
       }
     }
 
@@ -4557,7 +4632,7 @@ async function handleRequest(req: Request): Promise<Response> {
           { headers: { "Content-Type": "application/json" } }
         );
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to fetch audit review data", err, { traceId });
         return new Response(
           JSON.stringify({ success: false, error: errorMessage }),
@@ -4747,7 +4822,7 @@ async function handleRequest(req: Request): Promise<Response> {
           { headers: { "Content-Type": "application/json" } }
         );
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to fetch audit review comparison data", err, { traceId });
         return new Response(
           JSON.stringify({ success: false, error: errorMessage }),
@@ -4901,9 +4976,8 @@ async function handleRequest(req: Request): Promise<Response> {
           }
         });
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
         logger.error("Failed to export audit review", err, { traceId });
-        return new Response(`Error: ${errorMessage}`, { status: 500 });
+        return new Response("An internal error occurred. Please try again later.", { status: 500 });
       }
     }
 
@@ -5004,7 +5078,7 @@ async function handleRequest(req: Request): Promise<Response> {
           { headers: { "Content-Type": "application/json" } }
         );
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to apply audit entry", err, { traceId });
         return new Response(
           JSON.stringify({ success: false, error: errorMessage }),
@@ -5168,7 +5242,7 @@ async function handleRequest(req: Request): Promise<Response> {
           { headers: { "Content-Type": "application/json" } }
         );
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to approve proposed location", err, { traceId });
         return new Response(
           JSON.stringify({ success: false, error: errorMessage }),
@@ -5256,7 +5330,7 @@ async function handleRequest(req: Request): Promise<Response> {
           { headers: { "Content-Type": "application/json" } }
         );
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to reject proposed location", err, { traceId });
         return new Response(
           JSON.stringify({ success: false, error: errorMessage }),
@@ -5369,7 +5443,7 @@ async function handleRequest(req: Request): Promise<Response> {
           { headers: { "Content-Type": "application/json" } }
         );
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to apply all audit entries", err, { traceId });
         return new Response(
           JSON.stringify({ success: false, error: errorMessage }),
@@ -5383,6 +5457,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Get printers from Bartender
     if (path === "/api/printers" && req.method === "GET") {
+      if (!currentUsername) {
+        return new Response(JSON.stringify({ success: false, message: "Authentication required" }), {
+          status: 401, headers: { "Content-Type": "application/json" },
+        });
+      }
       try {
         logger.info("Fetching printers from Bartender", { traceId });
         const bartenderHost = process.env.BARTENDER_HOST || "http://eeprt01/";
@@ -5478,7 +5557,7 @@ async function handleRequest(req: Request): Promise<Response> {
           headers: { "Content-Type": "application/json" },
         });
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to fetch printers", err, { traceId });
         return new Response(
           JSON.stringify({
@@ -5575,7 +5654,7 @@ async function handleRequest(req: Request): Promise<Response> {
           headers: { "Content-Type": "application/json" },
         });
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to fetch all printers", err, { traceId });
         return new Response(
           JSON.stringify({
@@ -5618,7 +5697,7 @@ async function handleRequest(req: Request): Promise<Response> {
           headers: { "Content-Type": "application/json" }
         });
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Dell API error", { traceId, serviceTag, error: errorMessage });
         return new Response(
           JSON.stringify({ success: false, message: errorMessage }),
@@ -5629,6 +5708,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Print label API
     if (path === "/api/print" && req.method === "POST") {
+      if (!currentUsername) {
+        return new Response(JSON.stringify({ success: false, message: "Authentication required" }), {
+          status: 401, headers: { "Content-Type": "application/json" },
+        });
+      }
       try {
         const body = await req.json();
         const validated = printLabelSchema.parse(body);
@@ -5667,7 +5751,7 @@ async function handleRequest(req: Request): Promise<Response> {
           headers: { "Content-Type": "application/json" },
         });
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         return new Response(JSON.stringify({ error: errorMessage }), {
           status: 500,
           headers: { "Content-Type": "application/json" },
@@ -5677,6 +5761,11 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Print printer name tag API
     if (path === "/api/print-printer-tag" && req.method === "POST") {
+      if (!currentUsername) {
+        return new Response(JSON.stringify({ success: false, message: "Authentication required" }), {
+          status: 401, headers: { "Content-Type": "application/json" },
+        });
+      }
       try {
         const body = await req.json();
         const validated = printPrinterTagSchema.parse(body);
@@ -5718,7 +5807,7 @@ async function handleRequest(req: Request): Promise<Response> {
           headers: { "Content-Type": "application/json" },
         });
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Print printer tag failed", err, { traceId });
         return new Response(JSON.stringify({ error: errorMessage }), {
           status: 500,
@@ -5956,9 +6045,8 @@ async function handleRequest(req: Request): Promise<Response> {
 
     return new Response("Not found", { status: 404 });
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
     logger.error("Request handler error", err, { traceId, path });
-    return new Response(searchPage("", null, errorMessage, false, false), {
+    return new Response(searchPage("", null, "An unexpected error occurred. Please try again later.", false, false), {
       status: 500,
       headers: { "Content-Type": "text/html" },
     });
@@ -6583,11 +6671,17 @@ startScheduler();
 
 const tlsOptions = await getTlsOptions();
 
+/** Wrapper that adds security headers to every response. */
+async function securedHandler(req: Request): Promise<Response> {
+  const response = await handleRequest(req);
+  return withSecurityHeaders(response);
+}
+
 if (tlsOptions) {
   // HTTPS server
   serve({
     port: Number(HTTPS_PORT),
-    fetch: handleRequest,
+    fetch: securedHandler,
     tls: tlsOptions,
   });
 
@@ -6609,6 +6703,6 @@ if (tlsOptions) {
   );
   serve({
     port: Number(PORT),
-    fetch: handleRequest,
+    fetch: securedHandler,
   });
 }

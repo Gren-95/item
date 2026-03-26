@@ -20,7 +20,10 @@ let transporter: Transporter | null = null;
  * Generate a secure token for email approval links
  */
 function generateApprovalToken(requestId: number): string {
-  const secret = process.env.APPROVAL_SECRET || "default-secret-change-in-production";
+  const secret = process.env.APPROVAL_SECRET || "";
+  if (!secret || secret.length < 32) {
+    throw new Error("APPROVAL_SECRET must be at least 32 characters long");
+  }
   const timestamp = Date.now();
   const data = `${requestId}-${timestamp}`;
   const hash = crypto.createHmac("sha256", secret).update(data).digest("hex");
@@ -38,14 +41,14 @@ export function verifyApprovalToken(token: string): { requestId: number; timesta
     const requestId = parseInt(requestIdStr, 10);
     const timestamp = parseInt(timestampStr, 10);
 
-    // Verify token hasn't expired (7 days)
-    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-    if (Date.now() - timestamp > SEVEN_DAYS_MS) {
+    // Verify token hasn't expired (24 hours)
+    const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
+    if (Date.now() - timestamp > TOKEN_EXPIRY_MS) {
       return null;
     }
 
     // Verify hash
-    const secret = process.env.APPROVAL_SECRET || "default-secret-change-in-production";
+    const secret = process.env.APPROVAL_SECRET || "";
     const expectedHash = crypto.createHmac("sha256", secret)
       .update(`${requestId}-${timestamp}`)
       .digest("hex");

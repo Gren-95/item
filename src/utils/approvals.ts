@@ -84,19 +84,27 @@ export async function createApprovalRequest(
 }
 
 /**
- * Get client IP from request
+ * Get client IP from request.
+ * Prefers the socket remote address to prevent IP spoofing via X-Forwarded-For.
  */
 export function getClientIp(req: Request): string | null {
+  // Prefer server socket address (cannot be spoofed)
+  const serverAddr = (req as unknown as { socket?: { remoteAddress?: string } }).socket?.remoteAddress;
+  if (serverAddr) {
+    return serverAddr;
+  }
+
+  // Fallback to headers only if socket address unavailable (e.g. behind reverse proxy)
   const forwarded = req.headers.get("x-forwarded-for");
   if (forwarded) {
     return forwarded.split(",")[0].trim();
   }
-  
+
   const realIp = req.headers.get("x-real-ip");
   if (realIp) {
     return realIp;
   }
-  
+
   return null;
 }
 
