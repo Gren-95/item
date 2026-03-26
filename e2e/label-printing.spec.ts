@@ -39,6 +39,7 @@ test.describe("Unified Label Printing (#68)", () => {
 
   test("tab=printer opens printer labels tab", async ({ page }) => {
     await page.goto("/labels?tab=printer");
+    await page.waitForLoadState("networkidle");
 
     const printerTab = page.locator("#tab-printer");
     await expect(printerTab).toBeVisible();
@@ -49,6 +50,7 @@ test.describe("Unified Label Printing (#68)", () => {
 
   test("tab=passwords opens PC passwords tab", async ({ page }) => {
     await page.goto("/labels?tab=passwords");
+    await page.waitForLoadState("networkidle");
 
     const pwTab = page.locator("#tab-passwords");
     await expect(pwTab).toBeVisible();

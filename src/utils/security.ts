@@ -37,7 +37,7 @@ interface RateLimitEntry {
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const RATE_LIMIT_MAX_ATTEMPTS = 10; // max 10 login attempts per window
+const RATE_LIMIT_MAX_ATTEMPTS = 30; // max 30 login attempts per window
 
 /** Returns true if the request should be rate-limited (too many attempts). */
 export function isRateLimited(ip: string): boolean {

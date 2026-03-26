@@ -184,7 +184,7 @@ test.describe.serial("Rate Limiting", () => {
     const uniqueIp = `192.168.99.${Math.floor(Math.random() * 254) + 1}`;
 
     let got429 = false;
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 35; i++) {
       const response = await request.post("/login", {
         form: { username: "brute_force_user", password: "wrong_pass" },
         headers: { "x-forwarded-for": uniqueIp },
