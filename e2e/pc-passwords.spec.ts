@@ -7,14 +7,14 @@ test.describe("PC Passwords Management (#43)", () => {
   });
 
   test("PC passwords page exists", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     // Page should load (may show permission error if not authorized)
     await expect(page.locator("body")).toBeVisible();
   });
 
   test("PC passwords page requires permission", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const content = await page.content();
     // Should show either the page content, permission message, or 404
@@ -32,7 +32,7 @@ test.describe("PC Passwords Management (#43)", () => {
   });
 
   test("PC passwords page shows table of credentials", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     // If user has permission, should see table
     const table = page.locator("table");
@@ -51,7 +51,7 @@ test.describe("PC Passwords Management (#43)", () => {
   });
 
   test("PC passwords has add button for authorized users", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const addButton = page.locator(
       'button:has-text("Add"), a:has-text("Add"), [data-action="add"]'
@@ -62,7 +62,7 @@ test.describe("PC Passwords Management (#43)", () => {
   });
 
   test("PC passwords shows user column", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const table = page.locator("table");
     if (await table.isVisible().catch(() => false)) {
@@ -76,7 +76,7 @@ test.describe("PC Passwords Management (#43)", () => {
   });
 
   test("PC passwords shows evocon column", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const table = page.locator("table");
     if (await table.isVisible().catch(() => false)) {
@@ -89,7 +89,7 @@ test.describe("PC Passwords Management (#43)", () => {
   });
 
   test("PC passwords shows password column (visible)", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const table = page.locator("table");
     if (await table.isVisible().catch(() => false)) {
@@ -104,7 +104,7 @@ test.describe("PC Passwords Management (#43)", () => {
   });
 
   test("PC passwords shows status column", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const table = page.locator("table");
     if (await table.isVisible().catch(() => false)) {
@@ -162,7 +162,7 @@ test.describe("PC Passwords Edit Functionality (#43)", () => {
   });
 
   test("edit button exists for authorized users", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const table = page.locator("table");
     if (await table.isVisible().catch(() => false)) {
@@ -176,7 +176,7 @@ test.describe("PC Passwords Edit Functionality (#43)", () => {
   });
 
   test("delete button exists for authorized users", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const table = page.locator("table");
     if (await table.isVisible().catch(() => false)) {
@@ -190,7 +190,7 @@ test.describe("PC Passwords Edit Functionality (#43)", () => {
   });
 
   test("print button exists for each entry", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const table = page.locator("table");
     if (await table.isVisible().catch(() => false)) {
@@ -204,7 +204,7 @@ test.describe("PC Passwords Edit Functionality (#43)", () => {
   });
 
   test("add form has user field", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const addButton = page
       .locator('button:has-text("Add"), a:has-text("Add")')
@@ -221,7 +221,7 @@ test.describe("PC Passwords Edit Functionality (#43)", () => {
   });
 
   test("add form has evocon field", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const addButton = page
       .locator('button:has-text("Add"), a:has-text("Add")')
@@ -238,7 +238,7 @@ test.describe("PC Passwords Edit Functionality (#43)", () => {
   });
 
   test("add form has password field", async ({ page }) => {
-    await page.goto("/pc-passwords");
+    await page.goto("/labels?tab=passwords");
 
     const addButton = page
       .locator('button:has-text("Add"), a:has-text("Add")')

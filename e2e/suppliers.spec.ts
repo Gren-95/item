@@ -8,7 +8,7 @@ test.describe("Suppliers Management (#6)", () => {
 
   test("suppliers page or vendors page loads", async ({ page }) => {
     // Suppliers may be at /suppliers or managed via /vendors
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     // Page loads (may redirect to vendors or show 404)
     await expect(page.locator("body")).toBeVisible();
@@ -49,7 +49,7 @@ test.describe("Suppliers Management (#6)", () => {
   });
 
   test("add supplier form has name field", async ({ page }) => {
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     const addButton = page
       .locator('button:has-text("Add"), a:has-text("Add")')
@@ -66,7 +66,7 @@ test.describe("Suppliers Management (#6)", () => {
   });
 
   test("add supplier form has email field", async ({ page }) => {
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     const addButton = page
       .locator('button:has-text("Add"), a:has-text("Add")')
@@ -83,7 +83,7 @@ test.describe("Suppliers Management (#6)", () => {
   });
 
   test("add supplier form has phone number field", async ({ page }) => {
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     const addButton = page
       .locator('button:has-text("Add"), a:has-text("Add")')
@@ -102,7 +102,7 @@ test.describe("Suppliers Management (#6)", () => {
   });
 
   test("add supplier form has SAP vendor number field", async ({ page }) => {
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     const addButton = page
       .locator('button:has-text("Add"), a:has-text("Add")')
@@ -121,7 +121,7 @@ test.describe("Suppliers Management (#6)", () => {
   });
 
   test("supplier can be edited", async ({ page }) => {
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     const editButton = page
       .locator(
@@ -141,7 +141,7 @@ test.describe("Suppliers Management (#6)", () => {
   });
 
   test("supplier can be deleted", async ({ page }) => {
-    await page.goto("/suppliers");
+    await page.goto("/vendors");
 
     // Delete button should exist
     const deleteButton = page

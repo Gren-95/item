@@ -269,13 +269,13 @@ test.describe("User Flow: Audit History", () => {
   });
 
   test("equipment audit log is accessible", async ({ page }) => {
-    await page.goto("/audit");
+    await page.goto("/inventory-audit/review");
 
     await expect(page.locator("body")).toBeVisible();
   });
 
   test("audit page shows equipment history", async ({ page }) => {
-    await page.goto("/audit");
+    await page.goto("/inventory-audit/review");
 
     const content = await page.content();
     // Page may not exist or have different content - check for any content or 404 indicator
