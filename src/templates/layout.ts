@@ -1,5 +1,6 @@
 import { navbar, navbarScripts } from "./navbar";
 import { EXCLAMATION_CIRCLE_ICON } from "./icons";
+import { escapeHtml } from "./components";
 import { APP_VERSION } from "../utils/version";
 import { clientDateScript } from "../utils/date";
 
@@ -68,7 +69,7 @@ export function layout(title: string, content: string, isAdmin: boolean = false,
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1e293b" media="(prefers-color-scheme: dark)">
-  ${username ? `<meta name="username" content="${username}">` : ''}
+  ${username ? `<meta name="username" content="${escapeHtml(username)}">` : ''}
   <script>
     (function() {
       const stored = localStorage.getItem('theme');

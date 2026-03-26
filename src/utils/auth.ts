@@ -29,12 +29,6 @@ export function verifyAdminCredentials(username: string, password: string): bool
     return false;
   }
   const matches = username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
-  // Only log in non-test environments
-  if (typeof process !== "undefined" && process.env.NODE_ENV !== "test" && !process.env.BUN_ENV?.includes("test")) {
-    if (username === ADMIN_USERNAME) {
-      console.log("Admin username matched, checking password...", { username, passwordMatch: password === ADMIN_PASSWORD });
-    }
-  }
   return matches;
 }
 
@@ -49,7 +43,8 @@ export async function verifyCredentials(username: string, password: string): Pro
   }
 
   // TEST_MODE: Allow login if user exists in it_employees_list (bypasses auth API)
-  if (process.env.TEST_MODE === "true") {
+  // Guard: TEST_MODE is forbidden when NODE_ENV=production
+  if (process.env.TEST_MODE === "true" && process.env.NODE_ENV !== "production") {
     try {
       const pool = (await import("../db")).default;
       const [users] = await pool.query<import("mysql2").RowDataPacket[]>(
