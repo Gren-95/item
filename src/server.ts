@@ -810,10 +810,10 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Login page - POST
     if (path === "/login" && req.method === "POST") {
-      // Rate limiting by IP — use server socket address, fall back to X-Forwarded-For only behind trusted proxy
+      // Rate limiting by IP — only check, don't increment yet (increment on failure only)
       const serverAddr = (req as unknown as { socket?: { remoteAddress?: string } }).socket?.remoteAddress;
       const clientIp = serverAddr || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-      if (isRateLimited(clientIp)) {
+      if (isRateLimited(clientIp, false)) {
         logger.info("Rate limited login attempt", { traceId, ip: clientIp });
         return new Response(loginPage("Too many login attempts. Please try again later.", null), {
           status: 429,
@@ -836,6 +836,8 @@ async function handleRequest(req: Request): Promise<Response> {
         const isValid = await verifyCredentials(username, password);
 
         if (!isValid) {
+          // Only count failed attempts toward the rate limit
+          isRateLimited(clientIp);
           logger.info("Failed login attempt", { traceId, username, ip: clientIp });
           return new Response(loginPage("Invalid username or password", redirect || null), {
             headers: { "Content-Type": "text/html" },

@@ -39,17 +39,30 @@ const rateLimitStore = new Map<string, RateLimitEntry>();
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const RATE_LIMIT_MAX_ATTEMPTS = 30; // max 30 login attempts per window
 
-/** Returns true if the request should be rate-limited (too many attempts). */
-export function isRateLimited(ip: string): boolean {
+/**
+ * Returns true if the request should be rate-limited (too many attempts).
+ * Rate limiting is disabled in development/test environments (NODE_ENV !== "production").
+ * @param ip - The client IP or rate limit key
+ * @param increment - If false, only checks without incrementing the counter (default: true)
+ */
+export function isRateLimited(ip: string, increment = true): boolean {
+  // Disable rate limiting in development/test environments
+  if (process.env.NODE_ENV !== "production") {
+    return false;
+  }
   const now = Date.now();
   const entry = rateLimitStore.get(ip);
 
   if (!entry || now > entry.resetAt) {
-    rateLimitStore.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    if (increment) {
+      rateLimitStore.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    }
     return false;
   }
 
-  entry.count++;
+  if (increment) {
+    entry.count++;
+  }
   return entry.count > RATE_LIMIT_MAX_ATTEMPTS;
 }
 

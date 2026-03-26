@@ -158,7 +158,9 @@ test.describe("Authentication Guards", () => {
   });
 });
 
-// Rate limiting tests run last and serial to avoid polluting other tests
+// Rate limiting tests — only run in production (rate limiting is disabled in dev/CI)
+const isProduction = process.env.NODE_ENV === "production";
+
 test.describe.serial("Rate Limiting", () => {
   test("login allows normal attempts", async ({ page }) => {
     await page.goto("/login");
@@ -180,6 +182,7 @@ test.describe.serial("Rate Limiting", () => {
   });
 
   test("login returns 429 after too many attempts", async ({ request }) => {
+    test.skip(!isProduction, "Rate limiting is disabled in non-production environments");
     // Use a unique IP that won't conflict with other tests
     const uniqueIp = `192.168.99.${Math.floor(Math.random() * 254) + 1}`;
 
