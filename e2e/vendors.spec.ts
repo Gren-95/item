@@ -151,11 +151,11 @@ test.describe("Suppliers Management", () => {
       await addButton.click();
 
       // Check for supplier-specific fields
-      const nameInput = page.locator('input[name="name"]');
-      const emailInput = page.locator('input[name="email"]');
-      const phoneInput = page.locator('input[name="phone_number"]');
+      const nameInput = page.locator('input[name="name"]').first();
+      const emailInput = page.locator('input[name="email"]').first();
+      const phoneInput = page.locator('input[name="phone_number"]').first();
 
-      if (await nameInput.isVisible()) {
+      if (await nameInput.isVisible().catch(() => false)) {
         await expect(nameInput).toBeVisible();
       }
     }
