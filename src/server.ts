@@ -19,6 +19,7 @@ import { applyAuthPreamble, createInitialContext, isPublicPath } from "./routes/
 import { Router } from "./routes/router";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerSystemRoutes, tryServeStatic } from "./routes/system";
+import { registerLabelsRoutes } from "./routes/labels";
 import { escapeHtml } from "./templates/components";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification, sendApprovalDecisionNotification, verifyApprovalToken } from "./utils/email";
@@ -53,7 +54,6 @@ import {
   hasRepairsPermission,
   hasRepairsSendPermission,
   hasPcPwViewPermission,
-  hasPcPwEditPermission,
   isAdminUser,
 } from "./utils/auth";
 import {
@@ -523,6 +523,7 @@ async function executeApprovedAction(
 const router = new Router();
 registerSystemRoutes(router);
 registerAuthRoutes(router);
+registerLabelsRoutes(router);
 
 async function handleRequest(req: Request): Promise<Response> {
   const ctx = createInitialContext(req, pool);
@@ -1160,106 +1161,6 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // ===== Unified Label Printing page =====
-    // GET /labels
-    if (path === "/labels" && req.method === "GET") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/labels", 302);
-      }
-
-      const activeTab = url.searchParams.get("tab") || "service-tag";
-      const success = url.searchParams.get("success") || "";
-      const error = url.searchParams.get("error") || "";
-
-      logger.info("Label Printing page access", { traceId, username: session.username, tab: activeTab });
-      const isAdmin = await hasAdminPermission(session.username, pool);
-      const hasPcPwView = await hasPcPwViewPermission(session.username, pool);
-      const hasPcPwEdit = await hasPcPwEditPermission(session.username, pool);
-      const userPlantId = await getUserPlantId(session.username, pool);
-      const hasAuditApprover = isAdmin || await hasPermission(session.username, pool, "audit-approver", userPlantId, true);
-
-      let passwords: PcPassword[] = [];
-      if (hasPcPwView) {
-        try {
-          const [rows] = await pool.query<RowDataPacket[]>(
-            "SELECT id, user, evocon, pw, status FROM it_pc_pw ORDER BY user"
-          );
-          passwords = rows as PcPassword[];
-        } catch (err) {
-          logger.error("Error loading PC passwords for label printing", err, { traceId });
-        }
-      }
-
-      return new Response(
-        labelPrintingPage(
-          { passwords, hasPcPwView, hasPcPwEdit: hasPcPwEdit },
-          isAdmin,
-          hasPcPwView,
-          session.username,
-          hasAuditApprover,
-          activeTab,
-          success,
-          error
-        ),
-        { headers: { "Content-Type": "text/html" } }
-      );
-    }
-
-    // POST /labels (PC Password add/delete within unified page)
-    if (path === "/labels" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/labels", 302);
-      }
-
-      const hasEdit = await hasPcPwEditPermission(session.username, pool);
-      if (!hasEdit) {
-        return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent("You do not have permission to edit PC passwords"), 303);
-      }
-
-      const formData = await req.formData();
-      const action = formData.get("action")?.toString();
-
-      try {
-        if (action === "add") {
-          const user = formData.get("user")?.toString() || "";
-          const evocon = formData.get("evocon")?.toString() || null;
-          const pw = formData.get("pw")?.toString() || "";
-          const status = parseInt(formData.get("status")?.toString() || "1");
-
-          if (!user || !pw) {
-            return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent("User and password are required"), 303);
-          }
-
-          await pool.query(
-            "INSERT INTO it_pc_pw (user, evocon, pw, status) VALUES (?, ?, ?, ?)",
-            [user, evocon, pw, status]
-          );
-
-          logger.info("PC password added (via labels)", { traceId, user });
-          return Response.redirect("/labels?tab=passwords&success=" + encodeURIComponent("Password added successfully"), 303);
-        } else if (action === "delete") {
-          const id = parseInt(formData.get("id")?.toString() || "0");
-
-          if (!id) {
-            return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent("Invalid password ID"), 303);
-          }
-
-          await pool.query("DELETE FROM it_pc_pw WHERE id = ?", [id]);
-
-          logger.info("PC password deleted (via labels)", { traceId, id });
-          return Response.redirect("/labels?tab=passwords&success=" + encodeURIComponent("Password deleted successfully"), 303);
-        } else {
-          return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent("Invalid action"), 303);
-        }
-      } catch (err) {
-        logger.error("Error processing PC password action (via labels)", err, { traceId, action });
-        const errorMessage = "An unexpected error occurred. Please try again.";
-        return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent(errorMessage), 303);
-      }
-    }
-
     // API: Search equipment by service tag
     if (path === "/api/equipment/search-by-tag" && req.method === "GET") {
       const session = getSessionFromRequest(req);
@@ -1334,148 +1235,6 @@ async function handleRequest(req: Request): Promise<Response> {
           headers: { "Content-Type": "application/json" },
         });
       }
-    }
-
-    // Redirect old /pc-pw GET to /labels?tab=passwords
-    if (path === "/pc-pw" && req.method === "GET") {
-      const success = url.searchParams.get("success") || "";
-      const error = url.searchParams.get("error") || "";
-      let redirectUrl = "/labels?tab=passwords";
-      if (success) redirectUrl += "&success=" + encodeURIComponent(success);
-      if (error) redirectUrl += "&error=" + encodeURIComponent(error);
-      return Response.redirect(redirectUrl, 302);
-    }
-
-    // PC Passwords page - POST (legacy, redirect to /labels)
-    if (path === "/pc-pw" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/labels?tab=passwords", 302);
-      }
-
-      const hasEdit = await hasPcPwEditPermission(session.username, pool);
-      if (!hasEdit) {
-        return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent("You do not have permission to edit PC passwords"), 303);
-      }
-
-      const formData = await req.formData();
-      const action = formData.get("action")?.toString();
-
-      try {
-        if (action === "add") {
-          const user = formData.get("user")?.toString() || "";
-          const evocon = formData.get("evocon")?.toString() || null;
-          const pw = formData.get("pw")?.toString() || "";
-          const status = parseInt(formData.get("status")?.toString() || "1");
-
-          if (!user || !pw) {
-            return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent("User and password are required"), 303);
-          }
-
-          await pool.query(
-            "INSERT INTO it_pc_pw (user, evocon, pw, status) VALUES (?, ?, ?, ?)",
-            [user, evocon, pw, status]
-          );
-
-          logger.info("PC password added", { traceId, user });
-          return Response.redirect("/labels?tab=passwords&success=" + encodeURIComponent("Password added successfully"), 303);
-        } else if (action === "delete") {
-          const id = parseInt(formData.get("id")?.toString() || "0");
-
-          if (!id) {
-            return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent("Invalid password ID"), 303);
-          }
-
-          await pool.query("DELETE FROM it_pc_pw WHERE id = ?", [id]);
-
-          logger.info("PC password deleted", { traceId, id });
-          return Response.redirect("/labels?tab=passwords&success=" + encodeURIComponent("Password deleted successfully"), 303);
-        } else {
-          return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent("Invalid action"), 303);
-        }
-      } catch (err) {
-        logger.error("Error processing PC password action", err, { traceId, action });
-        const errorMessage = "An unexpected error occurred. Please try again.";
-        return Response.redirect("/labels?tab=passwords&error=" + encodeURIComponent(errorMessage), 303);
-      }
-    }
-
-    // PC Passwords barcode printing endpoint - POST
-    if (path === "/api/pc-pw/print" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      const hasView = await hasPcPwViewPermission(session.username, pool);
-      if (!hasView) {
-        return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
-          status: 403,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      try {
-        const body = await req.json();
-        const { user, evocon, password, printer } = body;
-
-        if (!user || !password || !printer) {
-          return new Response(JSON.stringify({ error: "Missing required fields: user, password, printer" }), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-
-        // Forward request to external printing service
-        const printResponse = await fetch("http://eeprt01/Integration/PcPwSticker/Execute", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            user,
-            evocon: evocon || "",
-            password,
-            printer,
-          }),
-        });
-
-        const printResult = await printResponse.text();
-
-        if (printResponse.ok) {
-          logger.info("PC password print job sent", { traceId, user, printer });
-          return new Response(JSON.stringify({ success: true, message: "Print job sent successfully", result: printResult }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        } else {
-          logger.error("PC password print job failed", { traceId, user, printer, status: printResponse.status });
-          return new Response(JSON.stringify({ error: "Print job failed", result: printResult }), {
-            status: printResponse.status,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-      } catch (err) {
-        logger.error("Error sending PC password print job", err, { traceId });
-        const errorMessage = "An unexpected error occurred. Please try again.";
-        return new Response(JSON.stringify({ error: errorMessage }), {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-    }
-
-    // Redirect old /printer-labels to /labels?tab=printer
-    if (path === "/printer-labels" && req.method === "GET") {
-      const success = url.searchParams.get("success") || "";
-      const error = url.searchParams.get("error") || "";
-      let redirectUrl = "/labels?tab=printer";
-      if (success) redirectUrl += "&success=" + encodeURIComponent(success);
-      if (error) redirectUrl += "&error=" + encodeURIComponent(error);
-      return Response.redirect(redirectUrl, 302);
     }
 
     // API endpoint to check if user needs approval for an action
