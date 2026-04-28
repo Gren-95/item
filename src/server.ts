@@ -4,7 +4,6 @@ import pool from "./db";
 import { searchPage } from "./templates/search";
 import { editPage } from "./templates/edit";
 import { addPage } from "./templates/add";
-import { locationsPage } from "./templates/locations";
 import { logger } from "./utils/logger";
 import { getSessionFromRequest } from "./utils/session";
 import { withSecurityHeaders } from "./utils/security";
@@ -21,6 +20,7 @@ import { registerPermissionsRoutes } from "./routes/permissions";
 import { registerApprovalsRoutes } from "./routes/approvals";
 import { registerVendorsRoutes } from "./routes/vendors";
 import { registerTypesRoutes } from "./routes/equipment-types";
+import { registerLocationsRoutes } from "./routes/locations";
 import { escapeHtml } from "./templates/components";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification } from "./utils/email";
@@ -31,10 +31,6 @@ import {
   hasAddEquipmentPermission,
   hasEditEquipmentPermission,
   getUserPlantId,
-  hasLocationsViewPermission,
-  hasLocationsAddPermission,
-  hasLocationsEditPermission,
-  hasLocationsDeletePermission,
   hasManageLocationsPermission,
   hasRepairsSendPermission,
   hasPcPwViewPermission,
@@ -43,14 +39,12 @@ import {
 import {
   equipmentAddSchema,
   equipmentEditSchema,
-  locationsActionSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { runMigrations } from "./migrations/migrate";
 
 type AddDataType = Parameters<typeof addPage>[0];
 type EditDataType = Parameters<typeof editPage>[0];
-type LocationsDataType = Parameters<typeof locationsPage>[0];
 interface SearchResult {
   id: number;
   service_tag: string;
@@ -171,6 +165,7 @@ registerPermissionsRoutes(router);
 registerApprovalsRoutes(router);
 registerVendorsRoutes(router);
 registerTypesRoutes(router);
+registerLocationsRoutes(router);
 
 async function handleRequest(req: Request): Promise<Response> {
   const ctx = createInitialContext(req, pool);
@@ -1156,181 +1151,6 @@ async function handleRequest(req: Request): Promise<Response> {
         return new Response(editPage(auditData, false, errorMessage, isAdminError, hasPcPwViewError, false, userPlantIdError, null, null, session.username, hasAuditApprover, hasManageLocationsError), {
           headers: { "Content-Type": "text/html" },
         });
-      }
-    }
-
-    // Locations management - GET
-    if (path === "/locations" && req.method === "GET") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/locations", 302);
-      }
-
-      const success = url.searchParams.get("success") || "";
-      const error = url.searchParams.get("error") || "";
-
-      // Check view locations permission
-      const userPlantId = await getUserPlantId(session.username, pool);
-      const hasView = await hasLocationsViewPermission(session.username, pool, userPlantId);
-      if (!hasView) {
-        // Show success feedback even for users without view permission; keep gentle reminder
-        const fallbackError = success ? "" : "Actions require approval.";
-        return new Response(
-          locationsPage(await getLocationsData(), success, error || fallbackError, isAdmin, hasPcPwView, session.username, hasAuditApprover),
-          {
-            headers: { "Content-Type": "text/html" },
-          }
-        );
-      }
-
-      const data = await getLocationsData();
-      return new Response(locationsPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    // Locations management - POST (add/edit/activate/deactivate)
-    if (path === "/locations" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/locations", 302);
-      }
-
-      // Extract form data first
-      const form = await req.formData();
-      const rawData = {
-        type: (form.get("type") || "").toString(),
-        action: (form.get("action") || "").toString(),
-        name: form.get("name") ? form.get("name")!.toString().trim() : undefined,
-        id: form.get("id") ? form.get("id")!.toString() : undefined,
-        parent_id: form.get("parent_id") ? form.get("parent_id")!.toString() : undefined,
-      };
-
-      try {
-        const validated = locationsActionSchema.parse(rawData);
-        const action = validated.action;
-        const type = validated.type;
-        const id = validated.id ? Number(validated.id) : null;
-        const name = validated.name || "";
-        const parent_id = validated.parent_id ? Number(validated.parent_id) : null;
-
-        const map: Record<
-          string,
-          { table: string; parent?: string }
-        > = {
-          region: { table: "it_equipment_region" },
-          country: { table: "it_equipment_country", parent: "region_id" },
-          plant: { table: "it_equipment_plant", parent: "country_id" },
-          department: { table: "it_equipment_department", parent: "plant_id" },
-          area: { table: "it_equipment_area", parent: "department_id" },
-          sub_area: { table: "it_equipment_sub_area", parent: "area_id" },
-        };
-
-        if (!map[type]) {
-          return Response.redirect(`/locations?error=${encodeURIComponent("Unknown type")}`, 303);
-        }
-
-        const { table, parent } = map[type];
-
-        // Check granular permissions based on action and create approval request if needed
-        const employeeNo = await getEmployeeNo(session.username, pool);
-        const clientIp = getClientIp(req);
-        const userPlantId = await getUserPlantId(session.username, pool);
-
-        if (action === "add") {
-          const hasAdd = await hasLocationsAddPermission(session.username, pool, userPlantId);
-          if (!hasAdd) {
-            if (!employeeNo) {
-              return Response.redirect("/locations?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-            }
-            // Create approval request - only include parent_id if it's not null
-            const actionData: Record<string, unknown> = { type, name };
-            if (parent_id !== null) {
-              actionData.parent_id = parent_id;
-            }
-            const requestId = await createApprovalRequest(
-              employeeNo,
-              userPlantId ? `${userPlantId}_locations_add` : "locations_add",
-              "add_location",
-              actionData,
-              clientIp,
-              pool
-            );
-            if (requestId) {
-              return Response.redirect("/locations?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-            } else {
-              return Response.redirect("/locations?error=" + encodeURIComponent("Failed to create approval request"), 303);
-            }
-          }
-          if (!name) throw new Error("Name is required");
-          if (parent && !parent_id) throw new Error("Parent is required");
-          const cols = ["name", "status"];
-          const vals: (string | number)[] = [name!, 1];
-          if (parent && parent_id !== null) {
-            cols.push(parent);
-            vals.push(parent_id);
-          }
-          const placeholders = cols.map(() => "?").join(", ");
-          await pool.query(
-            `INSERT INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`,
-            vals
-          );
-        } else if (action === "edit") {
-          const hasEdit = await hasLocationsEditPermission(session.username, pool, userPlantId);
-          if (!hasEdit) {
-            if (!employeeNo) {
-              return Response.redirect("/locations?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-            }
-            // Create approval request
-            const requestId = await createApprovalRequest(
-              employeeNo,
-              userPlantId ? `${userPlantId}_locations_edit` : "locations_edit",
-              "edit_location",
-              { type, id, name },
-              clientIp,
-              pool
-            );
-            if (requestId) {
-              return Response.redirect("/locations?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-            } else {
-              return Response.redirect("/locations?error=" + encodeURIComponent("Failed to create approval request"), 303);
-            }
-          }
-          if (!id) throw new Error("ID is required");
-          if (!name) throw new Error("Name is required");
-          await pool.query(`UPDATE ${table} SET name = ? WHERE id = ?`, [name, id]);
-        } else if (action === "deactivate" || action === "activate") {
-          const hasDelete = await hasLocationsDeletePermission(session.username, pool, userPlantId);
-          if (!hasDelete) {
-            if (!employeeNo) {
-              return Response.redirect("/locations?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-            }
-            // Create approval request
-            const requestId = await createApprovalRequest(
-              employeeNo,
-              userPlantId ? `${userPlantId}_locations_delete` : "locations_delete",
-              action === "activate" ? "activate_location" : "deactivate_location",
-              { type, id, action },
-              clientIp,
-              pool
-            );
-            if (requestId) {
-              return Response.redirect("/locations?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-            } else {
-              return Response.redirect("/locations?error=" + encodeURIComponent("Failed to create approval request"), 303);
-            }
-          }
-          if (!id) throw new Error("ID is required");
-          const status = action === "activate" ? 1 : 0;
-          await pool.query(`UPDATE ${table} SET status = ? WHERE id = ?`, [status, id]);
-        } else {
-          throw new Error("Unknown action");
-        }
-
-        return Response.redirect(`/locations?success=${encodeURIComponent("Saved")}`, 303);
-      } catch (err) {
-        const errorMessage = "An unexpected error occurred. Please try again.";
-        return Response.redirect(`/locations?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
 
@@ -2973,131 +2793,6 @@ async function getAddData(serviceTag: string, userPlantId: number | null = null,
   } as unknown as AddDataType;
 }
 
-async function getLocationsData(): Promise<LocationsDataType> {
-  const [
-    [regions],
-    [countries],
-    [plants],
-    [departments],
-    [areas],
-    [subAreas]
-  ] = await Promise.all([
-    pool.query<RowDataPacket[]>(`WITH latest AS (
-        SELECT l1.equipment_id, l1.equipment_sub_area_id
-        FROM it_equipment_log l1
-        JOIN (
-          SELECT equipment_id, MAX(created) AS max_created
-          FROM it_equipment_log
-          GROUP BY equipment_id
-        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
-      )
-      SELECT r.id, r.name, r.status,
-        COUNT(lat.equipment_id) as equipment_count
-      FROM it_equipment_region r
-      LEFT JOIN it_equipment_country c ON c.region_id = r.id
-      LEFT JOIN it_equipment_plant p ON p.country_id = c.id
-      LEFT JOIN it_equipment_department d ON d.plant_id = p.id
-      LEFT JOIN it_equipment_area a ON a.department_id = d.id
-      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
-      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
-      GROUP BY r.id
-      ORDER BY r.name`),
-    pool.query<RowDataPacket[]>(`WITH latest AS (
-        SELECT l1.equipment_id, l1.equipment_sub_area_id
-        FROM it_equipment_log l1
-        JOIN (
-          SELECT equipment_id, MAX(created) AS max_created
-          FROM it_equipment_log
-          GROUP BY equipment_id
-        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
-      )
-      SELECT c.id, c.name, c.region_id as parent_id, c.status,
-        COUNT(lat.equipment_id) as equipment_count
-      FROM it_equipment_country c
-      LEFT JOIN it_equipment_plant p ON p.country_id = c.id
-      LEFT JOIN it_equipment_department d ON d.plant_id = p.id
-      LEFT JOIN it_equipment_area a ON a.department_id = d.id
-      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
-      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
-      GROUP BY c.id
-      ORDER BY c.name`),
-    pool.query<RowDataPacket[]>(`WITH latest AS (
-        SELECT l1.equipment_id, l1.equipment_sub_area_id
-        FROM it_equipment_log l1
-        JOIN (
-          SELECT equipment_id, MAX(created) AS max_created
-          FROM it_equipment_log
-          GROUP BY equipment_id
-        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
-      )
-      SELECT p.id, p.name, p.country_id as parent_id, p.status,
-        COUNT(lat.equipment_id) as equipment_count
-      FROM it_equipment_plant p
-      LEFT JOIN it_equipment_department d ON d.plant_id = p.id
-      LEFT JOIN it_equipment_area a ON a.department_id = d.id
-      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
-      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
-      GROUP BY p.id
-      ORDER BY p.name`),
-    pool.query<RowDataPacket[]>(`WITH latest AS (
-        SELECT l1.equipment_id, l1.equipment_sub_area_id
-        FROM it_equipment_log l1
-        JOIN (
-          SELECT equipment_id, MAX(created) AS max_created
-          FROM it_equipment_log
-          GROUP BY equipment_id
-        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
-      )
-      SELECT d.id, d.name, d.plant_id as parent_id, d.status,
-        COUNT(lat.equipment_id) as equipment_count
-      FROM it_equipment_department d
-      LEFT JOIN it_equipment_area a ON a.department_id = d.id
-      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
-      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
-      GROUP BY d.id
-      ORDER BY d.name`),
-    pool.query<RowDataPacket[]>(`WITH latest AS (
-        SELECT l1.equipment_id, l1.equipment_sub_area_id
-        FROM it_equipment_log l1
-        JOIN (
-          SELECT equipment_id, MAX(created) AS max_created
-          FROM it_equipment_log
-          GROUP BY equipment_id
-        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
-      )
-      SELECT a.id, a.name, a.department_id as parent_id, a.status,
-        COUNT(lat.equipment_id) as equipment_count
-      FROM it_equipment_area a
-      LEFT JOIN it_equipment_sub_area sa ON sa.area_id = a.id
-      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
-      GROUP BY a.id
-      ORDER BY a.name`),
-    pool.query<RowDataPacket[]>(`WITH latest AS (
-        SELECT l1.equipment_id, l1.equipment_sub_area_id
-        FROM it_equipment_log l1
-        JOIN (
-          SELECT equipment_id, MAX(created) AS max_created
-          FROM it_equipment_log
-          GROUP BY equipment_id
-        ) l2 ON l1.equipment_id = l2.equipment_id AND l1.created = l2.max_created
-      )
-      SELECT sa.id, sa.name, sa.area_id as parent_id, sa.status,
-        COUNT(lat.equipment_id) as equipment_count
-      FROM it_equipment_sub_area sa
-      LEFT JOIN latest lat ON lat.equipment_sub_area_id = sa.id
-      GROUP BY sa.id
-      ORDER BY sa.name`)
-  ]);
-
-  return {
-    regions,
-    countries,
-    plants,
-    departments,
-    areas,
-    subAreas
-  } as unknown as LocationsDataType;
-}
 
 
 
