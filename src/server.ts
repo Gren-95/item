@@ -5,7 +5,6 @@ import { searchPage } from "./templates/search";
 import { editPage } from "./templates/edit";
 import { addPage } from "./templates/add";
 import { locationsPage } from "./templates/locations";
-import { typesPage } from "./templates/types";
 import { logger } from "./utils/logger";
 import { getSessionFromRequest } from "./utils/session";
 import { withSecurityHeaders } from "./utils/security";
@@ -21,6 +20,7 @@ import { registerApiCrudRoutes } from "./routes/api-crud";
 import { registerPermissionsRoutes } from "./routes/permissions";
 import { registerApprovalsRoutes } from "./routes/approvals";
 import { registerVendorsRoutes } from "./routes/vendors";
+import { registerTypesRoutes } from "./routes/equipment-types";
 import { escapeHtml } from "./templates/components";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification } from "./utils/email";
@@ -36,11 +36,6 @@ import {
   hasLocationsEditPermission,
   hasLocationsDeletePermission,
   hasManageLocationsPermission,
-  hasTypesViewPermission,
-  hasTypesAddPermission,
-  hasTypesEditPermission,
-  hasTypesDeletePermission,
-  hasManageTypesPermission,
   hasRepairsSendPermission,
   hasPcPwViewPermission,
   isAdminUser,
@@ -49,7 +44,6 @@ import {
   equipmentAddSchema,
   equipmentEditSchema,
   locationsActionSchema,
-  typesActionSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { runMigrations } from "./migrations/migrate";
@@ -176,6 +170,7 @@ registerApiCrudRoutes(router);
 registerPermissionsRoutes(router);
 registerApprovalsRoutes(router);
 registerVendorsRoutes(router);
+registerTypesRoutes(router);
 
 async function handleRequest(req: Request): Promise<Response> {
   const ctx = createInitialContext(req, pool);
@@ -1336,302 +1331,6 @@ async function handleRequest(req: Request): Promise<Response> {
       } catch (err) {
         const errorMessage = "An unexpected error occurred. Please try again.";
         return Response.redirect(`/locations?error=${encodeURIComponent(errorMessage)}`, 303);
-      }
-    }
-
-    // Types management - GET
-    if (path === "/types" && req.method === "GET") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/types", 302);
-      }
-
-      // Check view types permission
-      const userPlantId = await getUserPlantId(session.username, pool);
-      const hasView = await hasTypesViewPermission(session.username, pool, userPlantId);
-      if (!hasView) {
-        const { errorPage } = await import("./templates/error");
-        return new Response(
-          errorPage(
-            "Access Denied",
-            "You do not have permission to view types/configurations.",
-            "You need the 'types_view' or 'types_edit' permission to access this page. Please contact your administrator if you need access.",
-            403,
-            isAdmin,
-            hasPcPwView,
-            session.username,
-            hasAuditApprover
-          ),
-          {
-            status: 403,
-            headers: { "Content-Type": "text/html" },
-          }
-        );
-      }
-
-      const success = url.searchParams.get("success") || "";
-      const error = url.searchParams.get("error") || "";
-      const data = await getTypesData();
-      return new Response(typesPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    // Types management - POST (add/edit/activate/deactivate)
-    if (path === "/types" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/types", 302);
-      }
-
-      // Check manage types permission
-      const hasManageTypes = await hasManageTypesPermission(session.username, pool);
-      if (!hasManageTypes) {
-        return Response.redirect("/types?error=" + encodeURIComponent("You do not have permission to manage types/configurations"), 303);
-      }
-
-      const form = await req.formData();
-      const rawData = {
-        type: (form.get("type") || "").toString(),
-        action: (form.get("action") || "").toString(),
-        name: form.get("name") ? form.get("name")!.toString().trim() : undefined,
-        id: form.get("id") ? form.get("id")!.toString() : undefined,
-        parent_id: form.get("parent_id") ? form.get("parent_id")!.toString() : undefined,
-      };
-
-      try {
-        const validated = typesActionSchema.parse(rawData);
-        const action = validated.action;
-        const id = validated.id ? Number(validated.id) : null;
-        const name = validated.name;
-        const parent_id = validated.parent_id ? Number(validated.parent_id) : null;
-
-        const employeeNo = await getEmployeeNo(session.username, pool);
-        const clientIp = getClientIp(req);
-        const userPlantId = await getUserPlantId(session.username, pool);
-
-        if (validated.type === "type") {
-          if (action === "add") {
-            const hasAdd = await hasTypesAddPermission(session.username, pool, userPlantId);
-            if (!hasAdd) {
-              if (!employeeNo) {
-                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_types_add` : "types_add",
-                "add_type",
-                { type: "type", name },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query(
-              "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)",
-              [name!]
-            );
-          } else if (action === "edit") {
-            const hasEdit = await hasTypesEditPermission(session.username, pool, userPlantId);
-            if (!hasEdit) {
-              if (!employeeNo) {
-                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_types_edit` : "types_edit",
-                "edit_type",
-                { type: "type", id, name },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query("UPDATE it_equipment_type SET type_name = ? WHERE id = ?", [name!, id!]);
-          } else if (action === "deactivate" || action === "activate") {
-            const hasDelete = await hasTypesDeletePermission(session.username, pool, userPlantId);
-            if (!hasDelete) {
-              if (!employeeNo) {
-                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_types_delete` : "types_delete",
-                action === "activate" ? "activate_type" : "deactivate_type",
-                { type: "type", id, action },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            const status = action === "activate" ? 1 : 0;
-            await pool.query("UPDATE it_equipment_type SET status = ? WHERE id = ?", [status, id!]);
-          } else {
-            throw new Error("Unknown action");
-          }
-        } else if (validated.type === "product-line") {
-          if (action === "add") {
-            const hasAdd = await hasTypesAddPermission(session.username, pool, userPlantId);
-            if (!hasAdd) {
-              if (!employeeNo) {
-                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_types_add` : "types_add",
-                "add_product_line",
-                { type: "product-line", name, parent_id },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query(
-              "INSERT INTO it_equipment_product_line (name, type_id, status) VALUES (?, ?, 1)",
-              [name!, parent_id!]
-            );
-          } else if (action === "edit") {
-            const hasEdit = await hasTypesEditPermission(session.username, pool, userPlantId);
-            if (!hasEdit) {
-              if (!employeeNo) {
-                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_types_edit` : "types_edit",
-                "edit_product_line",
-                { type: "product-line", id, name },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query("UPDATE it_equipment_product_line SET name = ? WHERE id = ?", [name!, id!]);
-          } else if (action === "deactivate" || action === "activate") {
-            const hasDelete = await hasTypesDeletePermission(session.username, pool, userPlantId);
-            if (!hasDelete) {
-              if (!employeeNo) {
-                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_types_delete` : "types_delete",
-                action === "activate" ? "activate_product_line" : "deactivate_product_line",
-                { type: "product-line", id, action },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            const status = action === "activate" ? 1 : 0;
-            await pool.query("UPDATE it_equipment_product_line SET status = ? WHERE id = ?", [status, id!]);
-          } else {
-            throw new Error("Unknown action");
-          }
-        } else if (validated.type === "model") {
-          if (action === "add") {
-            const hasAdd = await hasTypesAddPermission(session.username, pool, userPlantId);
-            if (!hasAdd) {
-              if (!employeeNo) {
-                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                "types_add",
-                "add_model",
-                { type: "model", name, parent_id },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query(
-              "INSERT INTO it_equipment_model (name, product_line_id, status) VALUES (?, ?, 1)",
-              [name!, parent_id!]
-            );
-          } else if (action === "edit") {
-            const hasEdit = await hasTypesEditPermission(session.username, pool, userPlantId);
-            if (!hasEdit) {
-              if (!employeeNo) {
-                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_types_edit` : "types_edit",
-                "edit_model",
-                { type: "model", id, name },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query("UPDATE it_equipment_model SET name = ? WHERE id = ?", [name!, id!]);
-          } else if (action === "deactivate" || action === "activate") {
-            const hasDelete = await hasTypesDeletePermission(session.username, pool, userPlantId);
-            if (!hasDelete) {
-              if (!employeeNo) {
-                return Response.redirect("/types?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_types_delete` : "types_delete",
-                action === "activate" ? "activate_model" : "deactivate_model",
-                { type: "model", id, action },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/types?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/types?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            const status = action === "activate" ? 1 : 0;
-            await pool.query("UPDATE it_equipment_model SET status = ? WHERE id = ?", [status, id!]);
-          } else {
-            throw new Error("Unknown action");
-          }
-        } else {
-          throw new Error("Unknown type");
-        }
-
-        return Response.redirect(`/types?success=${encodeURIComponent("Saved")}`, 303);
-      } catch (err) {
-        const errorMessage = "An unexpected error occurred. Please try again.";
-        logger.error("Failed to manage type/model", err, { traceId, rawData });
-        return Response.redirect(`/types?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
 
@@ -3402,71 +3101,6 @@ async function getLocationsData(): Promise<LocationsDataType> {
 
 
 
-async function getTypesData() {
-  const [types, models, productLines] = await Promise.all([
-    pool.query<RowDataPacket[]>(`
-      SELECT 
-        t.id,
-        t.type_name as name,
-        t.status,
-        COUNT(DISTINCT e.id) as equipment_count
-      FROM it_equipment_type t
-      LEFT JOIN it_equipment_product_line pl ON pl.type_id = t.id
-      LEFT JOIN it_equipment_model m ON m.product_line_id = pl.id
-      LEFT JOIN it_equipment e ON e.model_id = m.id
-      GROUP BY t.id, t.type_name, t.status
-      ORDER BY t.type_name
-    `),
-    pool.query<RowDataPacket[]>(`
-      SELECT 
-        m.id,
-        m.name,
-        m.product_line_id as parent_id,
-        m.status,
-        COUNT(DISTINCT e.id) as equipment_count
-      FROM it_equipment_model m
-      LEFT JOIN it_equipment e ON e.model_id = m.id
-      GROUP BY m.id, m.name, m.product_line_id, m.status
-      ORDER BY m.name
-    `),
-    pool.query<RowDataPacket[]>(`
-      SELECT 
-        pl.id,
-        pl.name,
-        pl.type_id as parent_id,
-        pl.status,
-        COUNT(DISTINCT e.id) as equipment_count
-      FROM it_equipment_product_line pl
-      LEFT JOIN it_equipment_model m ON m.product_line_id = pl.id
-      LEFT JOIN it_equipment e ON e.model_id = m.id
-      GROUP BY pl.id, pl.name, pl.type_id, pl.status
-      ORDER BY pl.name
-    `),
-  ]);
-
-  return {
-    types: types[0].map((t) => ({
-      id: t.id,
-      name: t.name,
-      status: t.status ? 1 : 0,
-      equipment_count: Number(t.equipment_count) || 0,
-    })),
-    models: models[0].map((m) => ({
-      id: m.id,
-      name: m.name,
-      parent_id: m.parent_id,
-      status: m.status ? 1 : 0,
-      equipment_count: Number(m.equipment_count) || 0,
-    })),
-    productLines: productLines[0].map((pl) => ({
-      id: pl.id,
-      name: pl.name,
-      parent_id: pl.parent_id,
-      status: pl.status ? 1 : 0,
-      equipment_count: Number(pl.equipment_count) || 0,
-    })),
-  };
-}
 
 // Run migrations on startup (before starting server)
 try {
