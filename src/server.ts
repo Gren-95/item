@@ -6,8 +6,6 @@ import { editPage } from "./templates/edit";
 import { addPage } from "./templates/add";
 import { locationsPage } from "./templates/locations";
 import { typesPage } from "./templates/types";
-import { vendorsPage } from "./templates/vendors";
-import { writeOffPage } from "./templates/write-off";
 import { logger } from "./utils/logger";
 import { getSessionFromRequest } from "./utils/session";
 import { withSecurityHeaders } from "./utils/security";
@@ -22,6 +20,7 @@ import { registerPrintersRoutes } from "./routes/printers";
 import { registerApiCrudRoutes } from "./routes/api-crud";
 import { registerPermissionsRoutes } from "./routes/permissions";
 import { registerApprovalsRoutes } from "./routes/approvals";
+import { registerVendorsRoutes } from "./routes/vendors";
 import { escapeHtml } from "./templates/components";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification } from "./utils/email";
@@ -42,15 +41,6 @@ import {
   hasTypesEditPermission,
   hasTypesDeletePermission,
   hasManageTypesPermission,
-  hasVendorsViewPermission,
-  hasVendorsAddPermission,
-  hasVendorsEditPermission,
-  hasVendorsDeletePermission,
-  hasManageVendorsPermission,
-  hasWriteOffReasonsViewPermission,
-  hasWriteOffReasonsAddPermission,
-  hasWriteOffReasonsEditPermission,
-  hasWriteOffReasonsDeletePermission,
   hasRepairsSendPermission,
   hasPcPwViewPermission,
   isAdminUser,
@@ -60,9 +50,6 @@ import {
   equipmentEditSchema,
   locationsActionSchema,
   typesActionSchema,
-  vendorsActionSchema,
-  suppliersActionSchema,
-  writeOffReasonsActionSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { runMigrations } from "./migrations/migrate";
@@ -127,12 +114,6 @@ interface ApprovalRequestRow extends RowDataPacket {
   processor_comment: string | null;
 }
 
-interface WriteOffReasonRow extends RowDataPacket {
-  id: number;
-  reason: string;
-  equipment_count: number;
-}
-
 interface AuditPeriodRow extends RowDataPacket {
   id: number;
   name: string;
@@ -194,6 +175,7 @@ registerPrintersRoutes(router);
 registerApiCrudRoutes(router);
 registerPermissionsRoutes(router);
 registerApprovalsRoutes(router);
+registerVendorsRoutes(router);
 
 async function handleRequest(req: Request): Promise<Response> {
   const ctx = createInitialContext(req, pool);
@@ -1357,263 +1339,6 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Vendors & Suppliers management - GET
-    if (path === "/vendors" && req.method === "GET") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/vendors", 302);
-      }
-
-      // Check view vendors permission
-      const userPlantId = await getUserPlantId(session.username, pool);
-      const hasView = await hasVendorsViewPermission(session.username, pool, userPlantId);
-      if (!hasView) {
-        return new Response(
-          vendorsPage(await getVendorsAndSuppliersData(), "", "Actions require approval.", isAdmin, hasPcPwView, session.username),
-          {
-            headers: { "Content-Type": "text/html" },
-          }
-        );
-      }
-
-      const success = url.searchParams.get("success") || "";
-      const error = url.searchParams.get("error") || "";
-      const data = await getVendorsAndSuppliersData();
-      return new Response(vendorsPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    // Vendors & Suppliers management - POST (add/edit/delete)
-    if (path === "/vendors" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/vendors", 302);
-      }
-
-      // Check manage vendors permission
-      const hasManageVendors = await hasManageVendorsPermission(session.username, pool);
-      if (!hasManageVendors) {
-        return Response.redirect("/vendors?error=" + encodeURIComponent("You do not have permission to manage vendors/suppliers"), 303);
-      }
-
-      const form = await req.formData();
-      const entity = (form.get("entity") || "vendor").toString();
-      const rawCommon = {
-        action: (form.get("action") || "").toString(),
-        name: form.get("name") ? form.get("name")!.toString().trim() : undefined,
-        id: form.get("id") ? form.get("id")!.toString() : undefined,
-      };
-
-      try {
-        if (entity === "supplier") {
-          const rawSupplier = {
-            ...rawCommon,
-            email: form.get("email") ? form.get("email")!.toString().trim() : "",
-            phone_number: form.get("phone_number") ? form.get("phone_number")!.toString().trim() : "",
-            address: form.get("address") ? form.get("address")!.toString().trim() : "",
-            representative_name: form.get("representative_name") ? form.get("representative_name")!.toString().trim() : "",
-            sap_vendor_no: form.get("sap_vendor_no") ? form.get("sap_vendor_no")!.toString().trim() : "",
-            website: form.get("website") ? form.get("website")!.toString().trim() : "",
-          };
-
-          const validated = suppliersActionSchema.parse(rawSupplier);
-          const action = validated.action;
-          const id = validated.id ? Number(validated.id) : null;
-          const name = validated.name;
-          const email = validated.email || null;
-          const phone_number = validated.phone_number || null;
-          const address = validated.address || null;
-          const representative_name = validated.representative_name || null;
-          const sap_vendor_no = validated.sap_vendor_no ? Number(validated.sap_vendor_no) : null;
-          const website = validated.website || null;
-
-          const employeeNo = await getEmployeeNo(session.username, pool);
-          const clientIp = getClientIp(req);
-          const userPlantId = await getUserPlantId(session.username, pool);
-
-          if (action === "add") {
-            const hasAdd = await hasVendorsAddPermission(session.username, pool, userPlantId);
-            if (!hasAdd) {
-              if (!employeeNo) {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_vendors_add` : "vendors_add",
-                "add_supplier",
-                { entity: "supplier", name, email, phone_number, address, representative_name, sap_vendor_no, website },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query(
-              `INSERT INTO it_equipment_supplier (name, email, phone_number, address, representative_name, sap_vendor_no, website)
-               VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              [name!, email, phone_number, address, representative_name, sap_vendor_no, website]
-            );
-          } else if (action === "edit") {
-            const hasEdit = await hasVendorsEditPermission(session.username, pool, userPlantId);
-            if (!hasEdit) {
-              if (!employeeNo) {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_vendors_edit` : "vendors_edit",
-                "edit_supplier",
-                { entity: "supplier", id, name, email, phone_number, address, representative_name, sap_vendor_no, website },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query(
-              `UPDATE it_equipment_supplier 
-                 SET name = ?, email = ?, phone_number = ?, address = ?, representative_name = ?, sap_vendor_no = ?, website = ?
-               WHERE id = ?`,
-              [name!, email, phone_number, address, representative_name, sap_vendor_no, website, id!]
-            );
-          } else if (action === "delete") {
-            const hasDelete = await hasVendorsDeletePermission(session.username, pool, userPlantId);
-            if (!hasDelete) {
-              if (!employeeNo) {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_vendors_delete` : "vendors_delete",
-                "delete_supplier",
-                { entity: "supplier", id },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            // Check if supplier is in use
-            const [equipment] = await pool.query<RowDataPacket[]>(
-              "SELECT COUNT(*) as count FROM it_equipment WHERE supplier_id = ?",
-              [id!]
-            );
-            if (equipment[0].count > 0) {
-              throw new Error("Cannot delete supplier that is in use");
-            }
-            await pool.query("DELETE FROM it_equipment_supplier WHERE id = ?", [id!]);
-          } else {
-            throw new Error("Unknown action");
-          }
-        } else if (entity === "vendor") {
-          const validated = vendorsActionSchema.parse(rawCommon);
-          const action = validated.action;
-          const id = validated.id ? Number(validated.id) : null;
-          const name = validated.name;
-
-          const employeeNo = await getEmployeeNo(session.username, pool);
-          const clientIp = getClientIp(req);
-          const userPlantId = await getUserPlantId(session.username, pool);
-
-          if (action === "add") {
-            const hasAdd = await hasVendorsAddPermission(session.username, pool, userPlantId);
-            if (!hasAdd) {
-              if (!employeeNo) {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_vendors_add` : "vendors_add",
-                "add_vendor",
-                { entity: "vendor", name },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query(
-              "INSERT INTO it_equipment_vendor (name) VALUES (?)",
-              [name!]
-            );
-          } else if (action === "edit") {
-            const hasEdit = await hasVendorsEditPermission(session.username, pool, userPlantId);
-            if (!hasEdit) {
-              if (!employeeNo) {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_vendors_edit` : "vendors_edit",
-                "edit_vendor",
-                { entity: "vendor", id, name },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            await pool.query("UPDATE it_equipment_vendor SET name = ? WHERE id = ?", [name!, id!]);
-          } else if (action === "delete") {
-            const hasDelete = await hasVendorsDeletePermission(session.username, pool, userPlantId);
-            if (!hasDelete) {
-              if (!employeeNo) {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-              }
-              const requestId = await createApprovalRequest(
-                employeeNo,
-                userPlantId ? `${userPlantId}_vendors_delete` : "vendors_delete",
-                "delete_vendor",
-                { entity: "vendor", id },
-                clientIp,
-                pool
-              );
-              if (requestId) {
-                return Response.redirect("/vendors?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-              } else {
-                return Response.redirect("/vendors?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-              }
-            }
-            // Check if vendor is in use
-            const [equipment] = await pool.query<RowDataPacket[]>(
-              "SELECT COUNT(*) as count FROM it_equipment WHERE vendor_id = ?",
-              [id!]
-            );
-            if (equipment[0].count > 0) {
-              throw new Error("Cannot delete vendor that is in use");
-            }
-            await pool.query("DELETE FROM it_equipment_vendor WHERE id = ?", [id!]);
-          } else {
-            throw new Error("Unknown action");
-          }
-        } else {
-          throw new Error("Unknown entity");
-        }
-
-        return Response.redirect(`/vendors?success=${encodeURIComponent("Saved")}`, 303);
-      } catch (err) {
-        const errorMessage = "An unexpected error occurred. Please try again.";
-        logger.error("Failed to manage vendor/supplier", err, { traceId, action: rawCommon.action, entity });
-        return Response.redirect(`/vendors?error=${encodeURIComponent(errorMessage)}`, 303);
-      }
-    }
-
     // Types management - GET
     if (path === "/types" && req.method === "GET") {
       const session = getSessionFromRequest(req);
@@ -1907,166 +1632,6 @@ async function handleRequest(req: Request): Promise<Response> {
         const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to manage type/model", err, { traceId, rawData });
         return Response.redirect(`/types?error=${encodeURIComponent(errorMessage)}`, 303);
-      }
-    }
-
-    // Write-Off Reasons management - GET
-    if (path === "/write-off-reasons" && req.method === "GET") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/write-off-reasons", 302);
-      }
-
-      // Check view write-off reasons permission
-      const userPlantId = await getUserPlantId(session.username, pool);
-      const hasView = await hasWriteOffReasonsViewPermission(session.username, pool, userPlantId);
-      if (!hasView) {
-        return new Response(
-          writeOffPage(await getWriteOffReasonsData(), "", "Actions require approval.", isAdmin, hasPcPwView, session.username, hasAuditApprover),
-          {
-            headers: { "Content-Type": "text/html" },
-          }
-        );
-      }
-
-      const success = url.searchParams.get("success") || "";
-      const error = url.searchParams.get("error") || "";
-      const data = await getWriteOffReasonsData();
-      return new Response(writeOffPage(data, success, error, isAdmin, hasPcPwView, session.username, hasAuditApprover), {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    // Write-Off Reasons management - POST (add/edit/delete)
-    if (path === "/write-off-reasons" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/write-off-reasons", 302);
-      }
-
-      const form = await req.formData();
-      const rawData = {
-        action: (form.get("action") || "").toString(),
-        reason: form.get("reason") ? form.get("reason")!.toString().trim() : undefined,
-        id: form.get("id") ? form.get("id")!.toString() : undefined,
-      };
-
-      try {
-        const validated = writeOffReasonsActionSchema.parse(rawData);
-        const action = validated.action;
-        const id = validated.id ? Number(validated.id) : null;
-        const reason = validated.reason;
-        const userPlantId = await getUserPlantId(session.username, pool);
-
-        if (action === "add") {
-          const hasAdd = await hasWriteOffReasonsAddPermission(session.username, pool, userPlantId);
-          if (!hasAdd) {
-            const employeeNo = await getEmployeeNo(session.username, pool);
-            const clientIp = getClientIp(req);
-
-            if (!employeeNo) {
-              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-            }
-
-            const requestId = await createApprovalRequest(
-              employeeNo,
-              userPlantId ? `${userPlantId}_write_off_reasons_add` : "write_off_reasons_add",
-              "add_write_off_reason",
-              { reason },
-              clientIp,
-              pool
-            );
-
-            if (requestId) {
-              return Response.redirect("/write-off-reasons?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-            } else {
-              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Failed to create approval request"), 303);
-            }
-          }
-          if (!reason) throw new Error("Reason is required");
-          await pool.query(
-            "INSERT INTO it_equipment_write_off_reason (reason) VALUES (?)",
-            [reason]
-          );
-        } else if (action === "edit") {
-          const employeeNo = await getEmployeeNo(session.username, pool);
-          const clientIp = getClientIp(req);
-          const hasEdit = await hasWriteOffReasonsEditPermission(session.username, pool, userPlantId);
-          if (!hasEdit) {
-            if (!employeeNo) {
-              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-            }
-
-            const requestId = await createApprovalRequest(
-              employeeNo,
-              userPlantId ? `${userPlantId}_write_off_reasons_edit` : "write_off_reasons_edit",
-              "edit_write_off_reason",
-              { id, reason },
-              clientIp,
-              pool
-            );
-
-            if (requestId) {
-              return Response.redirect("/write-off-reasons?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-            } else {
-              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-            }
-          }
-          if (!id) throw new Error("ID is required");
-          if (!reason) throw new Error("Reason is required");
-          await pool.query("UPDATE it_equipment_write_off_reason SET reason = ? WHERE id = ?", [reason, id]);
-        } else if (action === "delete") {
-          const employeeNo = await getEmployeeNo(session.username, pool);
-          const clientIp = getClientIp(req);
-          const hasDelete = await hasWriteOffReasonsDeletePermission(session.username, pool, userPlantId);
-          if (!hasDelete) {
-            if (!employeeNo) {
-              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-            }
-
-            // Check if reason is in use first
-            const [inUse] = await pool.query<RowDataPacket[]>(
-              "SELECT COUNT(*) as count FROM it_equipment WHERE is_written_off = ?",
-              [id]
-            );
-            if (inUse[0].count > 0) {
-              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Cannot delete write-off reason that is in use"), 303);
-            }
-
-            const requestId = await createApprovalRequest(
-              employeeNo,
-              userPlantId ? `${userPlantId}_write_off_reasons_delete` : "write_off_reasons_delete",
-              "delete_write_off_reason",
-              { id },
-              clientIp,
-              pool
-            );
-
-            if (requestId) {
-              return Response.redirect("/write-off-reasons?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-            } else {
-              return Response.redirect("/write-off-reasons?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-            }
-          }
-          if (!id) throw new Error("ID is required");
-          // Check if reason is in use
-          const [inUse] = await pool.query<RowDataPacket[]>(
-            "SELECT COUNT(*) as count FROM it_equipment WHERE is_written_off = ?",
-            [id]
-          );
-          if (inUse[0].count > 0) {
-            throw new Error("Cannot delete write-off reason that is in use");
-          }
-          await pool.query("DELETE FROM it_equipment_write_off_reason WHERE id = ?", [id]);
-        } else {
-          throw new Error("Unknown action");
-        }
-
-        return Response.redirect(`/write-off-reasons?success=${encodeURIComponent("Saved")}`, 303);
-      } catch (err) {
-        const errorMessage = "An unexpected error occurred. Please try again.";
-        logger.error("Failed to manage write-off reason", err, { traceId, rawData });
-        return Response.redirect(`/write-off-reasons?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
 
@@ -3835,76 +3400,6 @@ async function getLocationsData(): Promise<LocationsDataType> {
   } as unknown as LocationsDataType;
 }
 
-async function getVendorsAndSuppliersData() {
-  const [vendors, suppliers] = await Promise.all([
-    pool.query<RowDataPacket[]>(`
-      SELECT 
-        v.id,
-        v.name,
-        COUNT(DISTINCT e.id) as equipment_count
-      FROM it_equipment_vendor v
-      LEFT JOIN it_equipment e ON e.vendor_id = v.id
-      GROUP BY v.id, v.name
-      ORDER BY v.name
-    `),
-    pool.query<RowDataPacket[]>(`
-      SELECT 
-        s.id,
-        s.name,
-        s.email,
-        s.phone_number,
-        s.address,
-        s.representative_name,
-        s.sap_vendor_no,
-        s.website,
-        COUNT(DISTINCT e.id) as equipment_count
-      FROM it_equipment_supplier s
-      LEFT JOIN it_equipment e ON e.supplier_id = s.id
-      GROUP BY s.id, s.name, s.email, s.phone_number, s.address, s.representative_name, s.sap_vendor_no, s.website
-      ORDER BY s.name
-    `),
-  ]);
-
-  return {
-    vendors: vendors[0].map((v) => ({
-      id: v.id,
-      name: v.name,
-      equipment_count: Number(v.equipment_count) || 0,
-    })),
-    suppliers: suppliers[0].map((s) => ({
-      id: s.id,
-      name: s.name,
-      email: s.email || "",
-      phone_number: s.phone_number || "",
-      address: s.address || "",
-      representative_name: s.representative_name || "",
-      sap_vendor_no: s.sap_vendor_no === null || s.sap_vendor_no === undefined ? null : Number(s.sap_vendor_no),
-      website: s.website || "",
-      equipment_count: Number(s.equipment_count) || 0,
-    })),
-  };
-}
-
-async function getWriteOffReasonsData() {
-  const [writeOffReasons] = await pool.query<RowDataPacket[]>(`
-    SELECT 
-      wor.id,
-      wor.reason,
-      COUNT(DISTINCT e.id) as equipment_count
-    FROM it_equipment_write_off_reason wor
-    LEFT JOIN it_equipment e ON e.is_written_off = wor.id
-    GROUP BY wor.id, wor.reason
-    ORDER BY wor.reason
-  `);
-
-  return {
-    writeOffReasons: (writeOffReasons as WriteOffReasonRow[]).map((w) => ({
-      id: w.id,
-      reason: w.reason,
-      equipment_count: Number(w.equipment_count) || 0,
-    })),
-  };
-}
 
 
 async function getTypesData() {
