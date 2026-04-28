@@ -8,10 +8,8 @@ import { locationsPage } from "./templates/locations";
 import { typesPage } from "./templates/types";
 import { vendorsPage } from "./templates/vendors";
 import { writeOffPage } from "./templates/write-off";
-import { repairsPage } from "./templates/repairs";
 import { permissionsPage } from "./templates/permissions";
 import { approvalsPage } from "./templates/approvals";
-import { labelPrintingPage } from "./templates/label-printing";
 import { logger } from "./utils/logger";
 import { getSessionFromRequest } from "./utils/session";
 import { withSecurityHeaders, isRateLimited } from "./utils/security";
@@ -21,6 +19,7 @@ import { registerAuthRoutes } from "./routes/auth";
 import { registerSystemRoutes, tryServeStatic } from "./routes/system";
 import { registerLabelsRoutes } from "./routes/labels";
 import { registerApiRoutes } from "./routes/api";
+import { registerRepairsRoutes } from "./routes/repairs";
 import { escapeHtml } from "./templates/components";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification, sendApprovalDecisionNotification, verifyApprovalToken } from "./utils/email";
@@ -28,7 +27,6 @@ import { startScheduler } from "./utils/scheduler";
 import { parseEstonianDate } from "./utils/date";
 import {
   hasAdminPermission,
-  hasPermission,
   hasAddEquipmentPermission,
   hasEditEquipmentPermission,
   getUserPlantId,
@@ -51,8 +49,6 @@ import {
   hasWriteOffReasonsAddPermission,
   hasWriteOffReasonsEditPermission,
   hasWriteOffReasonsDeletePermission,
-  hasManageWriteOffReasonsPermission,
-  hasRepairsPermission,
   hasRepairsSendPermission,
   hasPcPwViewPermission,
   isAdminUser,
@@ -136,24 +132,6 @@ interface WriteOffReasonRow extends RowDataPacket {
   id: number;
   reason: string;
   equipment_count: number;
-}
-
-type RepairStatus = "needs_repair" | "at_supplier" | "returned" | "in_backup" | null;
-
-interface RepairItemRow extends RowDataPacket {
-  id: number;
-  service_tag: string;
-  model_name: string | null;
-  vendor_name: string | null;
-  supplier_name: string | null;
-  supplier_email: string | null;
-  repair_status: RepairStatus;
-  repair_note: string | null;
-  repair_physical_location: string | null;
-  repair_sent_date: Date | null;
-  repair_returned_date: Date | null;
-  repair_marked_backup_date: Date | null;
-  days_in_repair: number | null;
 }
 
 interface AuditPeriodRow extends RowDataPacket {
@@ -518,6 +496,7 @@ registerSystemRoutes(router);
 registerAuthRoutes(router);
 registerLabelsRoutes(router);
 registerApiRoutes(router);
+registerRepairsRoutes(router);
 
 async function handleRequest(req: Request): Promise<Response> {
   const ctx = createInitialContext(req, pool);
@@ -2953,171 +2932,6 @@ async function handleRequest(req: Request): Promise<Response> {
         const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Failed to manage write-off reason", err, { traceId, rawData });
         return Response.redirect(`/write-off-reasons?error=${encodeURIComponent(errorMessage)}`, 303);
-      }
-    }
-
-    // Repair Tracking - GET
-    if (path === "/repairs" && req.method === "GET") {
-      // Repairs page is public (no login required), but check permission if logged in
-      const session = getSessionFromRequest(req);
-      let repairsIsAdmin = false;
-      let repairsHasPcPwView = false;
-      let repairsHasAuditApprover = false;
-
-      if (session) {
-        // Calculate permissions for logged-in users (since this is a public route, global vars aren't set)
-        repairsIsAdmin = await hasAdminPermission(session.username, pool);
-        repairsHasPcPwView = await hasPcPwViewPermission(session.username, pool);
-        const userPlantId = await getUserPlantId(session.username, pool);
-        repairsHasAuditApprover = repairsIsAdmin || await hasPermission(session.username, pool, "audit-approver", userPlantId, true);
-
-        // Check repairs permission for logged-in users
-        const hasRepairs = await hasRepairsPermission(session.username, pool, userPlantId);
-        if (!hasRepairs) {
-          const { errorPage } = await import("./templates/error");
-          return new Response(
-            errorPage(
-              "Access Denied",
-              "You do not have permission to view repairs.",
-              "You need the 'repairs' permission to access this page. Please contact your administrator if you need access.",
-              403,
-              repairsIsAdmin,
-              repairsHasPcPwView,
-              session.username,
-              repairsHasAuditApprover
-            ),
-            {
-              status: 403,
-              headers: { "Content-Type": "text/html" },
-            }
-          );
-        }
-      }
-
-      const success = url.searchParams.get("success") || "";
-      const error = url.searchParams.get("error") || "";
-      const data = await getRepairsData();
-      return new Response(repairsPage(data, success, error, repairsIsAdmin, repairsHasPcPwView, session?.username || null, repairsHasAuditApprover), {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    // Repair Tracking - POST (status changes)
-    if (path === "/repairs" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/repairs", 302);
-      }
-
-      const form = await req.formData();
-      const rawData = {
-        action: (form.get("action") || "").toString(),
-        equipment_id: form.get("equipment_id") ? form.get("equipment_id")!.toString() : undefined,
-      };
-
-      try {
-        const action = rawData.action;
-        const equipmentId = rawData.equipment_id ? Number(rawData.equipment_id) : null;
-
-        if (!equipmentId) {
-          throw new Error("Equipment ID is required");
-        }
-
-        // Determine required permission based on action
-        let permissionRequired = "repairs";
-        let actionType = "";
-        let hasPermission = false;
-        const userPlantId = await getUserPlantId(session.username, pool);
-
-        if (action === "mark_sent") {
-          hasPermission = await hasRepairsSendPermission(session.username, pool, userPlantId);
-          permissionRequired = "repairs_send";
-          actionType = "send_to_repair";
-        } else {
-          // mark_returned and mark_backup use general repairs permission
-          hasPermission = await hasRepairsPermission(session.username, pool, userPlantId);
-          actionType = action === "mark_returned" ? "return_from_repair" : "mark_backup";
-        }
-
-        // If no permission, create approval request
-        if (!hasPermission) {
-          const employeeNo = await getEmployeeNo(session.username, pool);
-          const clientIp = getClientIp(req);
-
-          if (!employeeNo) {
-            return Response.redirect("/repairs?error=" + encodeURIComponent("Unable to create approval request. Please contact your administrator."), 303);
-          }
-
-          const requestId = await createApprovalRequest(
-            employeeNo,
-            permissionRequired,
-            actionType,
-            { equipment_id: equipmentId },
-            clientIp,
-            pool
-          );
-
-          if (requestId) {
-            return Response.redirect("/repairs?success=" + encodeURIComponent("Approval request created (ID: " + requestId + ")"), 303);
-          } else {
-            return Response.redirect("/repairs?error=" + encodeURIComponent("Failed to create approval request. Please contact your administrator."), 303);
-          }
-        }
-
-        // User has permission, proceed with direct update
-        if (action === "mark_sent") {
-          await pool.query(
-            `UPDATE it_equipment
-             SET repair_status = 'at_supplier', repair_sent_date = CURRENT_DATE
-             WHERE id = ?`,
-            [equipmentId]
-          );
-        } else if (action === "mark_returned") {
-          await pool.query(
-            `UPDATE it_equipment
-             SET repair_status = 'returned', repair_returned_date = CURRENT_DATE
-             WHERE id = ?`,
-            [equipmentId]
-          );
-        } else if (action === "mark_backup") {
-          // Get service_tag for log entry
-          const [equipment] = await pool.query<RowDataPacket[]>(
-            `SELECT service_tag FROM it_equipment WHERE id = ?`,
-            [equipmentId]
-          );
-
-          if (equipment.length === 0) {
-            throw new Error("Equipment not found");
-          }
-
-          const service_tag = equipment[0].service_tag;
-
-          // Update equipment status and clear repair comment
-          await pool.query(
-            `UPDATE it_equipment
-             SET repair_status = 'in_backup',
-                 repair_marked_backup_date = CURRENT_DATE,
-                 repair_note = NULL
-             WHERE id = ?`,
-            [equipmentId]
-          );
-
-          // Insert log entry with empty location and user
-          await pool.query(
-            `INSERT INTO it_equipment_log (
-              equipment_id, service_tag, assigned_to, equipment_sub_area_id, comment
-            ) VALUES (?, ?, NULL, NULL, ?)`,
-            [equipmentId, service_tag, '']
-          );
-        } else {
-          throw new Error("Unknown action");
-        }
-
-        return Response.redirect(`/repairs?success=${encodeURIComponent("Status updated")}`, 303);
-      } catch (err) {
-        const errorMessage = "An unexpected error occurred. Please try again.";
-        logger.error("Failed to update repair status", err, { traceId, rawData });
-        return Response.redirect(`/repairs?error=${encodeURIComponent(errorMessage)}`, 303);
       }
     }
 
@@ -5565,112 +5379,6 @@ async function getWriteOffReasonsData() {
   };
 }
 
-async function getRepairsData() {
-  const [needsRepair, atSupplier, returned] = await Promise.all([
-    pool.query<RowDataPacket[]>(`
-      SELECT 
-        e.id,
-        e.service_tag,
-        m.name as model_name,
-        v.name as vendor_name,
-        s.name as supplier_name,
-        s.email as supplier_email,
-        e.repair_status,
-        e.repair_note,
-        e.repair_physical_location,
-        e.repair_sent_date,
-        e.repair_returned_date,
-        e.repair_marked_backup_date,
-        CASE 
-          WHEN e.repair_sent_date IS NOT NULL 
-          THEN DATEDIFF(CURRENT_DATE, e.repair_sent_date)
-          ELSE NULL
-        END as days_in_repair
-      FROM it_equipment e
-      LEFT JOIN it_equipment_model m ON e.model_id = m.id
-      LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
-      LEFT JOIN it_equipment_supplier s ON e.supplier_id = s.id
-      WHERE e.repair_status = 'needs_repair'
-      ORDER BY e.repair_sent_date DESC, e.service_tag
-    `),
-    pool.query<RowDataPacket[]>(`
-      SELECT 
-        e.id,
-        e.service_tag,
-        m.name as model_name,
-        v.name as vendor_name,
-        s.name as supplier_name,
-        s.email as supplier_email,
-        e.repair_status,
-        e.repair_note,
-        e.repair_physical_location,
-        e.repair_sent_date,
-        e.repair_returned_date,
-        e.repair_marked_backup_date,
-        CASE 
-          WHEN e.repair_sent_date IS NOT NULL 
-          THEN DATEDIFF(CURRENT_DATE, e.repair_sent_date)
-          ELSE NULL
-        END as days_in_repair
-      FROM it_equipment e
-      LEFT JOIN it_equipment_model m ON e.model_id = m.id
-      LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
-      LEFT JOIN it_equipment_supplier s ON e.supplier_id = s.id
-      WHERE e.repair_status = 'at_supplier'
-      ORDER BY e.repair_sent_date DESC, e.service_tag
-    `),
-    pool.query<RowDataPacket[]>(`
-      SELECT 
-        e.id,
-        e.service_tag,
-        m.name as model_name,
-        v.name as vendor_name,
-        s.name as supplier_name,
-        s.email as supplier_email,
-        e.repair_status,
-        e.repair_note,
-        e.repair_physical_location,
-        e.repair_sent_date,
-        e.repair_returned_date,
-        e.repair_marked_backup_date,
-        CASE 
-          WHEN e.repair_sent_date IS NOT NULL AND e.repair_returned_date IS NOT NULL
-          THEN DATEDIFF(e.repair_returned_date, e.repair_sent_date)
-          WHEN e.repair_sent_date IS NOT NULL
-          THEN DATEDIFF(CURRENT_DATE, e.repair_sent_date)
-          ELSE NULL
-        END as days_in_repair
-      FROM it_equipment e
-      LEFT JOIN it_equipment_model m ON e.model_id = m.id
-      LEFT JOIN it_equipment_vendor v ON e.vendor_id = v.id
-      LEFT JOIN it_equipment_supplier s ON e.supplier_id = s.id
-      WHERE e.repair_status = 'returned'
-      ORDER BY e.repair_returned_date DESC, e.service_tag
-    `),
-  ]);
-
-  const mapRepairItem = (item: RepairItemRow) => ({
-    id: item.id,
-    service_tag: item.service_tag,
-    model_name: item.model_name,
-    vendor_name: item.vendor_name,
-    supplier_name: item.supplier_name,
-    supplier_email: item.supplier_email,
-    repair_status: item.repair_status,
-    repair_note: item.repair_note,
-    repair_physical_location: item.repair_physical_location,
-    repair_sent_date: item.repair_sent_date ? item.repair_sent_date.toISOString().split('T')[0] : null,
-    repair_returned_date: item.repair_returned_date ? item.repair_returned_date.toISOString().split('T')[0] : null,
-    repair_marked_backup_date: item.repair_marked_backup_date ? item.repair_marked_backup_date.toISOString().split('T')[0] : null,
-    days_in_repair: item.days_in_repair !== null ? Number(item.days_in_repair) : null,
-  });
-
-  return {
-    needsRepair: (needsRepair[0] as RepairItemRow[]).map(mapRepairItem),
-    atSupplier: (atSupplier[0] as RepairItemRow[]).map(mapRepairItem),
-    returned: (returned[0] as RepairItemRow[]).map(mapRepairItem),
-  };
-}
 
 async function getTypesData() {
   const [types, models, productLines] = await Promise.all([
