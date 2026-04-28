@@ -21,11 +21,11 @@ import { registerApprovalsRoutes } from "./routes/approvals";
 import { registerVendorsRoutes } from "./routes/vendors";
 import { registerTypesRoutes } from "./routes/equipment-types";
 import { registerLocationsRoutes } from "./routes/locations";
+import { registerAuditRoutes } from "./routes/audit";
 import { escapeHtml } from "./templates/components";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification } from "./utils/email";
 import { startScheduler } from "./utils/scheduler";
-import { parseEstonianDate } from "./utils/date";
 import {
   hasAdminPermission,
   hasAddEquipmentPermission,
@@ -166,6 +166,7 @@ registerApprovalsRoutes(router);
 registerVendorsRoutes(router);
 registerTypesRoutes(router);
 registerLocationsRoutes(router);
+registerAuditRoutes(router);
 
 async function handleRequest(req: Request): Promise<Response> {
   const ctx = createInitialContext(req, pool);
@@ -188,117 +189,6 @@ async function handleRequest(req: Request): Promise<Response> {
   // Routes (legacy if/else — being migrated to routes/*.ts modules)
   try {
     // Inventory Periods - GET (redirect to review page)
-    if (path === "/inventory-periods" && req.method === "GET") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/inventory-audit/review", 302);
-      }
-
-      if (!isAdmin) {
-        const { errorPage } = await import("./templates/error");
-        return new Response(
-          errorPage(
-            "Access Denied",
-            "You do not have permission to access the Inventory Periods page.",
-            "You need administrative permissions to manage inventory periods. Please contact your administrator if you need access.",
-            403,
-            isAdmin,
-            hasPcPwView,
-            session.username,
-            hasAuditApprover
-          ),
-          {
-            status: 403,
-            headers: { "Content-Type": "text/html" }
-          }
-        );
-      }
-
-      // Redirect to review page with periods tab
-      return Response.redirect("/inventory-audit/review#periods", 302);
-    }
-
-    // Inventory Periods - POST (create/delete)
-    if (path === "/inventory-periods" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/inventory-audit/review", 302);
-      }
-
-      if (!isAdmin) {
-        return Response.redirect("/inventory-audit/review?error=" + encodeURIComponent("Access denied") + "#periods", 303);
-      }
-
-      const form = await req.formData();
-      const action = (form.get("action") || "").toString();
-
-      try {
-        if (action === "add") {
-          const startDateRaw = form.get("start_date")?.toString();
-          const endDateRaw = form.get("end_date")?.toString();
-          const comment = form.get("comment")?.toString() || null;
-
-          if (!startDateRaw || !endDateRaw) {
-            throw new Error("Start and end date are required");
-          }
-
-          const startDate = parseEstonianDate(startDateRaw) || startDateRaw;
-          const endDate = parseEstonianDate(endDateRaw) || endDateRaw;
-
-          // Auto-generate inventory_nr: INV-YYYY-QX-N
-          const start = new Date(startDate);
-          const year = start.getUTCFullYear();
-          const quarter = Math.floor(start.getUTCMonth() / 3) + 1;
-          const prefix = `INV-${year}-Q${quarter}`;
-
-          const [existing] = await pool.query<RowDataPacket[]>(
-            `SELECT inventory_nr FROM it_inventory_period WHERE inventory_nr LIKE ? ORDER BY inventory_nr DESC LIMIT 1`,
-            [`${prefix}-%`]
-          );
-
-          let nextSeq = 1;
-          if (existing.length > 0) {
-            const parts = existing[0].inventory_nr.split("-");
-            const last = parts[parts.length - 1];
-            const n = parseInt(last, 10);
-            if (!Number.isNaN(n)) {
-              nextSeq = n + 1;
-            }
-          }
-
-          const inventoryNr = `${prefix}-${nextSeq}`;
-
-          await pool.query(
-            `INSERT INTO it_inventory_period (inventory_nr, start_date, end_date, comment)
-             VALUES (?, ?, ?, ?)`,
-            [inventoryNr, startDate, endDate, comment]
-          );
-
-          return Response.redirect("/inventory-audit/review?success=" + encodeURIComponent("Inventory period created") + "#periods", 303);
-        }
-
-        if (action === "delete") {
-          const id = form.get("id")?.toString();
-          if (!id) {
-            throw new Error("Missing period id");
-          }
-
-          // Only allow delete when not confirmed
-          await pool.query(
-            `DELETE FROM it_inventory_period WHERE id = ? AND confirmed_by IS NULL`,
-            [id]
-          );
-
-          return Response.redirect("/inventory-audit/review?success=" + encodeURIComponent("Inventory period deleted") + "#periods", 303);
-        }
-
-        throw new Error("Unknown action");
-      } catch (err) {
-        const errorMessage = "An unexpected error occurred. Please try again.";
-        logger.error("Inventory periods action failed", err, { traceId });
-        return Response.redirect("/inventory-audit/review?error=" + encodeURIComponent(errorMessage) + "#periods", 303);
-      }
-    }
 
     // Home / Search page
     if (path === "/" && req.method === "GET") {
@@ -1152,11 +1042,6 @@ async function handleRequest(req: Request): Promise<Response> {
           headers: { "Content-Type": "text/html" },
         });
       }
-    }
-
-    // Audit - GET (redirect to review page)
-    if (path === "/inventory-audit" && req.method === "GET") {
-      return Response.redirect("/inventory-audit/review", 302);
     }
 
     // Audit - POST (save audit record)
