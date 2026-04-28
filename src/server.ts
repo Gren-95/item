@@ -88,14 +88,6 @@ interface SearchResult {
   isReadonly?: boolean;
 }
 
-interface PcPassword {
-  id: number;
-  user: string;
-  evocon: string | null;
-  pw: string;
-  status: number;
-}
-
 // Database row interfaces for type safety
 interface PlantRow extends RowDataPacket {
   id: number;
