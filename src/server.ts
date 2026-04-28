@@ -1,4 +1,4 @@
-import { serve, file } from "bun";
+import { serve } from "bun";
 import nodePath from "path";
 import pool from "./db";
 import { searchPage } from "./templates/search";
@@ -9,26 +9,22 @@ import { typesPage } from "./templates/types";
 import { vendorsPage } from "./templates/vendors";
 import { writeOffPage } from "./templates/write-off";
 import { repairsPage } from "./templates/repairs";
-import { loginPage } from "./templates/login";
-import { changePasswordPage } from "./templates/change-password";
 import { permissionsPage } from "./templates/permissions";
 import { approvalsPage } from "./templates/approvals";
-import { pcPwPage } from "./templates/pc-pw";
-import { printerLabelsPage } from "./templates/printer-labels";
 import { labelPrintingPage } from "./templates/label-printing";
 import { logger } from "./utils/logger";
-import { getSessionFromRequest, createSession, deleteSession, createSessionCookie, deleteSessionCookie } from "./utils/session";
+import { getSessionFromRequest } from "./utils/session";
 import { withSecurityHeaders, isRateLimited } from "./utils/security";
+import { applyAuthPreamble, createInitialContext, isPublicPath } from "./routes/context";
+import { Router } from "./routes/router";
+import { registerAuthRoutes } from "./routes/auth";
+import { registerSystemRoutes, tryServeStatic } from "./routes/system";
 import { escapeHtml } from "./templates/components";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification, sendApprovalDecisionNotification, verifyApprovalToken } from "./utils/email";
 import { startScheduler } from "./utils/scheduler";
-import { APP_VERSION } from "./utils/version";
 import { parseEstonianDate } from "./utils/date";
 import {
-  verifyCredentials,
-  changePassword,
-  hasItemLoginPermission,
   hasAdminPermission,
   hasPermission,
   hasAddEquipmentPermission,
@@ -58,8 +54,7 @@ import {
   hasRepairsSendPermission,
   hasPcPwViewPermission,
   hasPcPwEditPermission,
-  seedFullPermissionsForUser,
-  isAdminUser
+  isAdminUser,
 } from "./utils/auth";
 import {
   equipmentAddSchema,
@@ -72,10 +67,8 @@ import {
   writeOffReasonsActionSchema,
   printLabelSchema,
   printPrinterTagSchema,
-  changePasswordSchema,
 } from "./utils/validation";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
-import { randomUUID } from "crypto";
 import { runMigrations } from "./migrations/migrate";
 
 type AddDataType = Parameters<typeof addPage>[0];
@@ -527,156 +520,29 @@ async function executeApprovedAction(
   }
 }
 
+const router = new Router();
+registerSystemRoutes(router);
+registerAuthRoutes(router);
+
 async function handleRequest(req: Request): Promise<Response> {
-  const traceId = randomUUID();
-  const url = new URL(req.url);
-  const path = url.pathname;
+  const ctx = createInitialContext(req, pool);
+  const { traceId, url, path } = ctx;
 
   logger.info("Request received", { traceId, method: req.method, path });
 
-  // Static files
-  if (path === "/favicon.ico") {
-    const ico = file("./public/icons/favicon.ico");
-    if (await ico.exists()) {
-      return new Response(ico, { headers: { "Content-Type": "image/x-icon" } });
-    }
+  const staticResponse = await tryServeStatic(ctx);
+  if (staticResponse) return staticResponse;
+
+  if (!isPublicPath(path)) {
+    const denial = await applyAuthPreamble(ctx);
+    if (denial) return denial;
   }
+  const { currentUsername, isAdmin, hasPcPwView, hasAuditApprover } = ctx;
 
-  // Serve qr-scanner library files
-  if (path === "/js/qr-scanner.umd.min.js") {
-    const libFile = file("./node_modules/qr-scanner/qr-scanner.umd.min.js");
-    if (await libFile.exists()) {
-      return new Response(libFile, { headers: { "Content-Type": "application/javascript" } });
-    }
-    return new Response("Not found", { status: 404 });
-  }
-  if (path === "/js/qr-scanner-worker.min.js") {
-    const workerFile = file("./node_modules/qr-scanner/qr-scanner-worker.min.js");
-    if (await workerFile.exists()) {
-      return new Response(workerFile, { headers: { "Content-Type": "application/javascript" } });
-    }
-    return new Response("Not found", { status: 404 });
-  }
+  const routerResponse = await router.dispatch(ctx);
+  if (routerResponse) return routerResponse;
 
-  if (path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/icons/") || path === "/manifest.webmanifest") {
-    // Resolve and validate path stays within public directory to prevent traversal
-    const resolved = nodePath.resolve("./public", `.${path}`);
-    const publicDir = nodePath.resolve("./public");
-    if (!resolved.startsWith(publicDir)) {
-      return new Response("Forbidden", { status: 403 });
-    }
-    const staticFile = file(resolved);
-    if (await staticFile.exists()) {
-      return new Response(staticFile);
-    }
-    return new Response("Not found", { status: 404 });
-  }
-
-  // Health check endpoint
-  if (path === "/health" && req.method === "GET") {
-    try {
-      // Check database connection
-      await pool.query("SELECT 1");
-      return new Response(
-        JSON.stringify({
-          status: "healthy",
-          timestamp: new Date().toISOString(),
-          traceId,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    } catch (err) {
-      logger.error("Health check failed", err, { traceId });
-      return new Response(
-        JSON.stringify({
-          status: "unhealthy",
-          timestamp: new Date().toISOString(),
-          traceId,
-        }),
-        {
-          status: 503,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-  }
-
-  // Version endpoint (public, curlable)
-  if (path === "/api/version" && req.method === "GET") {
-    return new Response(
-      JSON.stringify({
-        version: APP_VERSION,
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-  }
-
-  // Public routes that don't require authentication
-  const publicRoutes = ["/login", "/logout", "/repairs", "/health", "/api/version"];
-  const isPublicRoute = publicRoutes.includes(path) || path.startsWith("/css/") || path.startsWith("/js/") || path.startsWith("/icons/") || path === "/manifest.webmanifest" || path === "/favicon.ico";
-
-  // Check authentication for protected routes and get admin status
-  let isAdmin = false;
-  let hasPcPwView = false;
-  let hasAuditApprover = false;
-  let currentUsername: string | null = null;
-  if (!isPublicRoute) {
-    const session = getSessionFromRequest(req);
-    if (!session) {
-      // Redirect to login page, preserving the original URL
-      const loginUrl = `/login?redirect=${encodeURIComponent(path)}`;
-      return Response.redirect(loginUrl, 302);
-    }
-    currentUsername = session.username;
-    // Check admin permission for authenticated users
-    logger.info("Checking admin permission", { traceId, username: session.username });
-    isAdmin = await hasAdminPermission(session.username, pool);
-    logger.info("Admin permission result", { traceId, username: session.username, isAdmin });
-
-    // Check PC passwords view permission for navigation menu
-    hasPcPwView = await hasPcPwViewPermission(session.username, pool);
-    logger.info("PC Passwords view permission", { traceId, username: session.username, hasPcPwView });
-
-    // Check audit-approver permission for navigation menu
-    const userPlantId = await getUserPlantId(session.username, pool);
-    hasAuditApprover = isAdmin || await hasPermission(session.username, pool, "audit-approver", userPlantId, true);
-    logger.info("Audit approver permission", { traceId, username: session.username, hasAuditApprover });
-
-    // CSRF protection: verify Origin/Referer header on state-changing requests
-    if (req.method === "POST" || req.method === "PUT" || req.method === "DELETE") {
-      const origin = req.headers.get("origin");
-      const referer = req.headers.get("referer");
-      const host = req.headers.get("host");
-      const contentType = req.headers.get("content-type") || "";
-      if (origin) {
-        const originHost = new URL(origin).host;
-        if (host && originHost !== host) {
-          logger.info("CSRF: Origin mismatch", { traceId, origin, host });
-          return new Response("Forbidden: cross-origin request", { status: 403 });
-        }
-      } else if (referer) {
-        const refererHost = new URL(referer).host;
-        if (host && refererHost !== host) {
-          logger.info("CSRF: Referer mismatch", { traceId, referer, host });
-          return new Response("Forbidden: cross-origin request", { status: 403 });
-        }
-      } else if (!contentType.includes("application/json")) {
-        // No Origin or Referer — reject form submissions (JSON APIs are exempt as
-        // they cannot be sent cross-origin by HTML forms without CORS preflight)
-        logger.info("CSRF: Missing Origin and Referer", { traceId, path });
-        return new Response("Forbidden: missing origin header", { status: 403 });
-      }
-    }
-  }
-
-  // Routes
+  // Routes (legacy if/else — being migrated to routes/*.ts modules)
   try {
     // Inventory Periods - GET (redirect to review page)
     if (path === "/inventory-periods" && req.method === "GET") {
@@ -788,177 +654,6 @@ async function handleRequest(req: Request): Promise<Response> {
         const errorMessage = "An unexpected error occurred. Please try again.";
         logger.error("Inventory periods action failed", err, { traceId });
         return Response.redirect("/inventory-audit/review?error=" + encodeURIComponent(errorMessage) + "#periods", 303);
-      }
-    }
-
-    // Login page - GET
-    if (path === "/login" && req.method === "GET") {
-      // If already logged in, redirect to home
-      const session = getSessionFromRequest(req);
-      if (session) {
-        const rawRedirect = url.searchParams.get("redirect") || "/";
-        const safeRedirect = rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : "/";
-        return Response.redirect(safeRedirect, 302);
-      }
-
-      const error = url.searchParams.get("error") || null;
-      const redirect = url.searchParams.get("redirect") || null;
-      return new Response(loginPage(error, redirect), {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    // Login page - POST
-    if (path === "/login" && req.method === "POST") {
-      // Rate limiting by IP — only check, don't increment yet (increment on failure only)
-      const serverAddr = (req as unknown as { socket?: { remoteAddress?: string } }).socket?.remoteAddress;
-      const clientIp = serverAddr || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-      if (isRateLimited(clientIp, false)) {
-        logger.info("Rate limited login attempt", { traceId, ip: clientIp });
-        return new Response(loginPage("Too many login attempts. Please try again later.", null), {
-          status: 429,
-          headers: { "Content-Type": "text/html" },
-        });
-      }
-
-      const formData = await req.formData();
-      const username = (formData.get("username") || "").toString().trim();
-      const password = (formData.get("password") || "").toString();
-      const redirect = (formData.get("redirect") || "").toString() || "/";
-
-      if (!username || !password) {
-        return new Response(loginPage("Username and password are required", redirect || null), {
-          headers: { "Content-Type": "text/html" },
-        });
-      }
-
-      try {
-        const isValid = await verifyCredentials(username, password);
-
-        if (!isValid) {
-          // Only count failed attempts toward the rate limit
-          isRateLimited(clientIp);
-          logger.info("Failed login attempt", { traceId, username, ip: clientIp });
-          return new Response(loginPage("Invalid username or password", redirect || null), {
-            headers: { "Content-Type": "text/html" },
-          });
-        }
-
-        // Check if user is admin user (bypasses permission checks)
-        const isAdmin = isAdminUser(username);
-        if (isAdmin) {
-          logger.info("Admin user logged in", { traceId, username });
-        }
-
-        // Check if user has item_login permission
-        const hasPermission = await hasItemLoginPermission(username, pool);
-
-        // On first login with no existing permissions, seed full permissions for this user
-        // Skip for admin user as they don't need database permissions
-        if (!isAdmin) {
-          const [legacyCount] = await pool.query<RowDataPacket[]>(
-            "SELECT COUNT(*) as count FROM it_user_permissions"
-          );
-          if (legacyCount[0].count === 0) {
-            await seedFullPermissionsForUser(username, pool);
-          }
-        }
-
-        if (!hasPermission) {
-          logger.info("Login denied - missing item_login permission", { traceId, username });
-          return new Response(loginPage("You do not have permission to access this system. Please contact your administrator.", redirect || null), {
-            headers: { "Content-Type": "text/html" },
-          });
-        }
-
-        // Create session
-        const sessionId = createSession(username);
-
-        logger.info("User logged in", { traceId, username, isAdmin });
-
-        const safeRedirect = redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/";
-        return new Response(null, {
-          status: 302,
-          headers: {
-            "Location": safeRedirect,
-            "Set-Cookie": createSessionCookie(sessionId),
-          },
-        });
-      } catch (err) {
-        logger.error("Login error", err, { traceId, username });
-        return new Response(loginPage("An error occurred during login. Please try again.", redirect || null), {
-          headers: { "Content-Type": "text/html" },
-        });
-      }
-    }
-
-    // Logout route
-    if (path === "/logout" && req.method === "GET") {
-      const session = getSessionFromRequest(req);
-      if (session) {
-        deleteSession(session.sessionId);
-        logger.info("User logged out", { traceId, username: session.username });
-      }
-
-      return new Response(null, {
-        status: 302,
-        headers: {
-          "Location": "/login",
-          "Set-Cookie": deleteSessionCookie(),
-        },
-      });
-    }
-
-    // Change password - GET
-    if (path === "/change-password" && req.method === "GET") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/change-password", 302);
-      }
-
-      const success = url.searchParams.get("success") || null;
-      const error = url.searchParams.get("error") || null;
-      return new Response(changePasswordPage(success, error, isAdmin, hasPcPwView, currentUsername, hasAuditApprover), {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    // Change password - POST
-    if (path === "/change-password" && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return Response.redirect("/login?redirect=/change-password", 302);
-      }
-
-      const formData = await req.formData();
-      const rawData = {
-        old_password: formData.get("old_password")?.toString() || "",
-        new_password: formData.get("new_password")?.toString() || "",
-        confirm_password: formData.get("confirm_password")?.toString() || "",
-      };
-
-      try {
-        // Validate form data
-        const validated = changePasswordSchema.parse(rawData);
-
-        // Call password change function
-        const result = await changePassword(
-          session.username,
-          validated.old_password,
-          validated.new_password
-        );
-
-        if (result.success) {
-          logger.info("Password changed successfully", { traceId, username: session.username });
-          return Response.redirect("/change-password?success=" + encodeURIComponent(result.message || "Password changed successfully"), 303);
-        } else {
-          logger.info("Password change failed", { traceId, username: session.username, error: result.error });
-          return Response.redirect("/change-password?error=" + encodeURIComponent(result.error || "Password change failed"), 303);
-        }
-      } catch (err) {
-        const errorMessage = "Invalid input. Please check your entries.";
-        logger.error("Password change validation error", err, { traceId, username: session.username });
-        return Response.redirect("/change-password?error=" + encodeURIComponent(errorMessage), 303);
       }
     }
 
