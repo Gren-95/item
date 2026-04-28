@@ -21,6 +21,7 @@ import { registerLabelsRoutes } from "./routes/labels";
 import { registerApiRoutes } from "./routes/api";
 import { registerRepairsRoutes } from "./routes/repairs";
 import { registerPrintersRoutes } from "./routes/printers";
+import { registerApiCrudRoutes } from "./routes/api-crud";
 import { escapeHtml } from "./templates/components";
 import { getEmployeeNo, createApprovalRequest, getClientIp } from "./utils/approvals";
 import { validateEmailConfig, sendApprovalNotification, sendApprovalDecisionNotification, verifyApprovalToken } from "./utils/email";
@@ -57,7 +58,6 @@ import {
 import {
   equipmentAddSchema,
   equipmentEditSchema,
-  apiAddItemSchema,
   locationsActionSchema,
   typesActionSchema,
   vendorsActionSchema,
@@ -182,80 +182,6 @@ async function getTlsOptions() {
     console.warn("[HTTPS] Failed to load TLS cert/key");
     return null;
   }
-}
-
-/**
- * Find an existing item by name (and optional parent) for duplicate detection.
- * Returns { id, name } or null if not found.
- */
-async function findExistingItem(
-  pool: import("mysql2/promise").Pool,
-  apiType: string,
-  name: string,
-  parentId?: number | null
-): Promise<{ id: number; name: string } | null> {
-  type Row = { id: number; name: string };
-  let rows: Row[] = [];
-
-  switch (apiType) {
-    case "regions":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_region WHERE name = ? LIMIT 1", [name]
-      );
-      break;
-    case "countries":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_country WHERE name = ? AND region_id = ? LIMIT 1", [name, parentId]
-      );
-      break;
-    case "plants":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_plant WHERE name = ? AND country_id = ? LIMIT 1", [name, parentId]
-      );
-      break;
-    case "departments":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_department WHERE name = ? AND plant_id = ? LIMIT 1", [name, parentId]
-      );
-      break;
-    case "areas":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_area WHERE name = ? AND department_id = ? LIMIT 1", [name, parentId]
-      );
-      break;
-    case "sub-areas":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_sub_area WHERE name = ? AND area_id = ? LIMIT 1", [name, parentId]
-      );
-      break;
-    case "types":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, type_name as name FROM it_equipment_type WHERE type_name = ? LIMIT 1", [name]
-      );
-      break;
-    case "product-lines":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_product_line WHERE name = ? AND type_id = ? LIMIT 1", [name, parentId]
-      );
-      break;
-    case "models":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_model WHERE name = ? AND product_line_id = ? LIMIT 1", [name, parentId]
-      );
-      break;
-    case "vendors":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_vendor WHERE name = ? LIMIT 1", [name]
-      );
-      break;
-    case "suppliers":
-      [rows] = await pool.query<Row[] & import("mysql2").RowDataPacket[]>(
-        "SELECT id, name FROM it_equipment_supplier WHERE name = ? LIMIT 1", [name]
-      );
-      break;
-  }
-
-  return rows.length > 0 ? { id: rows[0].id, name: rows[0].name } : null;
 }
 
 /**
@@ -497,6 +423,7 @@ registerLabelsRoutes(router);
 registerApiRoutes(router);
 registerRepairsRoutes(router);
 registerPrintersRoutes(router);
+registerApiCrudRoutes(router);
 
 async function handleRequest(req: Request): Promise<Response> {
   const ctx = createInitialContext(req, pool);
@@ -4330,233 +4257,6 @@ async function handleRequest(req: Request): Promise<Response> {
             headers: { "Content-Type": "application/json" }
           }
         );
-      }
-    }
-
-    // API Routes for adding new items
-    if (path.startsWith("/api/") && req.method === "POST") {
-      const session = getSessionFromRequest(req);
-      if (!session) {
-        return new Response(JSON.stringify({ error: "Authentication required" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      const body = await req.json();
-      const apiType = path.replace("/api/", "");
-
-      let name = "";
-      let parent_id: number | null = null;
-
-      try {
-        const validated = apiAddItemSchema.parse(body);
-        name = validated.name;
-        parent_id = validated.parent_id;
-
-        const employeeNo = await getEmployeeNo(session.username, pool);
-        const clientIp = getClientIp(req);
-
-        let hasPermission = false;
-        let permissionRequired = "";
-        let actionType = "";
-        let actionData: Record<string, unknown> = { name };
-
-        if (parent_id !== undefined) {
-          actionData.parent_id = parent_id;
-        }
-
-        // Determine permission and action type based on API endpoint
-        switch (apiType) {
-          case "regions":
-          case "countries":
-          case "plants":
-          case "departments":
-          case "areas":
-          case "sub-areas":
-            permissionRequired = "locations_add";
-            actionType = `add_${apiType.slice(0, -1)}`; // remove 's' from plural
-            hasPermission = await hasLocationsAddPermission(session.username, pool);
-            break;
-          case "types":
-          case "product-lines":
-          case "models":
-            permissionRequired = "types_add";
-            actionType = `add_${apiType.replace("-", "_")}`;
-            hasPermission = await hasTypesAddPermission(session.username, pool);
-            break;
-          case "vendors":
-          case "suppliers":
-            permissionRequired = "vendors_add";
-            actionType = `add_${apiType.slice(0, -1)}`; // remove 's' from plural
-            hasPermission = await hasVendorsAddPermission(session.username, pool);
-            break;
-          default:
-            return new Response(JSON.stringify({ error: "Unknown API endpoint" }), {
-              status: 404,
-              headers: { "Content-Type": "application/json" },
-            });
-        }
-
-        // If no permission, create approval request
-        if (!hasPermission) {
-          if (!employeeNo) {
-            return new Response(JSON.stringify({ error: "Unable to create approval request. Please contact your administrator." }), {
-              status: 403,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-
-          const requestId = await createApprovalRequest(
-            employeeNo,
-            permissionRequired,
-            actionType,
-            actionData,
-            clientIp,
-            pool
-          );
-
-          if (requestId) {
-            return new Response(JSON.stringify({
-              message: "Approval request created",
-              requestId,
-              status: "pending_approval"
-            }), {
-              status: 202,
-              headers: { "Content-Type": "application/json" },
-            });
-          } else {
-            return new Response(JSON.stringify({ error: "Failed to create approval request. Please contact your administrator." }), {
-              status: 500,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-        }
-
-        // Check for duplicate before inserting
-        const existing = await findExistingItem(pool, apiType, name, parent_id);
-        if (existing) {
-          return new Response(JSON.stringify({
-            duplicate: true,
-            id: existing.id,
-            name: existing.name,
-            message: `"${name}" already exists`,
-          }), {
-            status: 409,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-
-        // User has permission, proceed with direct insert
-        let result: ResultSetHeader;
-
-        switch (apiType) {
-          case "regions":
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_region (name, status) VALUES (?, 1)",
-              [name]
-            );
-            break;
-          case "countries":
-            if (!parent_id) throw new Error("Region is required");
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_country (name, region_id, status) VALUES (?, ?, 1)",
-              [name, parent_id]
-            );
-            break;
-          case "plants":
-            if (!parent_id) throw new Error("Country is required");
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_plant (name, country_id, status) VALUES (?, ?, 1)",
-              [name, parent_id]
-            );
-            break;
-          case "departments":
-            if (!parent_id) throw new Error("Plant is required");
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_department (name, plant_id, status) VALUES (?, ?, 1)",
-              [name, parent_id]
-            );
-            break;
-          case "areas":
-            if (!parent_id) throw new Error("Department is required");
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_area (name, department_id, status) VALUES (?, ?, 1)",
-              [name, parent_id]
-            );
-            break;
-          case "sub-areas":
-            if (!parent_id) throw new Error("Area is required");
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_sub_area (name, area_id, status) VALUES (?, ?, 1)",
-              [name, parent_id]
-            );
-            break;
-          case "types":
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_type (type_name, status) VALUES (?, 1)",
-              [name]
-            );
-            break;
-          case "product-lines":
-            if (!parent_id) throw new Error("Type is required");
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_product_line (name, type_id, status) VALUES (?, ?, 1)",
-              [name, parent_id]
-            );
-            break;
-          case "models":
-            if (!parent_id) throw new Error("Product Line is required");
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_model (name, product_line_id, status) VALUES (?, ?, 1)",
-              [name, parent_id]
-            );
-            break;
-          case "vendors":
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_vendor (name) VALUES (?)",
-              [name]
-            );
-            break;
-          case "suppliers":
-            [result] = await pool.query<ResultSetHeader>(
-              "INSERT INTO it_equipment_supplier (name) VALUES (?)",
-              [name]
-            );
-            break;
-          default:
-            return new Response(JSON.stringify({ error: "Unknown API endpoint" }), {
-              status: 404,
-              headers: { "Content-Type": "application/json" },
-            });
-        }
-
-        return new Response(JSON.stringify({ id: result.insertId, name }), {
-          status: 201,
-          headers: { "Content-Type": "application/json" },
-        });
-      } catch (err: unknown) {
-        // Handle MySQL duplicate entry error (race condition fallback)
-        const mysqlErr = err as { code?: string };
-        if (mysqlErr.code === "ER_DUP_ENTRY") {
-          const existing = await findExistingItem(pool, apiType, name, parent_id);
-          if (existing) {
-            return new Response(JSON.stringify({
-              duplicate: true,
-              id: existing.id,
-              name: existing.name,
-              message: `"${name}" already exists`,
-            }), {
-              status: 409,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-        }
-        logger.error("API create item error", err, { traceId, apiType, name });
-        return new Response(JSON.stringify({ error: "Failed to create item. Please try again." }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
       }
     }
 
