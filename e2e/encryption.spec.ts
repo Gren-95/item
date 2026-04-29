@@ -5,9 +5,9 @@ import {
   isEncrypted,
 } from "../src/utils/crypto";
 
-// These tests assume PC_PW_ENCRYPTION_KEY is set in the environment the
-// runner sees — docker-compose passes it through to the app container,
-// which is where bun run test executes.
+// PC_PW_ENCRYPTION_KEY is set by docker-compose locally and by the
+// playwright.yml CI env block. .env.example carries a "change-me"
+// placeholder so a fresh `cp .env.example .env` is enough to boot.
 
 test.describe("PC password encryption (#75)", () => {
   test("round-trip returns the original plaintext", () => {
