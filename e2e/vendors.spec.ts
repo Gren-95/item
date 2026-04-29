@@ -169,7 +169,7 @@ test.describe("Suppliers Management", () => {
     if (await addButton.isVisible()) {
       await addButton.click();
 
-      const sapInput = page.locator('input[name="sap_vendor_no"]');
+      const sapInput = page.locator('input[name="sap_vendor_no"]').first();
       if (await sapInput.isVisible()) {
         // SAP vendor number should be numeric
         await sapInput.fill("12abc");
