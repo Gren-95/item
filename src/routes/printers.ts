@@ -69,7 +69,8 @@ async function fetchBartenderPrinters(traceId: string): Promise<BartenderPrinter
     throw new Error(`Bartender API returned ${response.status}`);
   }
 
-  const responseText = (await response.text()).replace(/^﻿/, "");
+  // Strip a leading byte-order mark if BarTender returned UTF-8-with-BOM.
+  const responseText = (await response.text()).replace(/^\uFEFF/, "");
   return JSON.parse(responseText) as BartenderPrinter[];
 }
 
