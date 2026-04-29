@@ -119,13 +119,10 @@ test.describe("PC Passwords Management (#43)", () => {
 
 test.describe("PC Passwords Print Functionality (#43)", () => {
   test("print API endpoint exists", async ({ request }) => {
+    // The endpoint now takes the row id and resolves the password
+    // server-side from it_pc_pw (encrypted at rest).
     const response = await request.post("/api/pc-pw/print", {
-      data: {
-        user: "testuser",
-        evocon: "test",
-        password: "testpass",
-        printer: "PRINTER01",
-      },
+      data: { id: 1, printer: "PRINTER01" },
     });
 
     // Should not be 404
@@ -143,12 +140,7 @@ test.describe("PC Passwords Print Functionality (#43)", () => {
 
   test("print API accepts valid print request", async ({ request }) => {
     const response = await request.post("/api/pc-pw/print", {
-      data: {
-        user: "testuser",
-        evocon: "EVOCON01",
-        password: "testpassword",
-        printer: "PRINTER01",
-      },
+      data: { id: 1, printer: "PRINTER01" },
     });
 
     // Should process request (may fail if printer not available)

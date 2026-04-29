@@ -336,7 +336,7 @@ export function labelPrintingPage(
                           <td class="py-3 px-2">
                             <div class="flex items-center gap-2">
                               ${printButton({
-                                onClick: `printBarcode('${escapeHtml(pw.user)}', '${escapeHtml(pw.evocon || "")}', '${escapeHtml(pw.pw)}')`,
+                                onClick: `printBarcode(${pw.id}, '${escapeHtml(pw.user)}')`,
                                 title: "Print barcode label",
                               })}
                               ${data.hasPcPwEdit ? `
@@ -809,9 +809,8 @@ export function labelPrintingPage(
       (function() {
         var pwPrinters = [];
         var pwSelectedPrinter = null;
+        var pwPendingId = null;
         var pwPendingUser = '';
-        var pwPendingEvocon = '';
-        var pwPendingPassword = '';
 
         function pwEscapeHtml(str) {
           if (str == null) return '';
@@ -820,10 +819,11 @@ export function labelPrintingPage(
           return div.innerHTML;
         }
 
-        window.printBarcode = function(user, evocon, password) {
+        // The password is no longer carried in the browser; the print
+        // endpoint resolves it server-side from the row id.
+        window.printBarcode = function(id, user) {
+          pwPendingId = id;
           pwPendingUser = user;
-          pwPendingEvocon = evocon;
-          pwPendingPassword = password;
           pwSelectedPrinter = null;
 
           var modal = document.getElementById('pwPrintModal');
@@ -911,7 +911,7 @@ export function labelPrintingPage(
             var response = await fetch('/api/pc-pw/print', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user: pwPendingUser, evocon: pwPendingEvocon || '', password: pwPendingPassword, printer: pwSelectedPrinter })
+              body: JSON.stringify({ id: pwPendingId, printer: pwSelectedPrinter })
             });
             var result = await response.json();
             if (response.ok) {

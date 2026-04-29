@@ -82,6 +82,7 @@ jobs:
           BASE_URL: http://localhost:3000
           ADMIN_USERNAME: admin
           ADMIN_PASSWORD: service
+          PC_PW_ENCRYPTION_KEY: change-me-change-me-change-me-change-me-change-me-change-me-change-me
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
