@@ -24,6 +24,8 @@ import { registerInventoryAuditRoutes } from "./routes/inventory-audit";
 import { validateEmailConfig } from "./utils/email";
 import { startScheduler } from "./utils/scheduler";
 import { runMigrations } from "./migrations/migrate";
+import { isCryptoConfigured } from "./utils/crypto";
+import { encryptLegacyPcPasswords } from "./repositories/pc-passwords";
 
 const PORT = process.env.PORT || 3000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
@@ -108,6 +110,20 @@ try {
 } catch (err) {
   logger.error("Failed to run migrations on startup", err);
   console.error("⚠️  Migration failed, but continuing server startup:", err);
+}
+
+// Encrypt any legacy plaintext PC passwords (one-shot, idempotent)
+if (isCryptoConfigured()) {
+  try {
+    await encryptLegacyPcPasswords(pool);
+  } catch (err) {
+    logger.error("Failed to encrypt legacy PC passwords", err);
+    console.error("⚠️  Legacy PC-password encryption failed:", err);
+  }
+} else {
+  console.warn(
+    "⚠️  PC_PW_ENCRYPTION_KEY not configured — PC passwords are stored in plaintext. Set the env var to enable at-rest encryption."
+  );
 }
 
 // Validate email configuration

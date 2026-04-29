@@ -1,17 +1,15 @@
-import type { RowDataPacket } from "mysql2";
 import { logger } from "../utils/logger";
 import { labelPrintingPage } from "../templates/label-printing";
 import { hasPcPwEditPermission, hasPcPwViewPermission } from "../utils/auth";
+import {
+  addPcPassword,
+  deletePcPassword,
+  getPcPasswordForPrint,
+  listPcPasswords,
+  type PcPasswordRow,
+} from "../repositories/pc-passwords";
 import type { RequestContext } from "./types";
 import type { Router } from "./router";
-
-interface PcPassword {
-  id: number;
-  user: string;
-  evocon: string | null;
-  pw: string;
-  status: number;
-}
 
 export function registerLabelsRoutes(router: Router): void {
   router.get("/labels", labelsGet);
@@ -32,13 +30,10 @@ async function labelsGet(ctx: RequestContext): Promise<Response> {
   logger.info("Label Printing page access", { traceId, username, tab: activeTab });
   const hasPcPwEdit = await hasPcPwEditPermission(username, pool);
 
-  let passwords: PcPassword[] = [];
+  let passwords: PcPasswordRow[] = [];
   if (hasPcPwView) {
     try {
-      const [rows] = await pool.query<RowDataPacket[]>(
-        "SELECT id, user, evocon, pw, status FROM it_pc_pw ORDER BY user"
-      );
-      passwords = rows as PcPassword[];
+      passwords = await listPcPasswords(pool);
     } catch (err) {
       logger.error("Error loading PC passwords for label printing", err, { traceId });
     }
@@ -94,10 +89,7 @@ async function pcPasswordsPost(ctx: RequestContext): Promise<Response> {
         );
       }
 
-      await pool.query(
-        "INSERT INTO it_pc_pw (user, evocon, pw, status) VALUES (?, ?, ?, ?)",
-        [user, evocon, pw, status]
-      );
+      await addPcPassword(pool, { user, evocon, pw, status });
 
       logger.info("PC password added", { traceId, user });
       return Response.redirect(
@@ -115,7 +107,7 @@ async function pcPasswordsPost(ctx: RequestContext): Promise<Response> {
         );
       }
 
-      await pool.query("DELETE FROM it_pc_pw WHERE id = ?", [id]);
+      await deletePcPassword(pool, id);
 
       logger.info("PC password deleted", { traceId, id });
       return Response.redirect(
@@ -172,22 +164,41 @@ async function pcPwPrintPost(ctx: RequestContext): Promise<Response> {
 
   try {
     const body = await req.json();
-    const { user, evocon, password, printer } = body;
+    const id = parseInt(String(body.id ?? ""), 10);
+    const printer = body.printer ? String(body.printer) : "";
 
-    if (!user || !password || !printer) {
+    if (!id || !printer) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: user, password, printer" }),
+        JSON.stringify({ error: "Missing required fields: id, printer" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const printResponse = await fetch("http://eeprt01/Integration/PcPwSticker/Execute", {
+    const credentials = await getPcPasswordForPrint(pool, id);
+    if (!credentials) {
+      return new Response(JSON.stringify({ error: "Password row not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const bartenderHost = process.env.BARTENDER_HOST || "";
+    if (!bartenderHost) {
+      return new Response(
+        JSON.stringify({ error: "Printer service not configured" }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    const host = bartenderHost.replace(/\/$/, "");
+    const printResponse = await fetch(`${host}/Integration/PcPwSticker/Execute`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // BarTender template placeholders: %user%, %evocon%, %pw%, %printer%.
+      // The pw value is the decrypted plaintext.
       body: JSON.stringify({
-        user,
-        evocon: evocon || "",
-        password,
+        user: credentials.user,
+        evocon: credentials.evocon || "",
+        pw: credentials.pw,
         printer,
       }),
     });
@@ -195,7 +206,7 @@ async function pcPwPrintPost(ctx: RequestContext): Promise<Response> {
     const printResult = await printResponse.text();
 
     if (printResponse.ok) {
-      logger.info("PC password print job sent", { traceId, user, printer });
+      logger.info("PC password print job sent", { traceId, user: credentials.user, printer });
       return new Response(
         JSON.stringify({ success: true, message: "Print job sent successfully", result: printResult }),
         { status: 200, headers: { "Content-Type": "application/json" } }
@@ -204,7 +215,7 @@ async function pcPwPrintPost(ctx: RequestContext): Promise<Response> {
 
     logger.error("PC password print job failed", {
       traceId,
-      user,
+      user: credentials.user,
       printer,
       status: printResponse.status,
     });

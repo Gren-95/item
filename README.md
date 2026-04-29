@@ -113,6 +113,8 @@ off until you set it.
 | `SMTP_FROM` | From address | `item-noreply@example.com` |
 | `APPROVAL_PENDING_THRESHOLD_HOURS` | Send reminder if a pending approval is older than this. `0` disables | `0` |
 | `APPROVAL_SECRET` | HMAC key for approval-link tokens. Must be at least 32 characters or token generation throws | - |
+| **Credentials at rest** |||
+| `PC_PW_ENCRYPTION_KEY` | AES-256-GCM key for `it_pc_pw.pw`. Either 64 hex chars (run `openssl rand -hex 32`) or any string ≥ 32 chars. Without it, adding a PC password fails | - |
 | **Testing** |||
 | `RUN_PRINTER_TESTS` | Run printer specs against a real BarTender host | `false` |
 

@@ -1,6 +1,6 @@
 {
   "name": "item",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "scripts": {
     "start": "bun run src/server.ts",
     "dev": "bun run scripts/watch.ts",
